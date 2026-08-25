@@ -51,11 +51,6 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           {isPending ? "Signing in..." : "Sign in"}
         </button>
       </div>
-      <div className="mt-5 pt-4 border-t border-white/10 text-xs text-slate-400 space-y-1">
-        <p className="font-medium text-slate-300">Demo credentials</p>
-        <p>Head of Sales: head@caccrm.com / password123</p>
-        <p>Sales Manager: priya@caccrm.com / password123</p>
-      </div>
     </form>
   );
 }
