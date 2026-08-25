@@ -11,12 +11,17 @@ function startOfQuarter(date: Date): Date {
   return new Date(date.getFullYear(), quarterStartMonth, 1);
 }
 
+// Only these are counted as "the CAC sales team" for individual rows -
+// everyone else (historical staff, other divisions, service) rolls up
+// into a single "Others" row instead of cluttering the report.
+const CAC_SALES_TITLE = "Sales Manager";
+
 export default async function ReportsPage() {
   await requireHead();
 
   const qStart = startOfQuarter(new Date());
 
-  const reps = await prisma.user.findMany({
+  const allReps = await prisma.user.findMany({
     where: { role: "SALES_MANAGER" },
     orderBy: { name: "asc" },
     include: {
@@ -26,21 +31,28 @@ export default async function ReportsPage() {
     },
   });
 
-  const repStats = reps.map((rep) => {
-    const openDeals = rep.deals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
-    const wonDeals = rep.deals.filter((d) => d.stage === "WON");
-    const lostDeals = rep.deals.filter((d) => d.stage === "LOST");
+  const salesReps = allReps.filter((r) => r.isActive && r.title === CAC_SALES_TITLE);
+  const others = allReps.filter((r) => !(r.isActive && r.title === CAC_SALES_TITLE));
+
+  function computeStats(id: string, name: string, avatarColor: string, group: typeof allReps) {
+    const deals = group.flatMap((r) => r.deals);
+    const leads = group.flatMap((r) => r.leads);
+    const activities = group.flatMap((r) => r.activities);
+
+    const openDeals = deals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
+    const wonDeals = deals.filter((d) => d.stage === "WON");
+    const lostDeals = deals.filter((d) => d.stage === "LOST");
     const wonThisQuarter = wonDeals.filter((d) => d.closedAt && d.closedAt >= qStart);
     const closedCount = wonDeals.length + lostDeals.length;
     const winRate = closedCount > 0 ? Math.round((wonDeals.length / closedCount) * 100) : 0;
-    const activeLeads = rep.leads.filter((l) => l.status !== "CONVERTED" && l.status !== "UNQUALIFIED").length;
-    const pendingActivities = rep.activities.filter((a) => a.status === "PENDING").length;
-    const completedActivities = rep.activities.filter((a) => a.status === "COMPLETED").length;
+    const activeLeads = leads.filter((l) => l.status !== "CONVERTED" && l.status !== "UNQUALIFIED").length;
+    const pendingActivities = activities.filter((a) => a.status === "PENDING").length;
+    const completedActivities = activities.filter((a) => a.status === "COMPLETED").length;
 
     return {
-      id: rep.id,
-      name: rep.name,
-      avatarColor: rep.avatarColor,
+      id,
+      name,
+      avatarColor,
       openValue: openDeals.reduce((s, d) => s + d.value, 0),
       openCount: openDeals.length,
       wonQuarterValue: wonThisQuarter.reduce((s, d) => s + d.value, 0),
@@ -50,20 +62,30 @@ export default async function ReportsPage() {
       pendingActivities,
       completedActivities,
     };
-  });
+  }
 
+  const repStats = salesReps.map((rep) => computeStats(rep.id, rep.name, rep.avatarColor, [rep]));
+  const othersStats =
+    others.length > 0 ? computeStats("others", "Others", "#94a3b8", others) : null;
+
+  // Headline team stats reflect only the current 6-person CAC sales team,
+  // not the historical/other-division data folded into "Others".
   const teamOpenValue = repStats.reduce((s, r) => s + r.openValue, 0);
   const teamWonQuarter = repStats.reduce((s, r) => s + r.wonQuarterValue, 0);
   const teamAvgWinRate =
     repStats.length > 0 ? Math.round(repStats.reduce((s, r) => s + r.winRate, 0) / repStats.length) : 0;
 
-  const chartData = repStats
+  const tableRows = othersStats ? [...repStats, othersStats] : repStats;
+  const chartData = tableRows
     .map((r) => ({ name: r.name.split(" ")[0], open: r.openValue, won: r.wonQuarterValue }))
     .sort((a, b) => b.won - a.won);
 
   return (
     <div>
-      <PageHeader title="Team Reports" description="Performance across all 6 sales managers" />
+      <PageHeader
+        title="Team Reports"
+        description={`Performance across your ${salesReps.length} CAC sales managers${othersStats ? " (everyone else rolled into Others)" : ""}`}
+      />
 
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -84,8 +106,8 @@ export default async function ReportsPage() {
           />
           <StatCard
             label="Team Size"
-            value={String(reps.length)}
-            sub="Sales managers"
+            value={String(salesReps.length)}
+            sub="CAC sales managers"
             icon={<Users className="h-4 w-4 text-sky-500" />}
           />
         </div>
@@ -109,12 +131,17 @@ export default async function ReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {repStats.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+              {tableRows.map((r) => (
+                <tr
+                  key={r.id}
+                  className={`hover:bg-slate-50 transition-colors ${r.id === "others" ? "bg-slate-50/60" : ""}`}
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Avatar name={r.name} color={r.avatarColor} size={7} />
-                      <span className="font-medium text-slate-800">{r.name}</span>
+                      <span className={r.id === "others" ? "font-medium text-slate-500 italic" : "font-medium text-slate-800"}>
+                        {r.name}
+                      </span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-700">
