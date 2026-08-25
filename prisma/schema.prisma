@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  HEAD // Head of Sales - sees everything across the team
+  SALES_MANAGER // Individual sales rep reporting to the Head
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  CONVERTED
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  COLD_CALL
+  EMAIL_CAMPAIGN
+  SOCIAL_MEDIA
+  EVENT
+  PARTNER
+  OTHER
+}
+
+enum DealStage {
+  QUALIFICATION
+  NEEDS_ANALYSIS
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  NOTE
+}
+
+enum ActivityStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(SALES_MANAGER)
+  title         String?
+  phone         String?
+  avatarColor   String    @default("#6366f1")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Manager relationship: a SALES_MANAGER reports to a HEAD
+  managerId     String?
+  manager       User?     @relation("TeamMembers", fields: [managerId], references: [id])
+  directReports User[]    @relation("TeamMembers")
+
+  accounts      Account[] @relation("AccountOwner")
+  contacts      Contact[] @relation("ContactOwner")
+  leads         Lead[]    @relation("LeadOwner")
+  deals         Deal[]    @relation("DealOwner")
+  activities    Activity[] @relation("ActivityOwner")
+  notes         Note[]    @relation("NoteAuthor")
+}
+
+model Account {
+  id          String    @id @default(cuid())
+  name        String
+  industry    String?
+  website     String?
+  phone       String?
+  address     String?
+  city        String?
+  country     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ownerId     String
+  owner       User      @relation("AccountOwner", fields: [ownerId], references: [id])
+
+  contacts    Contact[]
+  leads       Lead[]
+  deals       Deal[]
+}
+
+model Contact {
+  id          String    @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  jobTitle    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ownerId     String
+  owner       User      @relation("ContactOwner", fields: [ownerId], references: [id])
+
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id])
+
+  leads       Lead[]
+  deals       Deal[]
+  activities  Activity[]
+  notes       Note[]
+}
+
+model Lead {
+  id            String      @id @default(cuid())
+  title         String
+  company       String?
+  status        LeadStatus  @default(NEW)
+  source        LeadSource  @default(OTHER)
+  value         Float?
+  email         String?
+  phone         String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  ownerId       String
+  owner         User        @relation("LeadOwner", fields: [ownerId], references: [id])
+
+  accountId     String?
+  account       Account?    @relation(fields: [accountId], references: [id])
+
+  contactId     String?
+  contact       Contact?    @relation(fields: [contactId], references: [id])
+
+  convertedDealId String?   @unique
+  convertedDeal   Deal?     @relation("LeadConversion", fields: [convertedDealId], references: [id])
+
+  activities    Activity[]
+  noteItems     Note[]
+}
+
+model Deal {
+  id            String      @id @default(cuid())
+  title         String
+  stage         DealStage   @default(QUALIFICATION)
+  value         Float       @default(0)
+  probability   Int         @default(20)
+  expectedCloseDate DateTime?
+  closedAt      DateTime?
+  lostReason    String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  ownerId       String
+  owner         User        @relation("DealOwner", fields: [ownerId], references: [id])
+
+  accountId     String?
+  account       Account?    @relation(fields: [accountId], references: [id])
+
+  contactId     String?
+  contact       Contact?    @relation(fields: [contactId], references: [id])
+
+  sourceLead    Lead?       @relation("LeadConversion")
+
+  activities    Activity[]
+  notes         Note[]
+}
+
+model Activity {
+  id          String          @id @default(cuid())
+  type        ActivityType
+  subject     String
+  description String?
+  dueAt       DateTime?
+  completedAt DateTime?
+  status      ActivityStatus  @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  ownerId     String
+  owner       User            @relation("ActivityOwner", fields: [ownerId], references: [id])
+
+  leadId      String?
+  lead        Lead?           @relation(fields: [leadId], references: [id])
+
+  dealId      String?
+  deal        Deal?           @relation(fields: [dealId], references: [id])
+
+  contactId   String?
+  contact     Contact?        @relation(fields: [contactId], references: [id])
+}
+
+model Note {
+  id          String    @id @default(cuid())
+  body        String
+  createdAt   DateTime  @default(now())
+
+  authorId    String
+  author      User      @relation("NoteAuthor", fields: [authorId], references: [id])
+
+  leadId      String?
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+
+  dealId      String?
+  deal        Deal?     @relation(fields: [dealId], references: [id])
+
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+}
