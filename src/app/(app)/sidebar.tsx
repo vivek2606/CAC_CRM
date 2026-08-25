@@ -10,6 +10,8 @@ import {
   Contact,
   CheckSquare,
   BarChart3,
+  Package,
+  Tags,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -22,6 +24,8 @@ const NAV_ITEMS = [
   { href: "/accounts", label: "Accounts", icon: Building2 },
   { href: "/contacts", label: "Contacts", icon: Contact },
   { href: "/activities", label: "Activities", icon: CheckSquare },
+  { href: "/products", label: "Products", icon: Package },
+  { href: "/pricelist", label: "Price List", icon: Tags },
 ];
 
 export function Sidebar({ user }: { user: SessionUser }) {

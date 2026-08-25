@@ -50,7 +50,7 @@ export function DealForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Deal value (₹) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Deal value (₦) *</label>
           <input
             name="value"
             type="number"

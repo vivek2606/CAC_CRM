@@ -219,3 +219,30 @@ model Note {
   contactId   String?
   contact     Contact?  @relation(fields: [contactId], references: [id])
 }
+
+model Product {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  brand         String
+  category      String
+  subCategory   String
+  model         String
+  capacityKw    Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  pricelistEntries Pricelist[]
+}
+
+model Pricelist {
+  id            String    @id @default(cuid())
+  month         DateTime
+  dealerPrice   Float
+  landedPrice   Float
+  exchangeRate  Float
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+}

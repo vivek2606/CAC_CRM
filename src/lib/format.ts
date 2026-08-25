@@ -1,7 +1,7 @@
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-NG", {
     style: "currency",
-    currency: "INR",
+    currency: "NGN",
     maximumFractionDigits: 0,
   }).format(value);
 }
@@ -11,10 +11,10 @@ export function formatCurrency(value: number): string {
 export function formatCompactCurrency(value: number): string {
   const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
-  if (abs >= 1e7) return `${sign}₹${trimZero(abs / 1e7)}Cr`;
-  if (abs >= 1e5) return `${sign}₹${trimZero(abs / 1e5)}L`;
-  if (abs >= 1e3) return `${sign}₹${trimZero(abs / 1e3)}K`;
-  return `${sign}₹${abs.toFixed(0)}`;
+  if (abs >= 1e9) return `${sign}₦${trimZero(abs / 1e9)}B`;
+  if (abs >= 1e6) return `${sign}₦${trimZero(abs / 1e6)}M`;
+  if (abs >= 1e3) return `${sign}₦${trimZero(abs / 1e3)}K`;
+  return `${sign}₦${abs.toFixed(0)}`;
 }
 
 function trimZero(n: number): string {
@@ -23,7 +23,7 @@ function trimZero(n: number): string {
 
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return "—";
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-NG", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -32,7 +32,7 @@ export function formatDate(date: Date | string | null | undefined): string {
 
 export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return "—";
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-NG", {
     day: "2-digit",
     month: "short",
     year: "numeric",
