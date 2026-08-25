@@ -9,23 +9,26 @@ const PAGE_SIZE = 50;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; category?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
   const page = parsePage(params.page);
 
-  const where = params.q
-    ? {
-        OR: [
-          { code: { contains: params.q, mode: "insensitive" as const } },
-          { model: { contains: params.q, mode: "insensitive" as const } },
-          { category: { contains: params.q, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  const where = {
+    ...(params.category ? { category: params.category } : {}),
+    ...(params.q
+      ? {
+          OR: [
+            { code: { contains: params.q, mode: "insensitive" as const } },
+            { model: { contains: params.q, mode: "insensitive" as const } },
+            { category: { contains: params.q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
 
-  const [products, totalCount] = await Promise.all([
+  const [products, totalCount, categories] = await Promise.all([
     prisma.product.findMany({
       where,
       orderBy: { code: "asc" },
@@ -34,6 +37,11 @@ export default async function ProductsPage({
       include: { _count: { select: { pricelistEntries: true } } },
     }),
     prisma.product.count({ where }),
+    prisma.product.findMany({
+      distinct: ["category"],
+      select: { category: true },
+      orderBy: { category: "asc" },
+    }),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -53,13 +61,25 @@ export default async function ProductsPage({
             placeholder="Search code, model or category..."
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+          <select
+            name="category"
+            defaultValue={params.category ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.category} value={c.category}>
+                {c.category}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-700 transition-colors"
           >
-            Search
+            Filter
           </button>
-          {params.q && (
+          {(params.q || params.category) && (
             <Link href="/products" className="text-sm text-slate-500 hover:text-slate-700">
               Clear
             </Link>
@@ -108,7 +128,7 @@ export default async function ProductsPage({
             totalCount={totalCount}
             pageSize={PAGE_SIZE}
             basePath="/products"
-            searchParams={{ q: params.q }}
+            searchParams={{ q: params.q, category: params.category }}
           />
         </Card>
       </div>
