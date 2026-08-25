@@ -1,0 +1,27 @@
+---
+title: "What's next: R, Julia, and Haskell"
+description: "The plan for wiring up the other three languages this blog is meant to cover."
+date: 2026-08-21
+tags: ["meta", "roadmap"]
+---
+
+Python was first because [Pyodide](https://pyodide.org) is a mature,
+production-ready WebAssembly build of CPython. The other three languages
+this blog covers are each in a different spot:
+
+- **R** — [webR](https://docs.r-wasm.org/webr/latest/) is an actively
+  developed WASM build of R with a JS API similar to Pyodide's. Wiring it up
+  is a matter of adding `src/runtimes/r.ts` and registering it in
+  `src/runtimes/index.ts` — the `CodeRunner` component doesn't need to
+  change at all.
+- **Julia** — there is no mature in-browser WASM build of the Julia runtime
+  yet (experimental efforts exist but aren't suitable for an interactive
+  REPL). Blocks marked `lang="julia"` currently render a "coming soon"
+  message via `UnsupportedRuntime` instead of failing silently.
+- **Haskell** — same story as Julia: compiling *to* WASM (GHCJS, Asterius)
+  is possible, but a fast, interactive in-browser REPL isn't there yet.
+
+<p style="font-size: 0.875rem; color: var(--muted)">
+  (This post is intentionally not runnable — it's about the roadmap, not a
+  code example.)
+</p>
