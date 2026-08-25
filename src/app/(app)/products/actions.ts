@@ -12,13 +12,17 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required"),
   subCategory: z.string().min(1, "Sub-category is required"),
   model: z.string().min(1, "Model is required"),
-  capacityKw: z.coerce.number().min(0),
+  capacityKw: z.coerce.number().min(0).nullable(),
 });
+
+function blankToNull(value: FormDataEntryValue | undefined) {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
 
 export async function createProduct(formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
-  const parsed = productSchema.parse(raw);
+  const parsed = productSchema.parse({ ...raw, capacityKw: blankToNull(formData.get("capacityKw") ?? undefined) });
 
   const product = await prisma.product.create({ data: parsed });
 
@@ -29,7 +33,7 @@ export async function createProduct(formData: FormData) {
 export async function updateProduct(productId: string, formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
-  const parsed = productSchema.parse(raw);
+  const parsed = productSchema.parse({ ...raw, capacityKw: blankToNull(formData.get("capacityKw") ?? undefined) });
 
   await prisma.product.update({ where: { id: productId }, data: parsed });
 

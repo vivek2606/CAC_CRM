@@ -12,6 +12,7 @@ import {
   BarChart3,
   Package,
   Tags,
+  Upload,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -75,6 +76,17 @@ export function Sidebar({ user }: { user: SessionUser }) {
             >
               <BarChart3 className="h-4 w-4" />
               Team Reports
+            </Link>
+            <Link
+              href="/admin/import"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                pathname.startsWith("/admin/import")
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Upload className="h-4 w-4" />
+              Import Data
             </Link>
           </>
         )}

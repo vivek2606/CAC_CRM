@@ -2,26 +2,73 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
+import { Pagination, parsePage } from "@/components/pagination";
 
-export default async function ProductsPage() {
+const PAGE_SIZE = 50;
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
+  const page = parsePage(params.page);
 
-  const products = await prisma.product.findMany({
-    orderBy: { code: "asc" },
-    include: { _count: { select: { pricelistEntries: true } } },
-  });
+  const where = params.q
+    ? {
+        OR: [
+          { code: { contains: params.q, mode: "insensitive" as const } },
+          { model: { contains: params.q, mode: "insensitive" as const } },
+          { category: { contains: params.q, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  const [products, totalCount] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: { code: "asc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { _count: { select: { pricelistEntries: true } } },
+    }),
+    prisma.product.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div>
       <PageHeader
         title="Products"
-        description={`${products.length} product${products.length === 1 ? "" : "s"}`}
+        description={`${totalCount} product${totalCount === 1 ? "" : "s"}`}
         action={user.role === "HEAD" ? <NewButton href="/products/new" label="New Product" /> : undefined}
       />
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+        <form className="flex flex-wrap gap-3 items-center" action="/products">
+          <input
+            type="text"
+            name="q"
+            defaultValue={params.q}
+            placeholder="Search code, model or category..."
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-700 transition-colors"
+          >
+            Search
+          </button>
+          {params.q && (
+            <Link href="/products" className="text-sm text-slate-500 hover:text-slate-700">
+              Clear
+            </Link>
+          )}
+        </form>
+
         <Card>
           {products.length === 0 ? (
-            <EmptyState title="No products yet" description="Add your product catalog to start building pricelists." />
+            <EmptyState title="No products found" description="Try a different search, or add a new product." />
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -49,12 +96,20 @@ export default async function ProductsPage() {
                     <td className="px-4 py-3 text-slate-500">{product.category}</td>
                     <td className="px-4 py-3 text-slate-500">{product.subCategory}</td>
                     <td className="px-4 py-3 text-slate-600">{product.model}</td>
-                    <td className="px-4 py-3 text-slate-600">{product.capacityKw}</td>
+                    <td className="px-4 py-3 text-slate-600">{product.capacityKw ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={PAGE_SIZE}
+            basePath="/products"
+            searchParams={{ q: params.q }}
+          />
         </Card>
       </div>
     </div>

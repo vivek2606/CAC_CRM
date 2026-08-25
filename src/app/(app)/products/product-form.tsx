@@ -12,7 +12,7 @@ export function ProductForm({
     category?: string;
     subCategory?: string;
     model?: string;
-    capacityKw?: number;
+    capacityKw?: number | null;
   };
   submitLabel: string;
 }) {
@@ -66,14 +66,13 @@ export function ProductForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Capacity (kW) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Capacity (kW)</label>
           <input
             name="capacityKw"
             type="number"
             step="0.01"
             min={0}
-            required
-            defaultValue={defaultValues?.capacityKw}
+            defaultValue={defaultValues?.capacityKw ?? undefined}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

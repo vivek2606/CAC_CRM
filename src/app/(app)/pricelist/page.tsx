@@ -2,32 +2,41 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
+import { Pagination, parsePage } from "@/components/pagination";
 import { formatCurrency } from "@/lib/format";
 import { deletePricelistEntry } from "./actions";
 import { Trash2, Pencil } from "lucide-react";
 
+const PAGE_SIZE = 50;
+
 export default async function PricelistPage({
   searchParams,
 }: {
-  searchParams: Promise<{ productId?: string }>;
+  searchParams: Promise<{ productId?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
+  const page = parsePage(params.page);
+  const where = params.productId ? { productId: params.productId } : undefined;
 
-  const [entries, products] = await Promise.all([
+  const [entries, totalCount, products] = await Promise.all([
     prisma.pricelist.findMany({
-      where: params.productId ? { productId: params.productId } : undefined,
+      where,
       orderBy: [{ month: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: { product: { select: { code: true, model: true, brand: true } } },
     }),
+    prisma.pricelist.count({ where }),
     prisma.product.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true } }),
   ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div>
       <PageHeader
         title="Price List"
-        description={`${entries.length} price entr${entries.length === 1 ? "y" : "ies"}`}
+        description={`${totalCount} price entr${totalCount === 1 ? "y" : "ies"}`}
         action={user.role === "HEAD" ? <NewButton href="/pricelist/new" label="New Price Entry" /> : undefined}
       />
       <div className="p-6 space-y-4">
@@ -84,7 +93,9 @@ export default async function PricelistPage({
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
-                      <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.landedPrice)}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
+                      </td>
                       <td className="px-4 py-3 text-slate-500">₦{entry.exchangeRate.toFixed(2)} / $1</td>
                       {user.role === "HEAD" && (
                         <td className="px-4 py-3">
@@ -114,6 +125,14 @@ export default async function PricelistPage({
               </tbody>
             </table>
           )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={PAGE_SIZE}
+            basePath="/pricelist"
+            searchParams={{ productId: params.productId }}
+          />
         </Card>
       </div>
     </div>

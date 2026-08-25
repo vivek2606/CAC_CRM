@@ -2,31 +2,72 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState, Avatar } from "@/components/ui";
+import { Pagination, parsePage } from "@/components/pagination";
 
-export default async function AccountsPage() {
+const PAGE_SIZE = 50;
+
+export default async function AccountsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string }>;
+}) {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
+  const params = await searchParams;
+  const page = parsePage(params.page);
 
-  const accounts = await prisma.account.findMany({
-    where: { ownerId: { in: ownerIds } },
-    orderBy: { name: "asc" },
-    include: {
-      owner: { select: { name: true, avatarColor: true } },
-      _count: { select: { contacts: true, deals: true, leads: true } },
-    },
-  });
+  const where = {
+    ownerId: { in: ownerIds },
+    ...(params.q ? { name: { contains: params.q, mode: "insensitive" as const } } : {}),
+  };
+
+  const [accounts, totalCount] = await Promise.all([
+    prisma.account.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        owner: { select: { name: true, avatarColor: true } },
+        _count: { select: { contacts: true, deals: true, leads: true } },
+      },
+    }),
+    prisma.account.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div>
       <PageHeader
         title="Accounts"
-        description={`${accounts.length} compan${accounts.length === 1 ? "y" : "ies"}`}
+        description={`${totalCount} compan${totalCount === 1 ? "y" : "ies"}`}
         action={<NewButton href="/accounts/new" label="New Account" />}
       />
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+        <form className="flex flex-wrap gap-3 items-center" action="/accounts">
+          <input
+            type="text"
+            name="q"
+            defaultValue={params.q}
+            placeholder="Search company name..."
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-700 transition-colors"
+          >
+            Search
+          </button>
+          {params.q && (
+            <Link href="/accounts" className="text-sm text-slate-500 hover:text-slate-700">
+              Clear
+            </Link>
+          )}
+        </form>
+
         <Card>
           {accounts.length === 0 ? (
-            <EmptyState title="No accounts yet" description="Add companies you're working with." />
+            <EmptyState title="No accounts found" description="Try a different search, or add a new account." />
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -63,6 +104,14 @@ export default async function AccountsPage() {
               </tbody>
             </table>
           )}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={PAGE_SIZE}
+            basePath="/accounts"
+            searchParams={{ q: params.q }}
+          />
         </Card>
       </div>
     </div>

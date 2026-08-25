@@ -16,7 +16,7 @@ export function PricelistForm({
     productId?: string;
     month?: string; // "YYYY-MM"
     dealerPrice?: number;
-    landedPrice?: number;
+    landedPrice?: number | null;
     exchangeRate?: number;
   };
   submitLabel: string;
@@ -87,14 +87,13 @@ export function PricelistForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Landed Price (₦) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Landed Price (₦)</label>
           <input
             name="landedPrice"
             type="number"
             step="0.01"
             min={0}
-            required
-            defaultValue={defaultValues?.landedPrice}
+            defaultValue={defaultValues?.landedPrice ?? undefined}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

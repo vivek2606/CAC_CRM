@@ -83,6 +83,7 @@ model User {
 model Account {
   id          String    @id @default(cuid())
   name        String
+  code        String?   @unique
   industry    String?
   website     String?
   phone       String?
@@ -174,6 +175,10 @@ model Deal {
 
   sourceLead    Lead?       @relation("LeadConversion")
 
+  // Set only for deals brought in via the historical sales-register import,
+  // so re-running an import can't create duplicate deals.
+  sourceTxnNo   Int?        @unique
+
   activities    Activity[]
   notes         Note[]
 }
@@ -227,7 +232,7 @@ model Product {
   category      String
   subCategory   String
   model         String
-  capacityKw    Float
+  capacityKw    Float?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -238,11 +243,13 @@ model Pricelist {
   id            String    @id @default(cuid())
   month         DateTime
   dealerPrice   Float
-  landedPrice   Float
+  landedPrice   Float?
   exchangeRate  Float
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   productId     String
   product       Product   @relation(fields: [productId], references: [id])
+
+  @@unique([productId, month])
 }

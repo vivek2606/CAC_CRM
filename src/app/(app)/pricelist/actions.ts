@@ -10,7 +10,7 @@ const pricelistSchema = z.object({
   productId: z.string().min(1, "Product is required"),
   month: z.string().min(1, "Month is required"),
   dealerPrice: z.coerce.number().min(0),
-  landedPrice: z.coerce.number().min(0),
+  landedPrice: z.coerce.number().min(0).nullable(),
   exchangeRate: z.coerce.number().min(0),
 });
 
@@ -19,10 +19,14 @@ function parseMonth(value: string): Date {
   return new Date(`${value}-01T00:00:00.000Z`);
 }
 
+function blankToNull(value: FormDataEntryValue | null) {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
 export async function createPricelistEntry(formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
-  const parsed = pricelistSchema.parse(raw);
+  const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
 
   const entry = await prisma.pricelist.create({
     data: {
@@ -42,7 +46,7 @@ export async function createPricelistEntry(formData: FormData) {
 export async function updatePricelistEntry(entryId: string, formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
-  const parsed = pricelistSchema.parse(raw);
+  const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
 
   await prisma.pricelist.update({
     where: { id: entryId },

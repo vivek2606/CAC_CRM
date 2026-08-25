@@ -82,7 +82,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
                       <td className="py-2.5 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
-                      <td className="py-2.5 text-slate-700">{formatCurrency(entry.landedPrice)}</td>
+                      <td className="py-2.5 text-slate-700">
+                        {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
+                      </td>
                       <td className="py-2.5 text-slate-500">₦{entry.exchangeRate.toFixed(2)} / $1</td>
                     </tr>
                   ))}
@@ -113,7 +115,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Capacity</dt>
-              <dd className="text-slate-700">{product.capacityKw} kW</dd>
+              <dd className="text-slate-700">{product.capacityKw != null ? `${product.capacityKw} kW` : "—"}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Added</dt>
