@@ -22,23 +22,24 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function handleDrop(stage: DealStage) {
-    if (!dragId) return;
-    const deal = items.find((d) => d.id === dragId);
-    if (!deal || deal.stage === stage) {
-      setDragId(null);
-      return;
-    }
+  function moveDeal(dealId: string, stage: DealStage) {
+    const deal = items.find((d) => d.id === dealId);
+    if (!deal || deal.stage === stage) return;
 
     let lostReason: string | undefined;
     if (stage === "LOST") {
       lostReason = window.prompt("Reason for losing this deal?") ?? "Not specified";
     }
 
-    setItems((prev) => prev.map((d) => (d.id === dragId ? { ...d, stage } : d)));
+    setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
     startTransition(() => {
-      updateDealStage(dragId, stage, lostReason);
+      updateDealStage(dealId, stage, lostReason);
     });
+  }
+
+  function handleDrop(stage: DealStage) {
+    if (!dragId) return;
+    moveDeal(dragId, stage);
     setDragId(null);
   }
 
@@ -83,6 +84,19 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
                       <Avatar name={deal.owner.name} color={deal.owner.avatarColor} size={6} />
                     </div>
                   </Link>
+                  {/* Dragging doesn't work via touch on iPad/iPhone, so this select is the
+                      reliable way to change stage on those devices (also works with a mouse). */}
+                  <select
+                    value={deal.stage}
+                    onChange={(e) => moveDeal(deal.id, e.target.value as DealStage)}
+                    className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {DEAL_STAGES.map((s) => (
+                      <option key={s} value={s}>
+                        {DEAL_STAGE_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ))}
               {stageDeals.length === 0 && (

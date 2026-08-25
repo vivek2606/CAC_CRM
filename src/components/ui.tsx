@@ -12,9 +12,9 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white px-6 py-5 flex items-center justify-between gap-4 sticky top-0 z-10">
+    <div className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 sticky top-14 lg:top-0 z-10">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{title}</h1>
         {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
       </div>
       {action}

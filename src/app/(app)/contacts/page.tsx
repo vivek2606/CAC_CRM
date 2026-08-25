@@ -28,6 +28,7 @@ export default async function ContactsPage() {
           {contacts.length === 0 ? (
             <EmptyState title="No contacts yet" description="Add people you're in touch with." />
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -59,6 +60,7 @@ export default async function ContactsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>

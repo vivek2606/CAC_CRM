@@ -90,6 +90,7 @@ export default async function ClosedDealsPage({
           {deals.length === 0 ? (
             <EmptyState title="No closed deals found" />
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -130,6 +131,7 @@ export default async function ClosedDealsPage({
                 })}
               </tbody>
             </table>
+            </div>
           )}
           <Pagination
             page={page}

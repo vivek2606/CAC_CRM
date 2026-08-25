@@ -69,6 +69,7 @@ export default async function AccountsPage({
           {accounts.length === 0 ? (
             <EmptyState title="No accounts found" description="Try a different search, or add a new account." />
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -103,6 +104,7 @@ export default async function AccountsPage({
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           <Pagination
             page={page}

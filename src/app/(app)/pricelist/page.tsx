@@ -90,6 +90,7 @@ export default async function PricelistPage({
           {entries.length === 0 ? (
             <EmptyState title="No price entries found" description="Add a price entry for a product." />
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -146,6 +147,7 @@ export default async function PricelistPage({
                 })}
               </tbody>
             </table>
+            </div>
           )}
           <Pagination
             page={page}

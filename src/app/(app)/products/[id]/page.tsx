@@ -66,6 +66,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             {product.pricelistEntries.length === 0 ? (
               <EmptyState title="No price entries yet" />
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -90,6 +91,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </Card>
         </div>

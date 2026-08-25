@@ -83,6 +83,7 @@ export function ImportForm() {
               <p className="text-xs text-slate-500 mb-3">
                 Share these with each person — they should be the only ones who see their own password.
               </p>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -101,6 +102,7 @@ export function ImportForm() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           )}
         </div>

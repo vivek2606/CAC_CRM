@@ -100,6 +100,7 @@ export default async function LeadsPage({
           {leads.length === 0 ? (
             <EmptyState title="No leads found" description="Try adjusting your filters, or create a new lead." />
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -141,6 +142,7 @@ export default async function LeadsPage({
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>
