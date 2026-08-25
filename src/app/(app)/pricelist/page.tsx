@@ -12,23 +12,31 @@ const PAGE_SIZE = 50;
 export default async function PricelistPage({
   searchParams,
 }: {
-  searchParams: Promise<{ productId?: string; page?: string }>;
+  searchParams: Promise<{ productId?: string; category?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
   const page = parsePage(params.page);
-  const where = params.productId ? { productId: params.productId } : undefined;
+  const where = {
+    ...(params.productId ? { productId: params.productId } : {}),
+    ...(params.category ? { product: { category: params.category } } : {}),
+  };
 
-  const [entries, totalCount, products] = await Promise.all([
+  const [entries, totalCount, products, categories] = await Promise.all([
     prisma.pricelist.findMany({
       where,
       orderBy: [{ month: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { product: { select: { code: true, model: true, brand: true } } },
+      include: { product: { select: { code: true, model: true, brand: true, category: true } } },
     }),
     prisma.pricelist.count({ where }),
     prisma.product.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true } }),
+    prisma.product.findMany({
+      distinct: ["category"],
+      select: { category: true },
+      orderBy: { category: "asc" },
+    }),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -53,13 +61,25 @@ export default async function PricelistPage({
               </option>
             ))}
           </select>
+          <select
+            name="category"
+            defaultValue={params.category ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.category} value={c.category}>
+                {c.category}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-700 transition-colors"
           >
             Filter
           </button>
-          {params.productId && (
+          {(params.productId || params.category) && (
             <Link href="/pricelist" className="text-sm text-slate-500 hover:text-slate-700">
               Clear
             </Link>
@@ -74,6 +94,7 @@ export default async function PricelistPage({
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-3 font-medium">Product Code</th>
+                  <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Model</th>
                   <th className="px-4 py-3 font-medium">Month</th>
                   <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
@@ -88,6 +109,7 @@ export default async function PricelistPage({
                   return (
                     <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-800">{entry.product.code}</td>
+                      <td className="px-4 py-3 text-slate-500">{entry.product.category}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.product.model}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
@@ -131,7 +153,7 @@ export default async function PricelistPage({
             totalCount={totalCount}
             pageSize={PAGE_SIZE}
             basePath="/pricelist"
-            searchParams={{ productId: params.productId }}
+            searchParams={{ productId: params.productId, category: params.category }}
           />
         </Card>
       </div>
