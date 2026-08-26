@@ -2,8 +2,19 @@ import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
-import { OPEN_DEAL_STAGES, CLOSED_LEAD_STATUSES } from "@/lib/constants";
+import {
+  OPEN_DEAL_STAGES,
+  CLOSED_LEAD_STATUSES,
+  DEAL_STAGES,
+  LEAD_SOURCES,
+  LEAD_SOURCE_LABELS,
+  LEAD_SOURCE_COLORS,
+} from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
+import { StageValueChart, type StageValueRow } from "./stage-value-chart";
+import { ProbabilityExposureChart } from "./probability-exposure-chart";
+import { ConversionFunnel } from "./conversion-funnel";
+import { LeadSourceChart } from "./lead-source-chart";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
@@ -25,8 +36,10 @@ export default async function ReportsPage() {
     where: { role: "SALES_MANAGER" },
     orderBy: { name: "asc" },
     include: {
-      deals: { select: { stage: true, value: true, closedAt: true, createdAt: true } },
-      leads: { select: { status: true } },
+      deals: { select: { stage: true, value: true, probability: true, closedAt: true, createdAt: true } },
+      leads: {
+        select: { status: true, source: true, winProbability: true, value: true, convertedDeal: { select: { stage: true } } },
+      },
       activities: { select: { status: true } },
     },
   });
@@ -80,6 +93,64 @@ export default async function ReportsPage() {
     .map((r) => ({ name: r.name.split(" ")[0], open: r.openValue, won: r.wonQuarterValue }))
     .sort((a, b) => b.won - a.won);
 
+  // The 4 analytics sections below are scoped to the 6 active CAC reps only,
+  // same as the headline stats above - mixing in "Others" would swamp them
+  // with 1800+ historical bulk-imported deals from before this system existed.
+  const teamDeals = salesReps.flatMap((r) => r.deals);
+  const teamLeads = salesReps.flatMap((r) => r.leads);
+
+  // 1. Deal value by stage, per rep (stacked bar).
+  const stageValueData: StageValueRow[] = salesReps.map((rep) => {
+    const row = { name: rep.name.split(" ")[0] } as StageValueRow;
+    for (const stage of DEAL_STAGES) row[stage] = 0;
+    for (const deal of rep.deals) row[deal.stage] += deal.value;
+    return row;
+  });
+
+  // 2. Pipeline/leads exposure by win probability (open deals + open leads,
+  // bucketed to the nearest 10% so both fields line up on one scale).
+  function roundToBucket(pct: number): number {
+    return Math.min(100, Math.max(10, Math.round(pct / 10) * 10));
+  }
+  const openTeamDeals = teamDeals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
+  const openTeamLeads = teamLeads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
+  const probabilityExposureData = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((bucket) => ({
+    bucket: `${bucket}%`,
+    pipeline: openTeamDeals.filter((d) => roundToBucket(d.probability) === bucket).reduce((s, d) => s + d.value, 0),
+    leads: openTeamLeads
+      .filter((l) => l.winProbability != null && l.winProbability === bucket)
+      .reduce((s, l) => s + (l.value ?? 0), 0),
+  }));
+
+  // 3. Conversion funnel: every lead -> qualified -> converted to a deal -> won.
+  const totalLeadsCount = teamLeads.length;
+  const qualifiedLeadsCount = teamLeads.filter((l) => l.status === "QUALIFIED" || l.status === "CONVERTED").length;
+  const convertedLeadsCount = teamLeads.filter((l) => l.status === "CONVERTED").length;
+  const wonFromLeadsCount = teamLeads.filter((l) => l.convertedDeal?.stage === "WON").length;
+  const funnelStages = [
+    { label: "Total Leads", count: totalLeadsCount },
+    { label: "Qualified", count: qualifiedLeadsCount },
+    { label: "Converted to Deal", count: convertedLeadsCount },
+    { label: "Won", count: wonFromLeadsCount },
+  ];
+
+  // 4. Lead source distribution.
+  const sourceGroups = new Map<string, { count: number; value: number }>();
+  for (const lead of teamLeads) {
+    const g = sourceGroups.get(lead.source) ?? { count: 0, value: 0 };
+    g.count += 1;
+    g.value += lead.value ?? 0;
+    sourceGroups.set(lead.source, g);
+  }
+  const leadSourceData = LEAD_SOURCES.map((source) => ({
+    source: LEAD_SOURCE_LABELS[source],
+    count: sourceGroups.get(source)?.count ?? 0,
+    value: sourceGroups.get(source)?.value ?? 0,
+    fill: LEAD_SOURCE_COLORS[source],
+  }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+
   return (
     <div>
       <PageHeader
@@ -115,6 +186,36 @@ export default async function ReportsPage() {
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Open pipeline vs. won this quarter</h2>
           <RepComparisonChart data={chartData} />
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Deal value by status, per sales manager</h2>
+          <p className="text-xs text-slate-400 mb-3">Every deal each rep owns, split out by pipeline stage.</p>
+          <StageValueChart data={stageValueData} />
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Exposure by winning probability</h2>
+            <p className="text-xs text-slate-400 mb-3">Open deal and lead value, bucketed by confidence of closing.</p>
+            <ProbabilityExposureChart data={probabilityExposureData} />
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Conversion funnel</h2>
+            <p className="text-xs text-slate-400 mb-3">Every lead&apos;s journey from first contact to a won deal.</p>
+            <ConversionFunnel stages={funnelStages} />
+          </Card>
+        </div>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source distribution</h2>
+          <p className="text-xs text-slate-400 mb-3">Where the team&apos;s leads are coming from.</p>
+          {leadSourceData.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
+          ) : (
+            <LeadSourceChart data={leadSourceData} />
+          )}
         </Card>
 
         <Card>

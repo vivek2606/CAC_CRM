@@ -86,6 +86,19 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   EVENT: "Event",
 };
 
+// Fixed categorical order, validated for colorblind-safe adjacent contrast
+// (see dataviz skill) - never reorder or cycle these independently of LEAD_SOURCES.
+export const LEAD_SOURCE_COLORS: Record<LeadSource, string> = {
+  COLD_CALL: "#3b82f6",
+  WEBSITE: "#f97316",
+  CONTRACTOR: "#14b8a6",
+  CONSULTANT: "#f59e0b",
+  ARCHITECT: "#ec4899",
+  DIRECT: "#16a34a",
+  REFERRAL: "#7c3aed",
+  EVENT: "#ef4444",
+};
+
 export const EQUIPMENT_TYPES: EquipmentType[] = [
   "VRF",
   "ATOM",
