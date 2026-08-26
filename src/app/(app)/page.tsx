@@ -58,9 +58,11 @@ export default async function DashboardPage() {
           account: { select: { name: true } },
         },
       }),
+      // Only the core CAC sales team, not historical/other-division reps
+      // carrying the same SALES_MANAGER role.
       user.role === "HEAD"
         ? prisma.user.findMany({
-            where: { role: "SALES_MANAGER" },
+            where: { role: "SALES_MANAGER", isActive: true, title: "Sales Manager" },
             include: {
               deals: { select: { stage: true, value: true, closedAt: true } },
             },
