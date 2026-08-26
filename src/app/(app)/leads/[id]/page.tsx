@@ -7,8 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_COLORS,
-  LEAD_TEMPERATURE_LABELS,
-  LEAD_TEMPERATURE_COLORS,
+  winProbabilityColor,
   LEAD_SOURCE_LABELS,
   EQUIPMENT_TYPE_LABELS,
 } from "@/lib/constants";
@@ -116,12 +115,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   </Badge>
                 </dd>
               </div>
-              {lead.temperature && (
+              {lead.winProbability != null && (
                 <div className="flex justify-between">
-                  <dt className="text-slate-500">Temperature</dt>
+                  <dt className="text-slate-500">Winning probability</dt>
                   <dd>
-                    <Badge bg={LEAD_TEMPERATURE_COLORS[lead.temperature].bg} text={LEAD_TEMPERATURE_COLORS[lead.temperature].text}>
-                      {LEAD_TEMPERATURE_LABELS[lead.temperature]}
+                    <Badge bg={winProbabilityColor(lead.winProbability).bg} text={winProbabilityColor(lead.winProbability).text}>
+                      {lead.winProbability}%
                     </Badge>
                   </dd>
                 </div>

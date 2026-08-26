@@ -26,7 +26,7 @@ export default async function ImportLeadsPage() {
             <li>Upload the Hot Leads .xlsx file exactly as maintained today.</li>
             <li>Each row becomes a Lead, with its Account and Contact created or matched by name.</li>
             <li>Rows marked Won in the sheet are skipped entirely — those are already-billed sales and will come in later via the Sales Register import instead.</li>
-            <li>Status is set to Qualified (Hot/Warm/Cold) or Unqualified (Lost) as usual; the sheet&apos;s own Hot/Warm/Cold/Lost word is kept in a separate Temperature field.</li>
+            <li>Status is set to Qualified (Hot/Warm/Cold) or Unqualified (Lost) as usual; Hot/Warm/Cold also sets a Winning Probability of 90%/60%/30%.</li>
             <li>Equipment is mapped onto VRF, Atom, Floor Standing, Rooftop, Large Duct, or Mixed Product.</li>
             <li>Source is mapped onto Cold Call, Website, Contractor, Consultant, Architect, Direct, Referral, or Event.</li>
             <li>Where the Lead Source column actually named a person, it&apos;s relabeled &quot;Contractor&quot; and the name is kept under Influencer in the notes.</li>

@@ -1,12 +1,4 @@
-import type {
-  DealStage,
-  LeadStatus,
-  LeadTemperature,
-  LeadSource,
-  EquipmentType,
-  ActivityType,
-  ActivityStatus,
-} from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -63,23 +55,14 @@ export const LEAD_STATUS_COLORS: Record<LeadStatus, { bg: string; text: string }
   CONVERTED: { bg: "bg-indigo-100", text: "text-indigo-700" },
 };
 
-export const LEAD_TEMPERATURES: LeadTemperature[] = ["HOT", "WARM", "COLD", "WON", "LOST"];
+// Winning probability, as a percentage in steps of 10.
+export const WIN_PROBABILITY_OPTIONS: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
-export const LEAD_TEMPERATURE_LABELS: Record<LeadTemperature, string> = {
-  HOT: "Hot",
-  WARM: "Warm",
-  COLD: "Cold",
-  WON: "Won",
-  LOST: "Lost",
-};
-
-export const LEAD_TEMPERATURE_COLORS: Record<LeadTemperature, { bg: string; text: string }> = {
-  HOT: { bg: "bg-red-100", text: "text-red-700" },
-  WARM: { bg: "bg-amber-100", text: "text-amber-700" },
-  COLD: { bg: "bg-cyan-100", text: "text-cyan-700" },
-  WON: { bg: "bg-emerald-100", text: "text-emerald-700" },
-  LOST: { bg: "bg-slate-200", text: "text-slate-600" },
-};
+export function winProbabilityColor(pct: number): { bg: string; text: string } {
+  if (pct >= 70) return { bg: "bg-emerald-100", text: "text-emerald-700" };
+  if (pct >= 40) return { bg: "bg-amber-100", text: "text-amber-700" };
+  return { bg: "bg-rose-100", text: "text-rose-700" };
+}
 
 export const LEAD_SOURCES: LeadSource[] = [
   "COLD_CALL",

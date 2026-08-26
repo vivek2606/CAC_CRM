@@ -6,13 +6,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType, LeadTemperature } from "@prisma/client";
+import type { EquipmentType } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
   company: z.string().optional(),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
-  temperature: z.string().optional(),
+  winProbability: z.string().optional(),
   source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]),
   equipmentType: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
@@ -32,8 +32,10 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
   return value && value.trim() !== "" ? (value as EquipmentType) : null;
 }
 
-function toTemperature(value: string | undefined): LeadTemperature | null {
-  return value && value.trim() !== "" ? (value as LeadTemperature) : null;
+function toWinProbability(value: string | undefined): number | null {
+  if (!value || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function createLead(formData: FormData) {
@@ -48,7 +50,7 @@ export async function createLead(formData: FormData) {
       title: parsed.title,
       company: toNullable(parsed.company),
       status: parsed.status,
-      temperature: toTemperature(parsed.temperature),
+      winProbability: toWinProbability(parsed.winProbability),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,
@@ -82,7 +84,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       title: parsed.title,
       company: toNullable(parsed.company),
       status: parsed.status,
-      temperature: toTemperature(parsed.temperature),
+      winProbability: toWinProbability(parsed.winProbability),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,

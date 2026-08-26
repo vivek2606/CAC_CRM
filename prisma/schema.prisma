@@ -20,18 +20,6 @@ enum LeadStatus {
   CONVERTED
 }
 
-// A separate temperature/outcome tag, independent of the standard status
-// pipeline above - mainly populated by the Leads sheet import, which tracks
-// leads this way. A lead with temperature WON should also have status
-// CONVERTED once it's actually turned into a Deal.
-enum LeadTemperature {
-  HOT
-  WARM
-  COLD
-  WON
-  LOST
-}
-
 enum LeadSource {
   WEBSITE
   REFERRAL
@@ -153,7 +141,8 @@ model Lead {
   title         String
   company       String?
   status        LeadStatus  @default(NEW)
-  temperature   LeadTemperature?
+  // Probability this lead closes, as a percentage in steps of 10 (10-100).
+  winProbability Int?
   source        LeadSource  @default(DIRECT)
   equipmentType EquipmentType?
   value         Float?

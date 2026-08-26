@@ -2,7 +2,6 @@ import type { RawLeadRow } from "./parse-leads-register";
 import { normalizeSalesmanName } from "./roster";
 
 export type LeadStatusValue = "QUALIFIED" | "UNQUALIFIED";
-export type LeadTemperatureValue = "HOT" | "WARM" | "COLD" | "LOST";
 export type LeadSourceValue =
   | "WEBSITE"
   | "REFERRAL"
@@ -27,7 +26,7 @@ export type TransformedLead = {
   importKey: string;
   title: string;
   status: LeadStatusValue;
-  temperature: LeadTemperatureValue;
+  winProbability: number | null;
   source: LeadSourceValue;
   equipmentType: EquipmentTypeValue;
   value: number | null;
@@ -249,13 +248,15 @@ function mapStatus(rawStatus: string | null): LeadStatusValue {
   return "QUALIFIED";
 }
 
-// The sheet's own Hot/Warm/Cold/Lost vocabulary, kept as a separate tag.
-function mapTemperature(rawStatus: string | null): LeadTemperatureValue {
+// Hot/Warm/Cold are really just winning probabilities, per instruction:
+// Hot 90%, Warm 60%, Cold 30%. Lost leads no longer have a live probability
+// of winning, so they get none.
+function mapWinProbability(rawStatus: string | null): number | null {
   const s = (rawStatus ?? "").trim().toUpperCase();
-  if (s === "HOT") return "HOT";
-  if (s === "COLD") return "COLD";
-  if (s === "LOST") return "LOST";
-  return "WARM"; // Warm, and anything unrecognized (e.g. "indoors supplied"), defaults here.
+  if (s === "HOT") return 90;
+  if (s === "COLD") return 30;
+  if (s === "LOST") return null;
+  return 60; // Warm, and anything unrecognized (e.g. "indoors supplied"), defaults here.
 }
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -349,7 +350,7 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
       importKey: `leadsheet:${row.slNo}`,
       title: row.projectName?.trim() || row.equipment?.trim() || `Lead — ${accountName}`,
       status: mapStatus(row.status),
-      temperature: mapTemperature(row.status),
+      winProbability: mapWinProbability(row.status),
       source: mapLeadSourceEnum(leadSource, accountName),
       equipmentType: mapEquipmentType(row.equipment),
       value: row.amount,
