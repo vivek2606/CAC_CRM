@@ -114,12 +114,13 @@ const LEAD_SOURCE_ENUM_MAP: Record<string, LeadSourceValue> = {
   "OPERATION MANAGER": "DIRECT",
 };
 
-// Raw Equipment text -> the closed 6-value canonical set. Anything combining
-// two or more distinct types, or too ambiguous to place cleanly, becomes
-// Mixed Product; the original text is always kept in the notes. Per
-// instruction: DX and PAC are Large Duct, HRV is VRF, and anything
-// mentioning "atom" falls under Atom regardless of what else it's combined
-// with (see the substring check in mapEquipmentType below).
+// Raw Equipment text -> the closed 6-value canonical set. "RT" (as in RTU,
+// RT & CCD, RT,ATOM) means Rooftop. Per instruction: DX, Ceiling Concealed,
+// and PAC are Large Duct, HRV is VRF, a lone mention of "atom" falls under
+// Atom (see the substring check in mapEquipmentType below) - but whenever
+// two distinct product types are combined (joined by "&", "+", "/", ",", or
+// "and"), the row becomes Mixed Product, atom included; the original text is
+// always kept in the notes either way.
 const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
   VRF: "VRF",
   "VRF AND SPLIT": "MIXED_PRODUCT",
@@ -128,7 +129,7 @@ const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
   "ATOM WALL MOUNTED": "ATOM",
   "ATOM WALL MOUNTED/CASSETTE": "ATOM",
   "ATOM HIWALL": "ATOM",
-  "ATOM & CONCEALED": "ATOM",
+  "ATOM & CONCEALED": "MIXED_PRODUCT",
   HIWALL: "ATOM",
   SPLIT: "ATOM",
   DUCT: "LARGE_DUCT",
@@ -141,10 +142,14 @@ const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
   ROOFTOP: "ROOFTOP",
   RTU: "ROOFTOP",
   "RT & CCD": "MIXED_PRODUCT",
-  "RT,ATOM": "ATOM",
+  "RT,ATOM": "MIXED_PRODUCT",
   FS: "FLOOR_STANDING",
   "MIXED PRODUCT": "MIXED_PRODUCT",
 };
+
+// Separators that indicate two distinct product types were combined in one
+// cell (",", "&", "+", "/", or the word "and").
+const EQUIPMENT_COMBINATOR = /[&+,/]|\bAND\b/;
 
 const EMPTY_ISH = new Set(["", "NONE", "NIL", "NA", "N/A"]);
 
@@ -228,7 +233,8 @@ function mapEquipmentType(rawEquipment: string | null): EquipmentTypeValue {
   if (!rawEquipment) return "MIXED_PRODUCT";
   const key = rawEquipment.trim().replace(/\s+/g, " ").toUpperCase();
   if (EQUIPMENT_TYPE_MAP[key]) return EQUIPMENT_TYPE_MAP[key];
-  if (key.includes("ATOM")) return "ATOM"; // catch-all: anything atom falls under Atom.
+  if (EQUIPMENT_COMBINATOR.test(key)) return "MIXED_PRODUCT"; // two types combined in one cell.
+  if (key.includes("ATOM")) return "ATOM"; // a lone mention of atom falls under Atom.
   return "MIXED_PRODUCT";
 }
 
