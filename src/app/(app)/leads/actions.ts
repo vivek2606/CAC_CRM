@@ -4,9 +4,9 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType } from "@prisma/client";
+import type { EquipmentType, DealStage } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -144,4 +144,78 @@ export async function convertLeadToDeal(leadId: string) {
   revalidatePath("/leads");
   revalidatePath("/deals");
   redirect(`/deals/${deal.id}`);
+}
+
+// Per instruction: Hot (90%) -> Negotiation, Warm (60%) -> Proposal,
+// Cold (30%) -> Needs Analysis. Only open, not-yet-converted leads with one
+// of these win probabilities are touched, so this is safe to run more than
+// once - anything already converted, or without one of these probabilities
+// (e.g. Lost leads), is left alone.
+const STAGE_BY_WIN_PROBABILITY: Record<number, DealStage> = {
+  90: "NEGOTIATION",
+  60: "PROPOSAL",
+  30: "NEEDS_ANALYSIS",
+};
+
+export type BulkConvertSummary = {
+  converted: number;
+  negotiation: number;
+  proposal: number;
+  needsAnalysis: number;
+  totalValue: number;
+};
+
+export type BulkConvertState = { error?: string; summary?: BulkConvertSummary };
+
+// useActionState requires this (prevState, formData) signature; neither is needed here.
+export async function bulkConvertLeadsByProbability(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: BulkConvertState | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<BulkConvertState> {
+  await requireHead();
+
+  const leads = await prisma.lead.findMany({
+    where: { status: { not: "CONVERTED" }, winProbability: { in: [90, 60, 30] } },
+  });
+
+  let negotiation = 0;
+  let proposal = 0;
+  let needsAnalysis = 0;
+  let totalValue = 0;
+
+  for (const lead of leads) {
+    const stage = STAGE_BY_WIN_PROBABILITY[lead.winProbability!];
+    if (!stage) continue;
+
+    const deal = await prisma.deal.create({
+      data: {
+        title: lead.title,
+        stage,
+        value: lead.value ?? 0,
+        probability: STAGE_DEFAULT_PROBABILITY[stage],
+        ownerId: lead.ownerId,
+        accountId: lead.accountId,
+        contactId: lead.contactId,
+      },
+    });
+
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { status: "CONVERTED", convertedDealId: deal.id },
+    });
+
+    if (stage === "NEGOTIATION") negotiation++;
+    else if (stage === "PROPOSAL") proposal++;
+    else needsAnalysis++;
+    totalValue += lead.value ?? 0;
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/deals");
+
+  return {
+    summary: { converted: negotiation + proposal + needsAnalysis, negotiation, proposal, needsAnalysis, totalValue },
+  };
 }

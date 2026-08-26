@@ -4,7 +4,10 @@ import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, Badge, EmptyState, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, LEAD_STATUSES } from "@/lib/constants";
+import { BulkConvertButton } from "./bulk-convert-button";
 import type { LeadStatus } from "@prisma/client";
+
+export const maxDuration = 60;
 
 export default async function LeadsPage({
   searchParams,
@@ -45,7 +48,12 @@ export default async function LeadsPage({
       <PageHeader
         title="Leads"
         description={`${leads.length} lead${leads.length === 1 ? "" : "s"}`}
-        action={<NewButton href="/leads/new" label="New Lead" />}
+        action={
+          <div className="flex items-center gap-2">
+            {user.role === "HEAD" && <BulkConvertButton />}
+            <NewButton href="/leads/new" label="New Lead" />
+          </div>
+        }
       />
 
       <div className="p-6 space-y-4">
