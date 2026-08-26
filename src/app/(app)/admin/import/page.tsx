@@ -1,29 +1,47 @@
+import Link from "next/link";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { ImportForm } from "./import-form";
+import { FileSpreadsheet, Target, ChevronRight } from "lucide-react";
 
-export const maxDuration = 60;
+const IMPORTS = [
+  {
+    href: "/admin/import/sales-register",
+    icon: FileSpreadsheet,
+    title: "Sales Register",
+    description: "Orion ERP historical sales export — accounts, products, price history, and Won deals.",
+  },
+  {
+    href: "/admin/import/leads",
+    icon: Target,
+    title: "Leads",
+    description: "The Excel sheet used to track hot/warm/cold leads.",
+  },
+];
 
-export default async function ImportPage() {
+export default async function ImportHubPage() {
   await requireHead();
 
   return (
     <div>
-      <PageHeader title="Import Sales Register" description="One-time historical data import from the Orion ERP export" />
-      <div className="p-6 space-y-4">
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
-          <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
-            <li>Upload the Sales Register .xlsx file exactly as exported from Orion ERP.</li>
-            <li>This creates customer accounts, the product catalog, historical price entries, and Won deals dated back to when they actually closed.</li>
-            <li>Installation/service billing lines and return/credit-note lines are excluded automatically.</li>
-            <li>Safe to re-run on the same file — already-imported records are skipped, not duplicated.</li>
-            <li>This can take a minute for a large file. Don&apos;t close the tab while it&apos;s running.</li>
-          </ul>
-        </Card>
-        <Card className="p-6">
-          <ImportForm />
-        </Card>
+      <PageHeader title="Import Data" description="Bring in data from your existing spreadsheets" />
+      <div className="p-6 space-y-3 max-w-2xl">
+        {IMPORTS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href}>
+              <Card className="p-5 flex items-center gap-4 hover:border-indigo-300 transition-colors">
+                <div className="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold text-slate-900">{item.title}</h2>
+                  <p className="text-sm text-slate-500">{item.description}</p>
+                </div>
+                <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
