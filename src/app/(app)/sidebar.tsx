@@ -13,6 +13,7 @@ import {
   Package,
   Tags,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
@@ -111,6 +112,18 @@ export function Sidebar({
             >
               <Upload className="h-4 w-4" />
               Import Data
+            </Link>
+            <Link
+              href="/admin/team"
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                pathname.startsWith("/admin/team")
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              Team & Logins
             </Link>
           </>
         )}
