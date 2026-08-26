@@ -132,8 +132,8 @@ async function main() {
     "Referral from existing client",
   ];
 
-  const leadStatuses: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED"];
-  const leadSources: LeadSource[] = ["WEBSITE", "REFERRAL", "COLD_CALL", "EMAIL_CAMPAIGN", "SOCIAL_MEDIA", "EVENT", "PARTNER"];
+  const leadStatuses: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "HOT", "WARM", "COLD", "UNQUALIFIED"];
+  const leadSources: LeadSource[] = ["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"];
 
   const openLeads = [];
   for (let i = 0; i < 30; i++) {

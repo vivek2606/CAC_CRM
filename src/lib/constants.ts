@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, ActivityType, ActivityStatus } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -34,44 +34,86 @@ export const DEAL_STAGE_COLORS: Record<DealStage, { bg: string; text: string; do
   LOST: { bg: "bg-rose-100", text: "text-rose-700", dot: "bg-rose-500" },
 };
 
-export const LEAD_STATUSES: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"];
+// Terminal statuses that should be excluded from "active leads" counts.
+export const CLOSED_LEAD_STATUSES: LeadStatus[] = ["CONVERTED", "UNQUALIFIED", "WON", "LOST"];
+
+export const LEAD_STATUSES: LeadStatus[] = [
+  "NEW",
+  "CONTACTED",
+  "QUALIFIED",
+  "HOT",
+  "WARM",
+  "COLD",
+  "UNQUALIFIED",
+  "CONVERTED",
+  "WON",
+  "LOST",
+];
 
 export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   NEW: "New",
   CONTACTED: "Contacted",
   QUALIFIED: "Qualified",
+  HOT: "Hot",
+  WARM: "Warm",
+  COLD: "Cold",
   UNQUALIFIED: "Unqualified",
   CONVERTED: "Converted",
+  WON: "Won",
+  LOST: "Lost",
 };
 
 export const LEAD_STATUS_COLORS: Record<LeadStatus, { bg: string; text: string }> = {
   NEW: { bg: "bg-blue-100", text: "text-blue-700" },
   CONTACTED: { bg: "bg-sky-100", text: "text-sky-700" },
   QUALIFIED: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  HOT: { bg: "bg-red-100", text: "text-red-700" },
+  WARM: { bg: "bg-amber-100", text: "text-amber-700" },
+  COLD: { bg: "bg-cyan-100", text: "text-cyan-700" },
   UNQUALIFIED: { bg: "bg-slate-200", text: "text-slate-600" },
   CONVERTED: { bg: "bg-indigo-100", text: "text-indigo-700" },
+  WON: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  LOST: { bg: "bg-slate-200", text: "text-slate-600" },
 };
 
 export const LEAD_SOURCES: LeadSource[] = [
-  "WEBSITE",
-  "REFERRAL",
   "COLD_CALL",
-  "EMAIL_CAMPAIGN",
-  "SOCIAL_MEDIA",
+  "WEBSITE",
+  "CONTRACTOR",
+  "CONSULTANT",
+  "ARCHITECT",
+  "DIRECT",
+  "REFERRAL",
   "EVENT",
-  "PARTNER",
-  "OTHER",
 ];
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
-  WEBSITE: "Website",
-  REFERRAL: "Referral",
   COLD_CALL: "Cold Call",
-  EMAIL_CAMPAIGN: "Email Campaign",
-  SOCIAL_MEDIA: "Social Media",
+  WEBSITE: "Website",
+  CONTRACTOR: "Contractor",
+  CONSULTANT: "Consultant",
+  ARCHITECT: "Architect",
+  DIRECT: "Direct",
+  REFERRAL: "Referral",
   EVENT: "Event",
-  PARTNER: "Partner",
-  OTHER: "Other",
+};
+
+export const EQUIPMENT_TYPES: EquipmentType[] = [
+  "VRF",
+  "ATOM",
+  "FLOOR_STANDING",
+  "ROOFTOP",
+  "LARGE_DUCT",
+  "MIXED_PRODUCT",
+];
+
+export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
+  VRF: "VRF",
+  ATOM: "Atom",
+  FLOOR_STANDING: "Floor Standing",
+  ROOFTOP: "Rooftop",
+  LARGE_DUCT: "Large Duct",
+  MIXED_PRODUCT: "Mixed Product",
 };
 
 export const ACTIVITY_TYPES: ActivityType[] = ["CALL", "EMAIL", "MEETING", "TASK", "NOTE"];

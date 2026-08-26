@@ -1,17 +1,33 @@
 import type { RawLeadRow } from "./parse-leads-register";
 import { normalizeSalesmanName } from "./roster";
 
+export type LeadStatusValue = "HOT" | "WARM" | "COLD" | "WON" | "LOST";
+export type LeadSourceValue =
+  | "WEBSITE"
+  | "REFERRAL"
+  | "COLD_CALL"
+  | "CONTRACTOR"
+  | "CONSULTANT"
+  | "ARCHITECT"
+  | "DIRECT"
+  | "EVENT";
+export type EquipmentTypeValue = "VRF" | "ATOM" | "FLOOR_STANDING" | "ROOFTOP" | "LARGE_DUCT" | "MIXED_PRODUCT";
+
 export type TransformedAccount = { name: string; ownerKey: string };
 export type TransformedContact = {
   key: string; // accountName::fullName, for dedup within the import batch
+  importKey: string;
   accountName: string;
   firstName: string;
   lastName: string;
   phone: string | null;
 };
 export type TransformedLead = {
+  importKey: string;
   title: string;
-  status: "QUALIFIED" | "CONVERTED" | "UNQUALIFIED";
+  status: LeadStatusValue;
+  source: LeadSourceValue;
+  equipmentType: EquipmentTypeValue;
   value: number | null;
   phone: string | null;
   notes: string;
@@ -35,6 +51,12 @@ const SALES_PERSON_MAP: Record<string, string> = {
   CHIOMA: "CHIOMA ADUMEKWE",
   BUNMI: "ODUJEBE OLUWABUNMI AMINAT",
   CELINAH: "CELINAH OLUWAMAYO OJO",
+};
+
+// Confirmed same real-world company under a different name in the Sales
+// Register import — merge into the account that already exists there.
+export const ACCOUNT_NAME_ALIASES: Record<string, string> = {
+  "meczonetts engineering": "MECZONETTS ENGINEERING SERVICES NIG LTD",
 };
 
 // Lead Source values that are actually a person's name rather than a real
@@ -70,6 +92,54 @@ const PERSON_NAME_LEAD_SOURCES = new Set([
   "MRS DUKE",
   "ENGR. AYO",
 ]);
+
+// Cleaned (canonicalized) Lead Source text -> the closed LeadSource enum.
+// Anything not listed here falls back to DIRECT (if it matches the row's own
+// account name — i.e. the customer named itself as the source) or CONSULTANT
+// (an unrecognized named company/institution acting as an intermediary).
+const LEAD_SOURCE_ENUM_MAP: Record<string, LeadSourceValue> = {
+  CONTRACTOR: "CONTRACTOR",
+  "TURN KEY CONTRACTOR": "CONTRACTOR",
+  "CONTRACTOR/CONSULTANT": "CONTRACTOR",
+  CONSULTANT: "CONSULTANT",
+  RESELLER: "REFERRAL",
+  CLIENT: "DIRECT",
+  "PROJECT MANAGER": "CONTRACTOR",
+  NONE: "DIRECT",
+  DIRECT: "DIRECT",
+  ARCH: "ARCHITECT",
+  CHAIRMAN: "DIRECT",
+  "OPERATION MANAGER": "DIRECT",
+};
+
+// Raw Equipment text -> the closed 6-value canonical set. Anything combining
+// two or more distinct types, or too ambiguous to place cleanly, becomes
+// Mixed Product; the original text is always kept in the notes.
+const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
+  VRF: "VRF",
+  "VRF AND SPLIT": "MIXED_PRODUCT",
+  ATOM: "ATOM",
+  "ATOM UNIT": "ATOM",
+  "ATOM WALL MOUNTED": "ATOM",
+  "ATOM WALL MOUNTED/CASSETTE": "ATOM",
+  "ATOM HIWALL": "ATOM",
+  "ATOM & CONCEALED": "MIXED_PRODUCT",
+  HIWALL: "ATOM",
+  SPLIT: "ATOM",
+  DUCT: "LARGE_DUCT",
+  "DUCTED UNIT": "LARGE_DUCT",
+  DX: "MIXED_PRODUCT",
+  "CEILING CONCEALED": "LARGE_DUCT",
+  "LARGE CEILNG CONCEALED": "LARGE_DUCT",
+  HRV: "LARGE_DUCT",
+  PAC: "MIXED_PRODUCT",
+  ROOFTOP: "ROOFTOP",
+  RTU: "ROOFTOP",
+  "RT & CCD": "MIXED_PRODUCT",
+  "RT,ATOM": "MIXED_PRODUCT",
+  FS: "FLOOR_STANDING",
+  "MIXED PRODUCT": "MIXED_PRODUCT",
+};
 
 const EMPTY_ISH = new Set(["", "NONE", "NIL", "NA", "N/A"]);
 
@@ -142,11 +212,27 @@ function normalizeInfluencer(raw: string | null): string | null {
   return isEmptyish(raw) ? null : raw!.trim();
 }
 
-function mapStatus(rawStatus: string | null): "QUALIFIED" | "CONVERTED" | "UNQUALIFIED" {
+function mapLeadSourceEnum(cleanedLeadSource: string, accountName: string): LeadSourceValue {
+  const key = cleanedLeadSource.trim().toUpperCase();
+  if (LEAD_SOURCE_ENUM_MAP[key]) return LEAD_SOURCE_ENUM_MAP[key];
+  if (key === accountName.trim().toUpperCase()) return "DIRECT";
+  return "CONSULTANT";
+}
+
+function mapEquipmentType(rawEquipment: string | null): EquipmentTypeValue {
+  if (!rawEquipment) return "MIXED_PRODUCT";
+  const key = rawEquipment.trim().replace(/\s+/g, " ").toUpperCase();
+  return EQUIPMENT_TYPE_MAP[key] ?? "MIXED_PRODUCT";
+}
+
+function mapStatus(rawStatus: string | null): LeadStatusValue {
   const s = (rawStatus ?? "").trim().toUpperCase();
-  if (s === "WON") return "CONVERTED";
-  if (s === "LOST") return "UNQUALIFIED";
-  return "QUALIFIED"; // Hot/Warm/Cold, and anything else unrecognized, default here.
+  if (s === "WON") return "WON";
+  if (s === "LOST") return "LOST";
+  if (s === "HOT") return "HOT";
+  if (s === "COLD") return "COLD";
+  if (s === "WARM") return "WARM";
+  return "WARM"; // anything unrecognized (e.g. "indoors supplied") defaults here.
 }
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -159,6 +245,8 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 // leave intentionally-cased names alone.
 function canonicalizeName(raw: string): string {
   const trimmed = raw.trim().replace(/\s+/g, " ");
+  const alias = ACCOUNT_NAME_ALIASES[trimmed.toLowerCase()];
+  if (alias) return alias;
   const isAllCaps = trimmed === trimmed.toUpperCase();
   const isAllLower = trimmed === trimmed.toLowerCase();
   return isAllCaps || isAllLower ? titleCase(trimmed) : trimmed;
@@ -166,6 +254,12 @@ function canonicalizeName(raw: string): string {
 
 function dedupeKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// The display name an aliased account would have had before merging (so a
+// leftover duplicate row under the old name can be cleaned up post-import).
+export function aliasedAwayDisplayNames(): string[] {
+  return Object.keys(ACCOUNT_NAME_ALIASES).map(titleCase);
 }
 
 export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
@@ -180,7 +274,7 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
     const ownerKey = normalizeSalesmanName(mappedName ?? row.salesPerson);
 
     const rawAccountName = isEmptyish(row.customerName) ? row.contactPerson.trim() : row.customerName!.trim();
-    const accountDedupeKey = dedupeKey(rawAccountName);
+    const accountDedupeKey = dedupeKey(ACCOUNT_NAME_ALIASES[dedupeKey(rawAccountName)] ?? rawAccountName);
     let account = accountMap.get(accountDedupeKey);
     if (!account) {
       account = { name: canonicalizeName(rawAccountName), ownerKey };
@@ -194,6 +288,7 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
     if (!contact) {
       contact = {
         key: contactDedupeKey,
+        importKey: `leadsheet:contact:${contactDedupeKey}`,
         accountName,
         firstName,
         lastName,
@@ -222,8 +317,11 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
     ].filter((l): l is string => !!l);
 
     leads.push({
+      importKey: `leadsheet:${row.slNo}`,
       title: row.projectName?.trim() || row.equipment?.trim() || `Lead — ${accountName}`,
       status: mapStatus(row.status),
+      source: mapLeadSourceEnum(leadSource, accountName),
+      equipmentType: mapEquipmentType(row.equipment),
       value: row.amount,
       phone: row.contactNo,
       notes: noteLines.join("\n"),

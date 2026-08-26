@@ -25,11 +25,13 @@ export default async function ImportLeadsPage() {
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>Upload the Hot Leads .xlsx file exactly as maintained today.</li>
             <li>Each row becomes a Lead, with its Account and Contact created or matched by name.</li>
-            <li>Hot/Warm/Cold become Qualified, Won becomes Converted, Lost becomes Unqualified.</li>
+            <li>Status keeps the sheet&apos;s own words — Hot, Warm, Cold, Won, Lost.</li>
             <li>Won and Lost rows are not turned into Deals automatically — only their Lead status is set.</li>
+            <li>Equipment is mapped onto VRF, Atom, Floor Standing, Rooftop, Large Duct, or Mixed Product.</li>
+            <li>Source is mapped onto Cold Call, Website, Contractor, Consultant, Architect, Direct, Referral, or Event.</li>
             <li>Where the Lead Source column actually named a person, it&apos;s relabeled &quot;Contractor&quot; and the name is kept under Influencer in the notes.</li>
-            <li>Project, equipment, site, and the original tracker status are kept in the Lead&apos;s notes.</li>
-            <li>Safe to re-run — run the Sales Register import first so the 5 sales reps already exist.</li>
+            <li>Project, site, quote date, and the original tracker status are kept in the Lead&apos;s notes.</li>
+            <li>Safe to re-run — re-uploading replaces this import&apos;s own leads/contacts instead of duplicating them. Run the Sales Register import first so the 5 sales reps already exist.</li>
           </ul>
         </Card>
         <Card className="p-6">

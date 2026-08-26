@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
-import { OPEN_DEAL_STAGES } from "@/lib/constants";
+import { OPEN_DEAL_STAGES, CLOSED_LEAD_STATUSES } from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
@@ -45,7 +45,7 @@ export default async function ReportsPage() {
     const wonThisQuarter = wonDeals.filter((d) => d.closedAt && d.closedAt >= qStart);
     const closedCount = wonDeals.length + lostDeals.length;
     const winRate = closedCount > 0 ? Math.round((wonDeals.length / closedCount) * 100) : 0;
-    const activeLeads = leads.filter((l) => l.status !== "CONVERTED" && l.status !== "UNQUALIFIED").length;
+    const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status)).length;
     const pendingActivities = activities.filter((a) => a.status === "PENDING").length;
     const completedActivities = activities.filter((a) => a.status === "COMPLETED").length;
 

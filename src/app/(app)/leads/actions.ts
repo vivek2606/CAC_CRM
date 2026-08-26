@@ -6,12 +6,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import type { EquipmentType } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
   company: z.string().optional(),
-  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
-  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "EMAIL_CAMPAIGN", "SOCIAL_MEDIA", "EVENT", "PARTNER", "OTHER"]),
+  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "HOT", "WARM", "COLD", "UNQUALIFIED", "CONVERTED", "WON", "LOST"]),
+  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]),
+  equipmentType: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
@@ -23,6 +25,10 @@ const leadSchema = z.object({
 
 function toNullable(value: string | undefined) {
   return value && value.trim() !== "" ? value : null;
+}
+
+function toEquipmentType(value: string | undefined): EquipmentType | null {
+  return value && value.trim() !== "" ? (value as EquipmentType) : null;
 }
 
 export async function createLead(formData: FormData) {
@@ -38,6 +44,7 @@ export async function createLead(formData: FormData) {
       company: toNullable(parsed.company),
       status: parsed.status,
       source: parsed.source,
+      equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
       phone: toNullable(parsed.phone),
@@ -70,6 +77,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       company: toNullable(parsed.company),
       status: parsed.status,
       source: parsed.source,
+      equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
       phone: toNullable(parsed.phone),

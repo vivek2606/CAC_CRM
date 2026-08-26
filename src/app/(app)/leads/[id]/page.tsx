@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS } from "@/lib/constants";
+import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
 import { convertLeadToDeal, deleteLead } from "../actions";
@@ -113,6 +113,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 <dt className="text-slate-500">Source</dt>
                 <dd className="text-slate-700">{LEAD_SOURCE_LABELS[lead.source]}</dd>
               </div>
+              {lead.equipmentType && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Equipment</dt>
+                  <dd className="text-slate-700">{EQUIPMENT_TYPE_LABELS[lead.equipmentType]}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">Value</dt>
                 <dd className="text-slate-700">{lead.value ? formatCurrency(lead.value) : "—"}</dd>

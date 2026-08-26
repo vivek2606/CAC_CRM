@@ -3,17 +3,20 @@
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { parseLeadsRegisterBuffer } from "@/lib/import/parse-leads-register";
-import { transformLeadsRegister } from "@/lib/import/leads-register";
+import { transformLeadsRegister, aliasedAwayDisplayNames } from "@/lib/import/leads-register";
 import { lookupRosterEntry } from "@/lib/import/roster";
 
 export type ImportSummary = {
   accountsCreated: number;
   contactsCreated: number;
   leadsCreated: number;
+  leadsReplaced: number;
   totalLeadValue: number;
-  qualifiedCount: number;
-  convertedCount: number;
-  unqualifiedCount: number;
+  hotCount: number;
+  warmCount: number;
+  coldCount: number;
+  wonCount: number;
+  lostCount: number;
   unresolvedOwners: string[];
   skippedFileRows: number;
 };
@@ -47,6 +50,14 @@ export async function importLeadsRegister(
   }
 
   const result = transformLeadsRegister(rows);
+
+  // Re-running this import replaces its own previously-imported rows (rather
+  // than duplicating them), so it's always safe to re-upload the same or an
+  // updated file.
+  const { count: leadsReplaced } = await prisma.lead.deleteMany({
+    where: { importKey: { startsWith: "leadsheet:" } },
+  });
+  await prisma.contact.deleteMany({ where: { importKey: { startsWith: "leadsheet:contact:" } } });
 
   // Resolve each ownerKey (a roster-normalized rep name) to a real User id.
   const uniqueOwnerKeys = Array.from(new Set(result.leads.map((l) => l.ownerKey)));
@@ -98,6 +109,24 @@ export async function importLeadsRegister(
     result.accounts.map((a) => [a.name, accountIdByNormalizedName.get(a.name.trim().toLowerCase())!])
   );
 
+  // Clean up any leftover duplicate account left behind under a pre-merge
+  // name from an earlier run of this import, now that it's unused.
+  const staleNames = aliasedAwayDisplayNames();
+  if (staleNames.length > 0) {
+    const staleAccounts = await prisma.account.findMany({
+      where: { name: { in: staleNames } },
+      include: {
+        _count: { select: { contacts: true, leads: true, deals: true } },
+      },
+    });
+    for (const a of staleAccounts) {
+      const c = a._count;
+      if (c.contacts + c.leads + c.deals === 0) {
+        await prisma.account.delete({ where: { id: a.id } });
+      }
+    }
+  }
+
   // Contacts: one per (account, contact person) pair in this file, owned by the lead's rep.
   const contactOwnerByKey = new Map<string, string>();
   for (const lead of result.leads) {
@@ -111,34 +140,36 @@ export async function importLeadsRegister(
     phone: c.phone,
     ownerId: contactOwnerByKey.get(c.key) ?? head.id,
     accountId: accountIdByName.get(c.accountName) ?? null,
+    importKey: c.importKey,
   }));
-  const contactsResult = contactCreateData.length > 0 ? await prisma.contact.createMany({ data: contactCreateData }) : { count: 0 };
+  const contactsResult =
+    contactCreateData.length > 0 ? await prisma.contact.createMany({ data: contactCreateData }) : { count: 0 };
 
   // Re-fetch to map contactKey -> id (createMany doesn't return rows).
-  const contactAccountIds = Array.from(new Set(contactCreateData.map((c) => c.accountId).filter((v): v is string => !!v)));
   const dbContacts = await prisma.contact.findMany({
-    where: { accountId: { in: contactAccountIds } },
-    select: { id: true, firstName: true, lastName: true, accountId: true },
+    where: { importKey: { in: result.contacts.map((c) => c.importKey) } },
+    select: { id: true, importKey: true },
   });
+  const contactIdByImportKey = new Map(dbContacts.map((c) => [c.importKey!, c.id]));
   const contactIdByKey = new Map<string, string>();
   for (const c of result.contacts) {
-    const accountId = accountIdByName.get(c.accountName);
-    const match = dbContacts.find(
-      (d) => d.accountId === accountId && d.firstName === c.firstName && d.lastName === c.lastName
-    );
-    if (match) contactIdByKey.set(c.key, match.id);
+    const id = contactIdByImportKey.get(c.importKey);
+    if (id) contactIdByKey.set(c.key, id);
   }
 
   // Leads
   const leadCreateData = result.leads.map((l) => ({
     title: l.title,
     status: l.status,
+    source: l.source,
+    equipmentType: l.equipmentType,
     value: l.value,
     phone: l.phone,
     notes: l.notes,
     ownerId: ownerIdByKey.get(l.ownerKey) ?? head.id,
     accountId: accountIdByName.get(l.accountName) ?? null,
     contactId: contactIdByKey.get(l.contactKey) ?? null,
+    importKey: l.importKey,
   }));
   const leadsResult = await prisma.lead.createMany({ data: leadCreateData });
 
@@ -149,10 +180,13 @@ export async function importLeadsRegister(
       accountsCreated: newAccounts.length,
       contactsCreated: contactsResult.count,
       leadsCreated: leadsResult.count,
+      leadsReplaced,
       totalLeadValue,
-      qualifiedCount: result.leads.filter((l) => l.status === "QUALIFIED").length,
-      convertedCount: result.leads.filter((l) => l.status === "CONVERTED").length,
-      unqualifiedCount: result.leads.filter((l) => l.status === "UNQUALIFIED").length,
+      hotCount: result.leads.filter((l) => l.status === "HOT").length,
+      warmCount: result.leads.filter((l) => l.status === "WARM").length,
+      coldCount: result.leads.filter((l) => l.status === "COLD").length,
+      wonCount: result.leads.filter((l) => l.status === "WON").length,
+      lostCount: result.leads.filter((l) => l.status === "LOST").length,
       unresolvedOwners: Array.from(new Set(unresolvedOwners)),
       skippedFileRows,
     },

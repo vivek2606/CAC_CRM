@@ -55,8 +55,10 @@ export function ImportForm() {
             </div>
           </dl>
           <p className="text-xs text-slate-400 mt-4">
-            Converted: {state.summary.convertedCount} · Unqualified: {state.summary.unqualifiedCount} · Qualified:{" "}
-            {state.summary.qualifiedCount}
+            Hot: {state.summary.hotCount} · Warm: {state.summary.warmCount} · Cold: {state.summary.coldCount} · Won:{" "}
+            {state.summary.wonCount} · Lost: {state.summary.lostCount}
+            {state.summary.leadsReplaced > 0 &&
+              ` · Replaced ${state.summary.leadsReplaced} leads from a previous run of this import.`}
             {state.summary.skippedFileRows > 0 && ` · Skipped ${state.summary.skippedFileRows} blank rows in the file.`}
           </p>
           {state.summary.unresolvedOwners.length > 0 && (

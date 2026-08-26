@@ -8,6 +8,7 @@ import {
   DEAL_STAGE_COLORS,
   OPEN_DEAL_STAGES,
   ACTIVITY_TYPE_LABELS,
+  CLOSED_LEAD_STATUSES,
 } from "@/lib/constants";
 import { PipelineChart } from "./pipeline-chart";
 import { Target, TrendingUp, Wallet, Percent, ArrowRight } from "lucide-react";
@@ -36,7 +37,7 @@ export default async function DashboardPage() {
         select: { stage: true },
       }),
       prisma.lead.count({
-        where: { ownerId: { in: ownerIds }, status: { notIn: ["CONVERTED", "UNQUALIFIED"] } },
+        where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
       }),
       prisma.activity.findMany({
         where: { ownerId: { in: ownerIds }, status: "PENDING" },

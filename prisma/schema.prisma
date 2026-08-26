@@ -18,17 +18,31 @@ enum LeadStatus {
   QUALIFIED
   UNQUALIFIED
   CONVERTED
+  HOT
+  WARM
+  COLD
+  WON // historically won, tracked outside the Deal pipeline (e.g. imported)
+  LOST
 }
 
 enum LeadSource {
   WEBSITE
   REFERRAL
   COLD_CALL
-  EMAIL_CAMPAIGN
-  SOCIAL_MEDIA
+  CONTRACTOR
+  CONSULTANT
+  ARCHITECT
+  DIRECT
   EVENT
-  PARTNER
-  OTHER
+}
+
+enum EquipmentType {
+  VRF
+  ATOM
+  FLOOR_STANDING
+  ROOFTOP
+  LARGE_DUCT
+  MIXED_PRODUCT
 }
 
 enum DealStage {
@@ -121,6 +135,10 @@ model Contact {
   deals       Deal[]
   activities  Activity[]
   notes       Note[]
+
+  // Set only for contacts brought in via the Leads sheet import, so
+  // re-running the import can safely replace its own rows.
+  importKey   String?   @unique
 }
 
 model Lead {
@@ -128,13 +146,18 @@ model Lead {
   title         String
   company       String?
   status        LeadStatus  @default(NEW)
-  source        LeadSource  @default(OTHER)
+  source        LeadSource  @default(DIRECT)
+  equipmentType EquipmentType?
   value         Float?
   email         String?
   phone         String?
   notes         String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  // Set only for leads brought in via the Leads sheet import, so re-running
+  // the import can safely replace its own rows instead of duplicating them.
+  importKey     String?     @unique
 
   ownerId       String
   owner         User        @relation("LeadOwner", fields: [ownerId], references: [id])

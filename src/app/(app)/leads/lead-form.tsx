@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { LEAD_STATUSES, LEAD_STATUS_LABELS, LEAD_SOURCES, LEAD_SOURCE_LABELS } from "@/lib/constants";
-import type { LeadStatus, LeadSource } from "@prisma/client";
+import {
+  LEAD_STATUSES,
+  LEAD_STATUS_LABELS,
+  LEAD_SOURCES,
+  LEAD_SOURCE_LABELS,
+  EQUIPMENT_TYPES,
+  EQUIPMENT_TYPE_LABELS,
+} from "@/lib/constants";
+import type { LeadStatus, LeadSource, EquipmentType } from "@prisma/client";
 
 type Option = { id: string; label: string };
 
@@ -25,6 +32,7 @@ export function LeadForm({
     company?: string | null;
     status?: LeadStatus;
     source?: LeadSource;
+    equipmentType?: EquipmentType | null;
     value?: number | null;
     email?: string | null;
     phone?: string | null;
@@ -91,12 +99,28 @@ export function LeadForm({
           <label className="block text-sm font-medium text-slate-700 mb-1">Source</label>
           <select
             name="source"
-            defaultValue={defaultValues?.source ?? "OTHER"}
+            defaultValue={defaultValues?.source ?? "DIRECT"}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             {LEAD_SOURCES.map((s) => (
               <option key={s} value={s}>
                 {LEAD_SOURCE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type</label>
+          <select
+            name="equipmentType"
+            defaultValue={defaultValues?.equipmentType ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {EQUIPMENT_TYPES.map((e) => (
+              <option key={e} value={e}>
+                {EQUIPMENT_TYPE_LABELS[e]}
               </option>
             ))}
           </select>
