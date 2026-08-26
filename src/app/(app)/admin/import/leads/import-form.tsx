@@ -55,8 +55,10 @@ export function ImportForm() {
             </div>
           </dl>
           <p className="text-xs text-slate-400 mt-4">
-            Hot: {state.summary.hotCount} · Warm: {state.summary.warmCount} · Cold: {state.summary.coldCount} · Won:{" "}
-            {state.summary.wonCount} · Lost: {state.summary.lostCount}
+            Hot: {state.summary.hotCount} · Warm: {state.summary.warmCount} · Cold: {state.summary.coldCount} · Lost:{" "}
+            {state.summary.lostCount}
+            {state.summary.excludedWonRows > 0 &&
+              ` · Skipped ${state.summary.excludedWonRows} row(s) marked Won in the sheet (these come in later via the Sales Register import instead).`}
             {state.summary.leadsReplaced > 0 &&
               ` · Replaced ${state.summary.leadsReplaced} leads from a previous run of this import.`}
             {state.summary.skippedFileRows > 0 && ` · Skipped ${state.summary.skippedFileRows} blank rows in the file.`}

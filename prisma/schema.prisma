@@ -18,10 +18,17 @@ enum LeadStatus {
   QUALIFIED
   UNQUALIFIED
   CONVERTED
+}
+
+// A separate temperature/outcome tag, independent of the standard status
+// pipeline above - mainly populated by the Leads sheet import, which tracks
+// leads this way. A lead with temperature WON should also have status
+// CONVERTED once it's actually turned into a Deal.
+enum LeadTemperature {
   HOT
   WARM
   COLD
-  WON // historically won, tracked outside the Deal pipeline (e.g. imported)
+  WON
   LOST
 }
 
@@ -146,6 +153,7 @@ model Lead {
   title         String
   company       String?
   status        LeadStatus  @default(NEW)
+  temperature   LeadTemperature?
   source        LeadSource  @default(DIRECT)
   equipmentType EquipmentType?
   value         Float?

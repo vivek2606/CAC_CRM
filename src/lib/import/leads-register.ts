@@ -1,7 +1,8 @@
 import type { RawLeadRow } from "./parse-leads-register";
 import { normalizeSalesmanName } from "./roster";
 
-export type LeadStatusValue = "HOT" | "WARM" | "COLD" | "WON" | "LOST";
+export type LeadStatusValue = "QUALIFIED" | "UNQUALIFIED";
+export type LeadTemperatureValue = "HOT" | "WARM" | "COLD" | "LOST";
 export type LeadSourceValue =
   | "WEBSITE"
   | "REFERRAL"
@@ -26,6 +27,7 @@ export type TransformedLead = {
   importKey: string;
   title: string;
   status: LeadStatusValue;
+  temperature: LeadTemperatureValue;
   source: LeadSourceValue;
   equipmentType: EquipmentTypeValue;
   value: number | null;
@@ -40,7 +42,7 @@ export type TransformResult = {
   accounts: TransformedAccount[];
   contacts: TransformedContact[];
   leads: TransformedLead[];
-  summary: { totalRowsIn: number; keptRows: number };
+  summary: { totalRowsIn: number; excludedWonRows: number; keptRows: number };
 };
 
 // The 5 nicknames used in the Leads sheet, mapped to the real rep accounts
@@ -114,7 +116,10 @@ const LEAD_SOURCE_ENUM_MAP: Record<string, LeadSourceValue> = {
 
 // Raw Equipment text -> the closed 6-value canonical set. Anything combining
 // two or more distinct types, or too ambiguous to place cleanly, becomes
-// Mixed Product; the original text is always kept in the notes.
+// Mixed Product; the original text is always kept in the notes. Per
+// instruction: DX and PAC are Large Duct, HRV is VRF, and anything
+// mentioning "atom" falls under Atom regardless of what else it's combined
+// with (see the substring check in mapEquipmentType below).
 const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
   VRF: "VRF",
   "VRF AND SPLIT": "MIXED_PRODUCT",
@@ -123,20 +128,20 @@ const EQUIPMENT_TYPE_MAP: Record<string, EquipmentTypeValue> = {
   "ATOM WALL MOUNTED": "ATOM",
   "ATOM WALL MOUNTED/CASSETTE": "ATOM",
   "ATOM HIWALL": "ATOM",
-  "ATOM & CONCEALED": "MIXED_PRODUCT",
+  "ATOM & CONCEALED": "ATOM",
   HIWALL: "ATOM",
   SPLIT: "ATOM",
   DUCT: "LARGE_DUCT",
   "DUCTED UNIT": "LARGE_DUCT",
-  DX: "MIXED_PRODUCT",
+  DX: "LARGE_DUCT",
   "CEILING CONCEALED": "LARGE_DUCT",
   "LARGE CEILNG CONCEALED": "LARGE_DUCT",
-  HRV: "LARGE_DUCT",
-  PAC: "MIXED_PRODUCT",
+  HRV: "VRF",
+  PAC: "LARGE_DUCT",
   ROOFTOP: "ROOFTOP",
   RTU: "ROOFTOP",
   "RT & CCD": "MIXED_PRODUCT",
-  "RT,ATOM": "MIXED_PRODUCT",
+  "RT,ATOM": "ATOM",
   FS: "FLOOR_STANDING",
   "MIXED PRODUCT": "MIXED_PRODUCT",
 };
@@ -222,17 +227,29 @@ function mapLeadSourceEnum(cleanedLeadSource: string, accountName: string): Lead
 function mapEquipmentType(rawEquipment: string | null): EquipmentTypeValue {
   if (!rawEquipment) return "MIXED_PRODUCT";
   const key = rawEquipment.trim().replace(/\s+/g, " ").toUpperCase();
-  return EQUIPMENT_TYPE_MAP[key] ?? "MIXED_PRODUCT";
+  if (EQUIPMENT_TYPE_MAP[key]) return EQUIPMENT_TYPE_MAP[key];
+  if (key.includes("ATOM")) return "ATOM"; // catch-all: anything atom falls under Atom.
+  return "MIXED_PRODUCT";
 }
 
+// The standard pipeline status: Hot/Warm/Cold and unrecognized values are all
+// real, active leads (Qualified); Lost leads didn't pan out (Unqualified).
+// Won rows never reach here - they're filtered out before the transform runs
+// (see transformLeadsRegister), since a won lead means it's already been
+// billed and will come in later through the Sales Register import instead.
 function mapStatus(rawStatus: string | null): LeadStatusValue {
   const s = (rawStatus ?? "").trim().toUpperCase();
-  if (s === "WON") return "WON";
-  if (s === "LOST") return "LOST";
+  if (s === "LOST") return "UNQUALIFIED";
+  return "QUALIFIED";
+}
+
+// The sheet's own Hot/Warm/Cold/Lost vocabulary, kept as a separate tag.
+function mapTemperature(rawStatus: string | null): LeadTemperatureValue {
+  const s = (rawStatus ?? "").trim().toUpperCase();
   if (s === "HOT") return "HOT";
   if (s === "COLD") return "COLD";
-  if (s === "WARM") return "WARM";
-  return "WARM"; // anything unrecognized (e.g. "indoors supplied") defaults here.
+  if (s === "LOST") return "LOST";
+  return "WARM"; // Warm, and anything unrecognized (e.g. "indoors supplied"), defaults here.
 }
 
 function splitName(fullName: string): { firstName: string; lastName: string } {
@@ -265,11 +282,17 @@ export function aliasedAwayDisplayNames(): string[] {
 export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
   const totalRowsIn = rows.length;
 
+  // Won rows are already-billed sales, not leads - they'll come in later via
+  // the Sales Register import (which creates a real Deal with an accurate
+  // value/date), so skip them entirely here rather than fabricating a lead.
+  const wonRows = rows.filter((r) => (r.status ?? "").trim().toUpperCase() === "WON");
+  const keptRows = rows.filter((r) => (r.status ?? "").trim().toUpperCase() !== "WON");
+
   const accountMap = new Map<string, TransformedAccount>();
   const contactMap = new Map<string, TransformedContact>();
   const leads: TransformedLead[] = [];
 
-  for (const row of rows) {
+  for (const row of keptRows) {
     const mappedName = SALES_PERSON_MAP[row.salesPerson.trim().toUpperCase()];
     const ownerKey = normalizeSalesmanName(mappedName ?? row.salesPerson);
 
@@ -320,6 +343,7 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
       importKey: `leadsheet:${row.slNo}`,
       title: row.projectName?.trim() || row.equipment?.trim() || `Lead — ${accountName}`,
       status: mapStatus(row.status),
+      temperature: mapTemperature(row.status),
       source: mapLeadSourceEnum(leadSource, accountName),
       equipmentType: mapEquipmentType(row.equipment),
       value: row.amount,
@@ -335,6 +359,6 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
     accounts: Array.from(accountMap.values()),
     contacts: Array.from(contactMap.values()),
     leads,
-    summary: { totalRowsIn, keptRows: leads.length },
+    summary: { totalRowsIn, excludedWonRows: wonRows.length, keptRows: leads.length },
   };
 }

@@ -15,8 +15,8 @@ export type ImportSummary = {
   hotCount: number;
   warmCount: number;
   coldCount: number;
-  wonCount: number;
   lostCount: number;
+  excludedWonRows: number;
   unresolvedOwners: string[];
   skippedFileRows: number;
 };
@@ -161,6 +161,7 @@ export async function importLeadsRegister(
   const leadCreateData = result.leads.map((l) => ({
     title: l.title,
     status: l.status,
+    temperature: l.temperature,
     source: l.source,
     equipmentType: l.equipmentType,
     value: l.value,
@@ -182,11 +183,11 @@ export async function importLeadsRegister(
       leadsCreated: leadsResult.count,
       leadsReplaced,
       totalLeadValue,
-      hotCount: result.leads.filter((l) => l.status === "HOT").length,
-      warmCount: result.leads.filter((l) => l.status === "WARM").length,
-      coldCount: result.leads.filter((l) => l.status === "COLD").length,
-      wonCount: result.leads.filter((l) => l.status === "WON").length,
-      lostCount: result.leads.filter((l) => l.status === "LOST").length,
+      hotCount: result.leads.filter((l) => l.temperature === "HOT").length,
+      warmCount: result.leads.filter((l) => l.temperature === "WARM").length,
+      coldCount: result.leads.filter((l) => l.temperature === "COLD").length,
+      lostCount: result.leads.filter((l) => l.temperature === "LOST").length,
+      excludedWonRows: result.summary.excludedWonRows,
       unresolvedOwners: Array.from(new Set(unresolvedOwners)),
       skippedFileRows,
     },

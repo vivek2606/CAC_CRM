@@ -4,7 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
+import {
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_COLORS,
+  LEAD_TEMPERATURE_LABELS,
+  LEAD_TEMPERATURE_COLORS,
+  LEAD_SOURCE_LABELS,
+  EQUIPMENT_TYPE_LABELS,
+} from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
 import { convertLeadToDeal, deleteLead } from "../actions";
@@ -109,6 +116,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   </Badge>
                 </dd>
               </div>
+              {lead.temperature && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Temperature</dt>
+                  <dd>
+                    <Badge bg={LEAD_TEMPERATURE_COLORS[lead.temperature].bg} text={LEAD_TEMPERATURE_COLORS[lead.temperature].text}>
+                      {LEAD_TEMPERATURE_LABELS[lead.temperature]}
+                    </Badge>
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">Source</dt>
                 <dd className="text-slate-700">{LEAD_SOURCE_LABELS[lead.source]}</dd>

@@ -4,12 +4,14 @@ import { useState } from "react";
 import {
   LEAD_STATUSES,
   LEAD_STATUS_LABELS,
+  LEAD_TEMPERATURES,
+  LEAD_TEMPERATURE_LABELS,
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   EQUIPMENT_TYPES,
   EQUIPMENT_TYPE_LABELS,
 } from "@/lib/constants";
-import type { LeadStatus, LeadSource, EquipmentType } from "@prisma/client";
+import type { LeadStatus, LeadTemperature, LeadSource, EquipmentType } from "@prisma/client";
 
 type Option = { id: string; label: string };
 
@@ -31,6 +33,7 @@ export function LeadForm({
     title?: string;
     company?: string | null;
     status?: LeadStatus;
+    temperature?: LeadTemperature | null;
     source?: LeadSource;
     equipmentType?: EquipmentType | null;
     value?: number | null;
@@ -90,6 +93,22 @@ export function LeadForm({
             {LEAD_STATUSES.filter((s) => s !== "CONVERTED").map((s) => (
               <option key={s} value={s}>
                 {LEAD_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Temperature</label>
+          <select
+            name="temperature"
+            defaultValue={defaultValues?.temperature ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {LEAD_TEMPERATURES.map((t) => (
+              <option key={t} value={t}>
+                {LEAD_TEMPERATURE_LABELS[t]}
               </option>
             ))}
           </select>

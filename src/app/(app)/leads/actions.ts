@@ -6,12 +6,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType } from "@prisma/client";
+import type { EquipmentType, LeadTemperature } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
   company: z.string().optional(),
-  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "HOT", "WARM", "COLD", "UNQUALIFIED", "CONVERTED", "WON", "LOST"]),
+  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
+  temperature: z.string().optional(),
   source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]),
   equipmentType: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
@@ -31,6 +32,10 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
   return value && value.trim() !== "" ? (value as EquipmentType) : null;
 }
 
+function toTemperature(value: string | undefined): LeadTemperature | null {
+  return value && value.trim() !== "" ? (value as LeadTemperature) : null;
+}
+
 export async function createLead(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
@@ -43,6 +48,7 @@ export async function createLead(formData: FormData) {
       title: parsed.title,
       company: toNullable(parsed.company),
       status: parsed.status,
+      temperature: toTemperature(parsed.temperature),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,
@@ -76,6 +82,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       title: parsed.title,
       company: toNullable(parsed.company),
       status: parsed.status,
+      temperature: toTemperature(parsed.temperature),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
       value: parsed.value ?? null,
