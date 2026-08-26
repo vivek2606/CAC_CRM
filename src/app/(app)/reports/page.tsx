@@ -6,6 +6,7 @@ import {
   OPEN_DEAL_STAGES,
   CLOSED_LEAD_STATUSES,
   DEAL_STAGES,
+  DEAL_STAGE_LABELS,
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   LEAD_SOURCE_COLORS,
@@ -127,12 +128,28 @@ export default async function ReportsPage() {
   const qualifiedLeadsCount = teamLeads.filter((l) => l.status === "QUALIFIED" || l.status === "CONVERTED").length;
   const convertedLeadsCount = teamLeads.filter((l) => l.status === "CONVERTED").length;
   const wonFromLeadsCount = teamLeads.filter((l) => l.convertedDeal?.stage === "WON").length;
-  const funnelStages = [
-    { label: "Total Leads", count: totalLeadsCount },
-    { label: "Qualified", count: qualifiedLeadsCount },
-    { label: "Converted to Deal", count: convertedLeadsCount },
-    { label: "Won", count: wonFromLeadsCount },
+  const leadFunnelStages = [
+    { label: "Total Leads", value: totalLeadsCount },
+    { label: "Qualified", value: qualifiedLeadsCount },
+    { label: "Converted to Deal", value: convertedLeadsCount },
+    { label: "Won", value: wonFromLeadsCount },
   ];
+
+  // 3b. Deal value funnel: value of deals that have reached each stage or
+  // later (cumulative, so it narrows monotonically like a real funnel -
+  // a deal sitting in Negotiation has necessarily passed every stage before it).
+  const DEAL_FUNNEL_STAGE_ORDER: (typeof DEAL_STAGES)[number][] = [
+    "QUALIFICATION",
+    "NEEDS_ANALYSIS",
+    "PROPOSAL",
+    "NEGOTIATION",
+    "WON",
+  ];
+  const dealValueFunnelStages = DEAL_FUNNEL_STAGE_ORDER.map((stage, idx) => {
+    const laterStages = new Set(DEAL_FUNNEL_STAGE_ORDER.slice(idx));
+    const value = teamDeals.filter((d) => laterStages.has(d.stage)).reduce((s, d) => s + d.value, 0);
+    return { label: DEAL_STAGE_LABELS[stage], value };
+  });
 
   // 4. Lead source distribution.
   const sourceGroups = new Map<string, { count: number; value: number }>();
@@ -194,17 +211,23 @@ export default async function ReportsPage() {
           <StageValueChart data={stageValueData} />
         </Card>
 
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Exposure by winning probability</h2>
+          <p className="text-xs text-slate-400 mb-3">Open deal and lead value, bucketed by confidence of closing.</p>
+          <ProbabilityExposureChart data={probabilityExposureData} />
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Exposure by winning probability</h2>
-            <p className="text-xs text-slate-400 mb-3">Open deal and lead value, bucketed by confidence of closing.</p>
-            <ProbabilityExposureChart data={probabilityExposureData} />
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead conversion funnel</h2>
+            <p className="text-xs text-slate-400 mb-3">Every lead&apos;s journey from first contact to a won deal.</p>
+            <ConversionFunnel stages={leadFunnelStages} />
           </Card>
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Conversion funnel</h2>
-            <p className="text-xs text-slate-400 mb-3">Every lead&apos;s journey from first contact to a won deal.</p>
-            <ConversionFunnel stages={funnelStages} />
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Deal value funnel</h2>
+            <p className="text-xs text-slate-400 mb-3">Value of deals that have reached each stage or further.</p>
+            <ConversionFunnel stages={dealValueFunnelStages} formatValue={formatCompactCurrency} />
           </Card>
         </div>
 
