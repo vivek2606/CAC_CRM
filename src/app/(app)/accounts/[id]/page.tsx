@@ -5,7 +5,7 @@ import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from "@/lib/constants";
-import { deleteAccount } from "../actions";
+import { DeleteAccountButton } from "../delete-account-button";
 import { Pencil, Trash2 } from "lucide-react";
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   if (!account) notFound();
   if (!canAccessOwner(user, account.ownerId)) redirect("/accounts");
 
-  const deleteAction = deleteAccount.bind(null, account.id);
+  const hasWonDeal = account.deals.some((d) => d.stage === "WON");
 
   return (
     <div>
@@ -41,15 +41,16 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <Pencil className="h-4 w-4" />
               Edit
             </Link>
-            <form action={deleteAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-500 text-sm font-medium px-3 py-2 transition-colors"
-                aria-label="Delete account"
+            {hasWonDeal ? (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 text-slate-300 text-sm font-medium px-3 py-2 cursor-not-allowed"
+                title="This account has a completed order and can't be deleted."
               >
                 <Trash2 className="h-4 w-4" />
-              </button>
-            </form>
+              </span>
+            ) : (
+              <DeleteAccountButton accountId={account.id} accountName={account.name} />
+            )}
           </div>
         }
       />

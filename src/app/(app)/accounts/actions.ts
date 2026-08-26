@@ -77,6 +77,11 @@ export async function deleteAccount(accountId: string) {
   const existing = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this account.");
 
+  const wonDealCount = await prisma.deal.count({ where: { accountId, stage: "WON" } });
+  if (wonDealCount > 0) {
+    throw new Error("This account has a completed order and can't be deleted.");
+  }
+
   await prisma.account.delete({ where: { id: accountId } });
   revalidatePath("/accounts");
   redirect("/accounts");
