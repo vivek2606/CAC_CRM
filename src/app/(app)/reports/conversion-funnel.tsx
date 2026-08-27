@@ -14,14 +14,19 @@ export function ConversionFunnel({
 }) {
   const total = stages[0]?.value ?? 0;
 
+  // Each stage's width as a % of the track, floored so a real but small
+  // value still reads as a sliver rather than disappearing.
+  const widthPcts = stages.map((s) => (total > 0 ? Math.max((s.value / total) * 100, s.value > 0 ? 8 : 0) : 0));
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-0.5">
       {stages.map((stage, i) => {
         const pct = total > 0 ? Math.round((stage.value / total) * 100) : 0;
-        const widthPct = total > 0 ? Math.max((stage.value / total) * 100, stage.value > 0 ? 6 : 0) : 0;
+        const topPct = widthPcts[i];
+        const bottomPct = i < stages.length - 1 ? widthPcts[i + 1] : widthPcts[i];
         const shadeIdx = stages.length > 1 ? Math.round((i / (stages.length - 1)) * (STAGE_SHADES.length - 1)) : 0;
         const shade = STAGE_SHADES[shadeIdx];
-        const lightShade = shadeIdx <= 1;
+
         return (
           <div key={stage.label}>
             <div className="flex items-baseline justify-between text-sm mb-1">
@@ -30,12 +35,14 @@ export function ConversionFunnel({
                 {formatValue(stage.value)} <span className="text-slate-400">({pct}%)</span>
               </span>
             </div>
-            <div className="h-7 rounded-md bg-slate-100 overflow-hidden">
+            <div className="relative h-14 rounded-md bg-slate-50">
               <div
-                className={`h-full rounded-md flex items-center justify-end px-2 text-xs font-medium transition-all ${
-                  lightShade ? "text-slate-700" : "text-white"
-                }`}
-                style={{ width: `${widthPct}%`, backgroundColor: shade, minWidth: stage.value > 0 ? "2.5rem" : 0 }}
+                title={`${stage.label}: ${formatValue(stage.value)} (${pct}%)`}
+                className="absolute inset-0 transition-all"
+                style={{
+                  backgroundColor: stage.value > 0 ? shade : "transparent",
+                  clipPath: `polygon(${50 - topPct / 2}% 0%, ${50 + topPct / 2}% 0%, ${50 + bottomPct / 2}% 100%, ${50 - bottomPct / 2}% 100%)`,
+                }}
               />
             </div>
           </div>
