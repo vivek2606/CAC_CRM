@@ -31,9 +31,9 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
             <Menu className="h-6 w-6" />
           </button>
           <div className="lg:hidden h-7 w-7 rounded-lg bg-indigo-500 text-white font-bold flex items-center justify-center text-xs">
-            C
+            S
           </div>
-          <span className="lg:hidden font-semibold text-slate-900 text-sm shrink-0">CAC CRM</span>
+          <span className="lg:hidden font-semibold text-slate-900 text-sm shrink-0">SAKURAGI</span>
           <SearchBox />
         </div>
 

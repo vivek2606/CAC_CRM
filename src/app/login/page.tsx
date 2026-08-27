@@ -12,9 +12,9 @@ export default async function LoginPage({
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500 text-white font-bold text-xl mb-4">
-            C
+            S
           </div>
-          <h1 className="text-2xl font-semibold text-white">CAC CRM</h1>
+          <h1 className="text-2xl font-semibold text-white">SAKURAGI CRM Pro</h1>
           <p className="text-slate-400 text-sm mt-1">Sign in to your sales workspace</p>
         </div>
         <LoginForm callbackUrl={callbackUrl ?? "/"} />

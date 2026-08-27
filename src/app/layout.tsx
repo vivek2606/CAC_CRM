@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CAC CRM - Sales Pipeline",
+  title: "SAKURAGI CRM Pro - Sales Pipeline",
   description: "CRM for managing the complete sales cycle across the team.",
 };
 

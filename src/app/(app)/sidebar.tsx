@@ -55,9 +55,9 @@ export function Sidebar({
     >
       <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-200">
         <div className="h-8 w-8 rounded-lg bg-indigo-500 text-white font-bold flex items-center justify-center text-sm">
-          C
+          S
         </div>
-        <span className="font-semibold text-slate-900">CAC CRM</span>
+        <span className="font-semibold text-slate-900">SAKURAGI CRM Pro</span>
         <button
           onClick={onClose}
           className="ml-auto lg:hidden text-slate-400 hover:text-slate-700 p-1"
