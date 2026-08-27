@@ -6,7 +6,8 @@ import { DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constan
 import { formatCompactCurrency } from "@/lib/format";
 import { Avatar } from "@/components/ui";
 import { updateDealStage } from "./actions";
-import type { DealStage } from "@prisma/client";
+import { MarkLostDialog } from "./mark-lost-dialog";
+import type { DealStage, LostReason } from "@prisma/client";
 
 type DealCard = {
   id: string;
@@ -20,20 +21,32 @@ type DealCard = {
 export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function moveDeal(dealId: string, stage: DealStage) {
     const deal = items.find((d) => d.id === dealId);
     if (!deal || deal.stage === stage) return;
 
-    let lostReason: string | undefined;
     if (stage === "LOST") {
-      lostReason = window.prompt("Reason for losing this deal?") ?? "Not specified";
+      setPendingLostDealId(dealId);
+      return;
     }
 
     setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
     startTransition(() => {
-      updateDealStage(dealId, stage, lostReason);
+      updateDealStage(dealId, stage);
+    });
+  }
+
+  function confirmLost(category: LostReason, note: string) {
+    const dealId = pendingLostDealId;
+    setPendingLostDealId(null);
+    if (!dealId) return;
+
+    setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage: "LOST" } : d)));
+    startTransition(() => {
+      updateDealStage(dealId, "LOST", category, note || undefined);
     });
   }
 
@@ -44,6 +57,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   }
 
   return (
+    <>
     <div className={`flex gap-4 overflow-x-auto pb-4 ${isPending ? "opacity-70" : ""}`}>
       {DEAL_STAGES.map((stage) => {
         const colors = DEAL_STAGE_COLORS[stage];
@@ -107,5 +121,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
         );
       })}
     </div>
+    {pendingLostDealId && <MarkLostDialog onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />}
+    </>
   );
 }

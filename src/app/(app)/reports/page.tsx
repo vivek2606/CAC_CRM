@@ -11,12 +11,16 @@ import {
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   LEAD_SOURCE_COLORS,
+  LOST_REASONS,
+  LOST_REASON_LABELS,
+  LOST_REASON_COLORS,
 } from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
 import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
 import { LeadSourceChart } from "./lead-source-chart";
+import { LostReasonChart } from "./lost-reason-chart";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
@@ -38,7 +42,9 @@ export default async function ReportsPage() {
     where: { role: "SALES_MANAGER" },
     orderBy: { name: "asc" },
     include: {
-      deals: { select: { stage: true, value: true, probability: true, closedAt: true, createdAt: true } },
+      deals: {
+        select: { stage: true, value: true, probability: true, closedAt: true, createdAt: true, lostReasonCategory: true },
+      },
       leads: {
         select: { status: true, source: true, winProbability: true, value: true, convertedDeal: { select: { stage: true } } },
       },
@@ -169,6 +175,26 @@ export default async function ReportsPage() {
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count);
 
+  // 5. Why we lose: only deals closed as LOST after this feature shipped
+  // have a category - older LOST deals predate it and just don't appear.
+  const lostDeals = teamDeals.filter((d) => d.stage === "LOST" && d.lostReasonCategory);
+  const lostReasonGroups = new Map<string, { count: number; value: number }>();
+  for (const deal of lostDeals) {
+    const key = deal.lostReasonCategory!;
+    const g = lostReasonGroups.get(key) ?? { count: 0, value: 0 };
+    g.count += 1;
+    g.value += deal.value;
+    lostReasonGroups.set(key, g);
+  }
+  const lostReasonData = LOST_REASONS.map((reason) => ({
+    reason: LOST_REASON_LABELS[reason],
+    count: lostReasonGroups.get(reason)?.count ?? 0,
+    value: lostReasonGroups.get(reason)?.value ?? 0,
+    fill: LOST_REASON_COLORS[reason],
+  }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+
   return (
     <div>
       <PageHeader
@@ -237,15 +263,27 @@ export default async function ReportsPage() {
           </Card>
         </div>
 
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source distribution</h2>
-          <p className="text-xs text-slate-400 mb-3">Where the team&apos;s leads are coming from.</p>
-          {leadSourceData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
-          ) : (
-            <LeadSourceChart data={leadSourceData} />
-          )}
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source distribution</h2>
+            <p className="text-xs text-slate-400 mb-3">Where the team&apos;s leads are coming from.</p>
+            {leadSourceData.length === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
+            ) : (
+              <LeadSourceChart data={leadSourceData} />
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Why we lose</h2>
+            <p className="text-xs text-slate-400 mb-3">Reasons given when a deal is marked Lost.</p>
+            {lostReasonData.length === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No lost deals with a reason yet.</p>
+            ) : (
+              <LostReasonChart data={lostReasonData} />
+            )}
+          </Card>
+        </div>
 
         <Card>
           <div className="overflow-x-auto">

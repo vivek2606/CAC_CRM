@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
+import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LOST_REASON_LABELS } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
 import { deleteDeal } from "../actions";
 import { StageActions } from "../stage-actions";
+import { DealItemsSection } from "../deal-items-section";
 import { Pencil, Trash2 } from "lucide-react";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +25,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       activities: { orderBy: { createdAt: "desc" } },
       notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, avatarColor: true } } } },
       sourceLead: { select: { id: true, title: true } },
+      items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
     },
   });
 
@@ -32,6 +34,22 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
   const colors = DEAL_STAGE_COLORS[deal.stage];
   const deleteAction = deleteDeal.bind(null, deal.id);
+
+  const [products, recentPrices] = await Promise.all([
+    prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
+    prisma.pricelist.findMany({ orderBy: { month: "desc" }, select: { productId: true, landedPrice: true, dealerPrice: true } }),
+  ]);
+  const latestPriceByProduct = new Map<string, number>();
+  for (const p of recentPrices) {
+    if (!latestPriceByProduct.has(p.productId)) {
+      latestPriceByProduct.set(p.productId, p.landedPrice ?? p.dealerPrice);
+    }
+  }
+  const productOptions = products.map((p) => ({
+    id: p.id,
+    label: `${p.model} (${p.code})`,
+    defaultPrice: latestPriceByProduct.get(p.id) ?? null,
+  }));
 
   return (
     <div>
@@ -63,6 +81,14 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Products</h2>
+            <p className="text-xs text-slate-400 mb-3">
+              What&apos;s being quoted on this deal. Feeds Sales by Category once it&apos;s won.
+            </p>
+            <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
+          </Card>
+
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Activities</h2>
             <ActivitiesSection
@@ -108,10 +134,13 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                   <dd className="text-slate-700">{formatDate(deal.closedAt)}</dd>
                 </div>
               )}
-              {deal.lostReason && (
+              {deal.lostReasonCategory && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Lost reason</dt>
-                  <dd className="text-rose-600 text-right max-w-[160px]">{deal.lostReason}</dd>
+                  <dd className="text-rose-600 text-right max-w-[160px]">
+                    {LOST_REASON_LABELS[deal.lostReasonCategory]}
+                    {deal.lostReason && <span className="block text-xs text-slate-400 font-normal">{deal.lostReason}</span>}
+                  </dd>
                 </div>
               )}
               {deal.account && (

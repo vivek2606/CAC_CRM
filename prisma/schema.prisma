@@ -49,6 +49,15 @@ enum DealStage {
   LOST
 }
 
+enum LostReason {
+  PRICE_TOO_HIGH
+  COMPETITOR
+  BUDGET_CANCELLED
+  TIMING
+  WENT_COLD
+  OTHER
+}
+
 enum ActivityType {
   CALL
   EMAIL
@@ -205,6 +214,10 @@ model Deal {
   probability   Int         @default(20)
   expectedCloseDate DateTime?
   closedAt      DateTime?
+  // A fixed category (for the "why we lose" breakdown) plus this pre-existing
+  // free-text field, now used for optional extra detail rather than the
+  // whole reason - kept as-is (not renamed) so no existing data moves.
+  lostReasonCategory LostReason?
   lostReason    String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -227,6 +240,26 @@ model Deal {
   activities    Activity[]
   notes         Note[]
   lineItems     SaleLineItem[]
+  items         DealLineItem[]
+}
+
+// Product-level detail on a deal while it's being quoted/worked - distinct
+// from SaleLineItem, which represents a finalized, closed sale. Freely
+// editable while the deal is open. When the deal is marked WON, its items
+// are mirrored into SaleLineItem so Sales by Category picks them up the
+// same way historical sales do.
+model DealLineItem {
+  id          String   @id @default(cuid())
+  qty         Float
+  unitPrice   Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dealId      String
+  deal        Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
 }
 
 // One row per product line within a historical sale, so sales value can be
@@ -310,6 +343,7 @@ model Product {
 
   pricelistEntries Pricelist[]
   saleLineItems    SaleLineItem[]
+  dealLineItems    DealLineItem[]
 }
 
 model Pricelist {

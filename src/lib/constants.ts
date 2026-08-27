@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -38,6 +38,35 @@ export const DEAL_STAGE_COLORS: Record<DealStage, { bg: string; text: string; do
 // the Dashboard, since there's no dedicated stage-change timestamp to track
 // "time in current stage" - last edit is the best available proxy.
 export const STALE_DEAL_DAYS = 14;
+
+export const LOST_REASONS: LostReason[] = [
+  "PRICE_TOO_HIGH",
+  "COMPETITOR",
+  "BUDGET_CANCELLED",
+  "TIMING",
+  "WENT_COLD",
+  "OTHER",
+];
+
+export const LOST_REASON_LABELS: Record<LostReason, string> = {
+  PRICE_TOO_HIGH: "Price too high",
+  COMPETITOR: "Lost to a competitor",
+  BUDGET_CANCELLED: "Budget cut / project cancelled",
+  TIMING: "Bad timing / delayed",
+  WENT_COLD: "Went cold / no response",
+  OTHER: "Other",
+};
+
+// Reuses the first 6 steps of the same validated categorical order used for
+// LEAD_SOURCE_COLORS, so identity colors stay consistent app-wide.
+export const LOST_REASON_COLORS: Record<LostReason, string> = {
+  PRICE_TOO_HIGH: "#3b82f6",
+  COMPETITOR: "#f97316",
+  BUDGET_CANCELLED: "#14b8a6",
+  TIMING: "#f59e0b",
+  WENT_COLD: "#ec4899",
+  OTHER: "#16a34a",
+};
 
 // Terminal statuses that should be excluded from "active leads" counts.
 export const CLOSED_LEAD_STATUSES: LeadStatus[] = ["CONVERTED", "UNQUALIFIED"];
