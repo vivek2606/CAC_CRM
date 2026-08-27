@@ -9,9 +9,10 @@ import {
   OPEN_DEAL_STAGES,
   ACTIVITY_TYPE_LABELS,
   CLOSED_LEAD_STATUSES,
+  STALE_DEAL_DAYS,
 } from "@/lib/constants";
 import { PipelineChart } from "./pipeline-chart";
-import { Target, TrendingUp, Wallet, Percent, ArrowRight } from "lucide-react";
+import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle } from "lucide-react";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -21,55 +22,84 @@ export default async function DashboardPage() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [openDeals, wonThisMonth, closedDeals, activeLeads, upcomingActivities, recentDeals, users] =
-    await Promise.all([
-      prisma.deal.findMany({
-        where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
-        select: { stage: true, value: true },
-      }),
-      prisma.deal.aggregate({
-        where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
-        _sum: { value: true },
-        _count: true,
-      }),
-      prisma.deal.findMany({
-        where: { ownerId: { in: ownerIds }, stage: { in: ["WON", "LOST"] } },
-        select: { stage: true },
-      }),
-      prisma.lead.count({
-        where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
-      }),
-      prisma.activity.findMany({
-        where: { ownerId: { in: ownerIds }, status: "PENDING" },
-        orderBy: { dueAt: "asc" },
-        take: 6,
-        include: {
-          owner: { select: { name: true, avatarColor: true } },
-          deal: { select: { title: true } },
-          lead: { select: { title: true } },
-        },
-      }),
-      prisma.deal.findMany({
-        where: { ownerId: { in: ownerIds } },
-        orderBy: { updatedAt: "desc" },
-        take: 6,
-        include: {
-          owner: { select: { name: true, avatarColor: true } },
-          account: { select: { name: true } },
-        },
-      }),
-      // Only the core CAC sales team, not historical/other-division reps
-      // carrying the same SALES_MANAGER role.
-      user.role === "HEAD"
-        ? prisma.user.findMany({
-            where: { role: "SALES_MANAGER", isActive: true, title: "Sales Manager" },
-            include: {
-              deals: { select: { stage: true, value: true, closedAt: true } },
-            },
-            orderBy: { name: "asc" },
-          })
-        : Promise.resolve([]),
-    ]);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
+  const staleThreshold = new Date();
+  staleThreshold.setDate(staleThreshold.getDate() - STALE_DEAL_DAYS);
+
+  const [
+    openDeals,
+    wonThisMonth,
+    closedDeals,
+    activeLeads,
+    upcomingActivities,
+    overdueCount,
+    staleDeals,
+    recentDeals,
+    users,
+  ] = await Promise.all([
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
+      select: { stage: true, value: true },
+    }),
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
+      _sum: { value: true },
+      _count: true,
+    }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: { in: ["WON", "LOST"] } },
+      select: { stage: true },
+    }),
+    prisma.lead.count({
+      where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
+    }),
+    prisma.activity.findMany({
+      where: { ownerId: { in: ownerIds }, status: "PENDING" },
+      orderBy: { dueAt: "asc" },
+      take: 6,
+      include: {
+        owner: { select: { name: true, avatarColor: true } },
+        deal: { select: { title: true } },
+        lead: { select: { title: true } },
+      },
+    }),
+    prisma.activity.count({
+      where: { ownerId: { in: ownerIds }, status: "PENDING", dueAt: { lt: startOfToday } },
+    }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES }, updatedAt: { lt: staleThreshold } },
+      orderBy: { updatedAt: "asc" },
+      take: 6,
+      include: {
+        owner: { select: { name: true, avatarColor: true } },
+        account: { select: { name: true } },
+      },
+    }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds } },
+      orderBy: { updatedAt: "desc" },
+      take: 6,
+      include: {
+        owner: { select: { name: true, avatarColor: true } },
+        account: { select: { name: true } },
+      },
+    }),
+    // Only the core CAC sales team, not historical/other-division reps
+    // carrying the same SALES_MANAGER role.
+    user.role === "HEAD"
+      ? prisma.user.findMany({
+          where: { role: "SALES_MANAGER", isActive: true, title: "Sales Manager" },
+          include: {
+            deals: { select: { stage: true, value: true, closedAt: true } },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const openPipelineValue = openDeals.reduce((sum, d) => sum + d.value, 0);
   const wonCount = closedDeals.filter((d) => d.stage === "WON").length;
@@ -155,7 +185,14 @@ export default async function DashboardPage() {
 
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-900">Upcoming activities</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Upcoming activities</h2>
+                {overdueCount > 0 && (
+                  <Badge bg="bg-rose-100" text="text-rose-700">
+                    {overdueCount} overdue
+                  </Badge>
+                )}
+              </div>
               <Link href="/activities" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
                 View all <ArrowRight className="h-3 w-3" />
               </Link>
@@ -164,7 +201,10 @@ export default async function DashboardPage() {
               <EmptyState title="Nothing scheduled" description="You're all caught up." />
             ) : (
               <ul className="space-y-3">
-                {upcomingActivities.map((a) => (
+                {upcomingActivities.map((a) => {
+                  const isOverdue = a.dueAt != null && a.dueAt < startOfToday;
+                  const isToday = a.dueAt != null && a.dueAt >= startOfToday && a.dueAt < endOfToday;
+                  return (
                   <li key={a.id} className="flex items-start gap-3">
                     <div className="mt-0.5">
                       <Badge>{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
@@ -172,11 +212,19 @@ export default async function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-800 truncate">{a.subject}</p>
                       <p className="text-xs text-slate-400 truncate">
-                        {a.deal?.title ?? a.lead?.title ?? "—"} · {relativeDueLabel(a.dueAt)}
+                        {a.deal?.title ?? a.lead?.title ?? "—"} ·{" "}
+                        <span
+                          className={
+                            isOverdue ? "text-rose-600 font-medium" : isToday ? "text-amber-600 font-medium" : ""
+                          }
+                        >
+                          {relativeDueLabel(a.dueAt)}
+                        </span>
                       </p>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </Card>
@@ -249,6 +297,38 @@ export default async function DashboardPage() {
             </Card>
           )}
         </div>
+
+        {staleDeals.length > 0 && (
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <h2 className="text-sm font-semibold text-slate-900">Deals needing attention</h2>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">No update in {STALE_DEAL_DAYS}+ days.</p>
+            <div className="divide-y divide-slate-100">
+              {staleDeals.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/deals/${d.id}`}
+                  className="flex items-center justify-between py-3 hover:bg-slate-50 -mx-2 px-2 rounded-lg transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{d.title}</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {d.account?.name ?? "No account"} · {d.owner.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-medium text-slate-700">{formatCurrency(d.value)}</span>
+                    <Badge bg="bg-amber-100" text="text-amber-700">
+                      {DEAL_STAGE_LABELS[d.stage]}
+                    </Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

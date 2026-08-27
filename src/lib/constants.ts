@@ -34,6 +34,11 @@ export const DEAL_STAGE_COLORS: Record<DealStage, { bg: string; text: string; do
   LOST: { bg: "bg-rose-100", text: "text-rose-700", dot: "bg-rose-500" },
 };
 
+// An open deal with no update in this many days is flagged as stalled on
+// the Dashboard, since there's no dedicated stage-change timestamp to track
+// "time in current stage" - last edit is the best available proxy.
+export const STALE_DEAL_DAYS = 14;
+
 // Terminal statuses that should be excluded from "active leads" counts.
 export const CLOSED_LEAD_STATUSES: LeadStatus[] = ["CONVERTED", "UNQUALIFIED"];
 
