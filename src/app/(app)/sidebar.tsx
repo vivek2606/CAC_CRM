@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
+import { SakuragiMark } from "@/components/sakuragi-logo";
 import { initials } from "@/lib/format";
 
 const NAV_ITEMS = [
@@ -54,9 +55,7 @@ export function Sidebar({
         ${open ? "translate-x-0" : "-translate-x-full"}`}
     >
       <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-200">
-        <div className="h-8 w-8 rounded-lg bg-indigo-500 text-white font-bold flex items-center justify-center text-sm">
-          S
-        </div>
+        <SakuragiMark className="h-8 w-8 shrink-0" />
         <span className="font-semibold text-slate-900">SAKURAGI CRM Pro</span>
         <button
           onClick={onClose}
