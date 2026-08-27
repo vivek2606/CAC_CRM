@@ -29,6 +29,7 @@ export type ImportSummary = {
   inactiveUsersCreated: number;
   dealsCreated: number;
   pricelistEntriesCreated: number;
+  lineItemsCreated: number;
   excludedServiceRows: number;
   excludedReturnRows: number;
   demoAccountsRemoved: string[];
@@ -167,6 +168,26 @@ export async function importSalesRegister(
     sourceTxnNo: d.txnNo,
   }));
   const dealsResult = await prisma.deal.createMany({ data: dealCreateData, skipDuplicates: true });
+  const dbDeals = await prisma.deal.findMany({
+    where: { sourceTxnNo: { in: result.deals.map((d) => d.txnNo) } },
+    select: { id: true, sourceTxnNo: true },
+  });
+  const dealIdByTxnNo = new Map(dbDeals.map((d) => [d.sourceTxnNo!, d.id]));
+
+  // Line items (product-level detail per historical sale, for category/month reporting)
+  const lineItemCreateData = result.lineItems
+    .filter((li) => productIdByCode.has(li.itemCode))
+    .map((li) => ({
+      sourceKey: li.sourceKey,
+      productId: productIdByCode.get(li.itemCode)!,
+      ownerId: userIdByKey.get(li.ownerKey) ?? head.id,
+      dealId: dealIdByTxnNo.get(li.txnNo) ?? null,
+      docDate: li.docDate,
+      month: li.month,
+      qty: li.qty,
+      value: li.value,
+    }));
+  const lineItemsResult = await prisma.saleLineItem.createMany({ data: lineItemCreateData, skipDuplicates: true });
 
   // Pricelist
   const pricelistCreateData = result.pricelistEntries
@@ -189,6 +210,7 @@ export async function importSalesRegister(
       inactiveUsersCreated: result.users.filter((u) => !u.isActive).length,
       dealsCreated: dealsResult.count,
       pricelistEntriesCreated: pricelistResult.count,
+      lineItemsCreated: lineItemsResult.count,
       excludedServiceRows: result.summary.excludedServiceRows,
       excludedReturnRows: result.summary.excludedReturnRows,
       demoAccountsRemoved,

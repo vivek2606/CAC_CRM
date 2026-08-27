@@ -14,6 +14,7 @@ import {
   Tags,
   Upload,
   Users,
+  TrendingUp,
   X,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Target },
   { href: "/deals", label: "Pipeline", icon: KanbanSquare },
+  { href: "/targets", label: "Targets", icon: TrendingUp },
   { href: "/accounts", label: "Accounts", icon: Building2 },
   { href: "/contacts", label: "Contacts", icon: Contact },
   { href: "/activities", label: "Activities", icon: CheckSquare },

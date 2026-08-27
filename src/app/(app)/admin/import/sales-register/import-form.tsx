@@ -55,6 +55,10 @@ export function ImportForm() {
                 <dd className="text-lg font-semibold text-slate-800">{state.summary.pricelistEntriesCreated}</dd>
               </div>
               <div>
+                <dt className="text-slate-500">Sale line items</dt>
+                <dd className="text-lg font-semibold text-slate-800">{state.summary.lineItemsCreated}</dd>
+              </div>
+              <div>
                 <dt className="text-slate-500">Total historical value</dt>
                 <dd className="text-lg font-semibold text-slate-800">
                   {formatCompactCurrency(state.summary.totalDealValue)}

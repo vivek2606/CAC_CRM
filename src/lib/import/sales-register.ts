@@ -46,6 +46,16 @@ export type TransformedPricelistEntry = {
   dealerPrice: number;
   exchangeRate: number;
 };
+export type TransformedLineItem = {
+  sourceKey: string;
+  itemCode: string;
+  txnNo: number;
+  docDate: Date;
+  month: Date;
+  qty: number;
+  value: number;
+  ownerKey: string;
+};
 
 export type TransformResult = {
   accounts: TransformedAccount[];
@@ -53,6 +63,7 @@ export type TransformResult = {
   users: TransformedUser[];
   deals: TransformedDeal[];
   pricelistEntries: TransformedPricelistEntry[];
+  lineItems: TransformedLineItem[];
   summary: {
     totalRowsIn: number;
     excludedServiceRows: number;
@@ -196,12 +207,26 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     exchangeRate: g.exchangeRate,
   }));
 
+  // Line items: one per kept row, preserving product-level detail (category,
+  // month, value) that gets lost once summed into Deal.value.
+  const lineItems: TransformedLineItem[] = kept.map((row, idx) => ({
+    sourceKey: `${row.txnNo}-${row.itemCode}-${idx}`,
+    itemCode: row.itemCode,
+    txnNo: row.txnNo,
+    docDate: row.docDate,
+    month: firstOfMonth(row.docDate),
+    qty: row.qty,
+    value: row.netAmt,
+    ownerKey: normalizeSalesmanName(row.salesman),
+  }));
+
   return {
     accounts: Array.from(accountMap.values()),
     products: Array.from(productMap.values()),
     users: Array.from(userMap.values()),
     deals,
     pricelistEntries,
+    lineItems,
     summary: {
       totalRowsIn,
       excludedServiceRows: excludedService.length,

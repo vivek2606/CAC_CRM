@@ -87,6 +87,31 @@ model User {
   deals         Deal[]    @relation("DealOwner")
   activities    Activity[] @relation("ActivityOwner")
   notes         Note[]    @relation("NoteAuthor")
+  targets       Target[]  @relation("SalesTarget")
+  saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
+}
+
+model Target {
+  id            String    @id @default(cuid())
+  month         DateTime // first-of-month
+  targetValue   Float
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userId        String
+  user          User      @relation("SalesTarget", fields: [userId], references: [id])
+
+  @@unique([userId, month])
+}
+
+// One company-wide Naira/USD rate per month, used to compute landed price
+// when the monthly Price Master upload doesn't supply its own.
+model MonthlyExchangeRate {
+  id            String    @id @default(cuid())
+  month         DateTime  @unique
+  rate          Float
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Account {
@@ -201,6 +226,33 @@ model Deal {
 
   activities    Activity[]
   notes         Note[]
+  lineItems     SaleLineItem[]
+}
+
+// One row per product line within a historical sale, so sales value can be
+// broken down by product category and month/year - detail that collapses
+// away once summed into Deal.value. Populated by the Sales Register import.
+model SaleLineItem {
+  id          String    @id @default(cuid())
+  docDate     DateTime
+  month       DateTime // first-of-month
+  qty         Float
+  value       Float
+
+  // Stable idempotency key from the import (txn no + item code + line
+  // index), so re-running the import can't create duplicate line items.
+  sourceKey   String    @unique
+
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+
+  ownerId     String
+  owner       User      @relation("SaleLineItemOwner", fields: [ownerId], references: [id])
+
+  dealId      String?
+  deal        Deal?     @relation(fields: [dealId], references: [id])
+
+  createdAt   DateTime  @default(now())
 }
 
 model Activity {
@@ -257,6 +309,7 @@ model Product {
   updatedAt     DateTime    @updatedAt
 
   pricelistEntries Pricelist[]
+  saleLineItems    SaleLineItem[]
 }
 
 model Pricelist {
