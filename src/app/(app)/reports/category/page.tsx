@@ -6,6 +6,7 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { CategoryChart } from "../category-chart";
 import { CategoryYearCompareChart, type CategoryYearRow } from "../category-year-chart";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 type Mode = "month" | "year" | "compare";
 
@@ -167,7 +168,19 @@ export default async function CategoryReportPage({
       ) : (
         <>
           <CategoryChart data={rows.map((r) => ({ category: r.category, value: r.value }))} />
-          <div className="overflow-x-auto mt-4">
+          <div className="flex justify-end mt-4">
+            <ExportCsvButton
+              filename={`sales-by-category-${periodLabel.replace(/\s+/g, "-")}.csv`}
+              headers={["Category", "Qty", "Sales Value", "Share %"]}
+              rows={rows.map((r) => [
+                r.category,
+                r.qty,
+                r.value,
+                totalValue > 0 ? Math.round((r.value / totalValue) * 100) : 0,
+              ])}
+            />
+          </div>
+          <div className="overflow-x-auto mt-2">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">

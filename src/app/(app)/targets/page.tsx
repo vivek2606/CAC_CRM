@@ -5,6 +5,7 @@ import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { TargetChart } from "./target-chart";
 import { SetTargetForm } from "./set-target-form";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 function parseMonthParam(raw: string | undefined): Date {
   const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
@@ -117,6 +118,18 @@ export default async function TargetsPage({
         </Card>
 
         <Card>
+          <div className="flex items-center justify-end p-4 pb-0">
+            <ExportCsvButton
+              filename={`targets-${monthStr}.csv`}
+              headers={["Sales Rep", "Target", "Actual", "Achievement %"]}
+              rows={reps.map((r) => {
+                const target = targetByUserId.get(r.id) ?? 0;
+                const actual = actualByUserId.get(r.id) ?? 0;
+                const pct = target > 0 ? Math.round((actual / target) * 100) : "";
+                return [r.name, target, actual, pct];
+              })}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

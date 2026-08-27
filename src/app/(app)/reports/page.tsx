@@ -21,6 +21,7 @@ import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
 import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
@@ -286,6 +287,33 @@ export default async function ReportsPage() {
         </div>
 
         <Card>
+          <div className="flex items-center justify-end p-4 pb-0">
+            <ExportCsvButton
+              filename="team-reports-summary.csv"
+              headers={[
+                "Sales Manager",
+                "Open Pipeline",
+                "Open Deals",
+                "Won (Qtr)",
+                "Won Count (Qtr)",
+                "Win Rate %",
+                "Active Leads",
+                "Tasks Pending",
+                "Tasks Done",
+              ]}
+              rows={tableRows.map((r) => [
+                r.name,
+                r.openValue,
+                r.openCount,
+                r.wonQuarterValue,
+                r.wonQuarterCount,
+                r.winRate,
+                r.activeLeads,
+                r.pendingActivities,
+                r.completedActivities,
+              ])}
+            />
+          </div>
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
