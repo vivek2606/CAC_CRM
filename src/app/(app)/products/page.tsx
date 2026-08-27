@@ -50,14 +50,7 @@ export default async function ProductsPage({
       <PageHeader
         title="Products"
         description={`${totalCount} product${totalCount === 1 ? "" : "s"}`}
-        action={
-          <div className="flex items-center gap-3">
-            <Link href="/products/sales-report" className="text-sm text-indigo-600 hover:text-indigo-700">
-              Sales by Category →
-            </Link>
-            {user.role === "HEAD" && <NewButton href="/products/new" label="New Product" />}
-          </div>
-        }
+        action={user.role === "HEAD" ? <NewButton href="/products/new" label="New Product" /> : undefined}
       />
       <div className="p-6 space-y-4">
         <form className="flex flex-wrap gap-3 items-center" action="/products">

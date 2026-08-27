@@ -15,6 +15,7 @@ import {
   Upload,
   Users,
   TrendingUp,
+  PieChart,
   X,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/activities", label: "Activities", icon: CheckSquare },
   { href: "/products", label: "Products", icon: Package },
   { href: "/pricelist", label: "Price List", icon: Tags },
+  { href: "/reports/category", label: "Sales by Category", icon: PieChart },
 ];
 
 export function Sidebar({

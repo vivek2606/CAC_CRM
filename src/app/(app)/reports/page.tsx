@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
@@ -173,6 +174,11 @@ export default async function ReportsPage() {
       <PageHeader
         title="Team Reports"
         description={`Performance across your ${salesReps.length} CAC sales managers${othersStats ? " (everyone else rolled into Others)" : ""}`}
+        action={
+          <Link href="/reports/category" className="text-sm text-indigo-600 hover:text-indigo-700">
+            Sales by Category →
+          </Link>
+        }
       />
 
       <div className="p-6 space-y-6">
