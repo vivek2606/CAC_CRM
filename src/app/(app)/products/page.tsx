@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
+import { RecomputeCapacityButton } from "./recompute-capacity-button";
 
 const PAGE_SIZE = 50;
 
@@ -50,7 +51,14 @@ export default async function ProductsPage({
       <PageHeader
         title="Products"
         description={`${totalCount} product${totalCount === 1 ? "" : "s"}`}
-        action={user.role === "HEAD" ? <NewButton href="/products/new" label="New Product" /> : undefined}
+        action={
+          user.role === "HEAD" ? (
+            <div className="flex items-center gap-3">
+              <RecomputeCapacityButton />
+              <NewButton href="/products/new" label="New Product" />
+            </div>
+          ) : undefined
+        }
       />
       <div className="p-6 space-y-4">
         <form className="flex flex-wrap gap-3 items-center" action="/products">

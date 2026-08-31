@@ -1,4 +1,5 @@
 import { lookupRosterEntry, normalizeSalesmanName } from "./roster";
+import { computeCapacityKw } from "@/lib/capacity";
 
 export type RawSalesRow = {
   txnNo: number;
@@ -24,6 +25,7 @@ export type TransformedProduct = {
   category: string;
   subCategory: string;
   model: string;
+  capacityKw: number | null;
 };
 export type TransformedUser = {
   key: string;
@@ -133,6 +135,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
       category: row.category,
       subCategory: productLastNonBlankSubCat.get(row.itemCode) ?? "Uncategorized",
       model: row.itemName,
+      capacityKw: computeCapacityKw(row.category, row.itemName),
     });
   }
 

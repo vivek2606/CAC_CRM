@@ -1,4 +1,5 @@
 import type { RawPriceMasterRow } from "./parse-price-master";
+import { computeCapacityKw } from "@/lib/capacity";
 
 export type TransformedProduct = {
   code: string;
@@ -29,7 +30,9 @@ export function transformPriceMaster(rows: RawPriceMasterRow[]): PriceMasterTran
       category: row.category,
       subCategory: row.subCategory,
       model: row.model,
-      capacityKw: row.capacityKw,
+      // The sheet's own Capacity (kW) column wins if supplied; otherwise
+      // derive it from the model number for the categories that encode it.
+      capacityKw: row.capacityKw ?? computeCapacityKw(row.category, row.model),
     });
     priceMap.set(row.productCode, { productCode: row.productCode, dealerPrice: row.dealerPrice });
   }

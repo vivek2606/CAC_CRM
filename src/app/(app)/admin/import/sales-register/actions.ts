@@ -146,6 +146,7 @@ export async function importSalesRegister(
     category: p.category,
     subCategory: p.subCategory,
     model: p.model,
+    capacityKw: p.capacityKw,
   }));
   await prisma.product.createMany({ data: productCreateData, skipDuplicates: true });
   const dbProducts = await prisma.product.findMany({
