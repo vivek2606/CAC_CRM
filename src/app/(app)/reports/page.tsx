@@ -44,7 +44,15 @@ export default async function ReportsPage() {
     orderBy: { name: "asc" },
     include: {
       deals: {
-        select: { stage: true, value: true, probability: true, closedAt: true, createdAt: true, lostReasonCategory: true },
+        select: {
+          stage: true,
+          value: true,
+          probability: true,
+          closedAt: true,
+          createdAt: true,
+          lostReasonCategory: true,
+          sourceTxnNo: true,
+        },
       },
       leads: {
         select: { status: true, source: true, winProbability: true, value: true, convertedDeal: { select: { stage: true } } },
@@ -63,10 +71,15 @@ export default async function ReportsPage() {
 
     const openDeals = deals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
     const wonDeals = deals.filter((d) => d.stage === "WON");
-    const lostDeals = deals.filter((d) => d.stage === "LOST");
     const wonThisQuarter = wonDeals.filter((d) => d.closedAt && d.closedAt >= qStart);
-    const closedCount = wonDeals.length + lostDeals.length;
-    const winRate = closedCount > 0 ? Math.round((wonDeals.length / closedCount) * 100) : 0;
+    // Win rate only makes sense over deals actually run through the pipeline
+    // here - the historical Sales Register import is a billing export of
+    // completed sales only, with no "Lost" counterpart, so including it
+    // would always show ~100% regardless of real performance.
+    const pipelineWonDeals = wonDeals.filter((d) => d.sourceTxnNo == null);
+    const pipelineLostDeals = deals.filter((d) => d.stage === "LOST" && d.sourceTxnNo == null);
+    const closedCount = pipelineWonDeals.length + pipelineLostDeals.length;
+    const winRate = closedCount > 0 ? Math.round((pipelineWonDeals.length / closedCount) * 100) : 0;
     const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status)).length;
     const pendingActivities = activities.filter((a) => a.status === "PENDING").length;
     const completedActivities = activities.filter((a) => a.status === "COMPLETED").length;

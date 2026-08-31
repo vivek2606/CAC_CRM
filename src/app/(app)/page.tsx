@@ -50,8 +50,12 @@ export default async function DashboardPage() {
       _sum: { value: true },
       _count: true,
     }),
+    // Win rate only makes sense over deals actually run through the pipeline
+    // here - the historical Sales Register import is a billing export of
+    // completed sales only, with no "Lost" counterpart, so including it
+    // would always show ~100% regardless of real performance.
     prisma.deal.findMany({
-      where: { ownerId: { in: ownerIds }, stage: { in: ["WON", "LOST"] } },
+      where: { ownerId: { in: ownerIds }, stage: { in: ["WON", "LOST"] }, sourceTxnNo: null },
       select: { stage: true },
     }),
     prisma.lead.count({
@@ -163,7 +167,7 @@ export default async function DashboardPage() {
           <StatCard
             label="Win Rate"
             value={`${winRate}%`}
-            sub={`${wonCount} of ${closedDeals.length} closed`}
+            sub={closedDeals.length > 0 ? `${wonCount} of ${closedDeals.length} closed` : "No pipeline deals closed yet"}
             icon={<Percent className="h-4 w-4 text-amber-500" />}
           />
         </div>
