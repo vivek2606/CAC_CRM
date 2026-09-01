@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { DealStage, LostReason } from "@prisma/client";
+import type { DealStage, LostReason, EquipmentType, ProjectType, EndUseSegment } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -77,10 +77,26 @@ const dealSchema = z.object({
   accountId: z.string().optional(),
   contactId: z.string().optional(),
   ownerId: z.string().min(1),
+  equipmentType: z.string().optional(),
+  projectType: z.string().optional(),
+  endUseSegment: z.string().optional(),
+  competitorBrand: z.string().optional(),
 });
 
 function toNullable(value: string | undefined) {
   return value && value.trim() !== "" ? value : null;
+}
+
+function toEquipmentType(value: string | undefined): EquipmentType | null {
+  return value && value.trim() !== "" ? (value as EquipmentType) : null;
+}
+
+function toProjectType(value: string | undefined): ProjectType | null {
+  return value && value.trim() !== "" ? (value as ProjectType) : null;
+}
+
+function toEndUseSegment(value: string | undefined): EndUseSegment | null {
+  return value && value.trim() !== "" ? (value as EndUseSegment) : null;
 }
 
 export async function createDeal(formData: FormData) {
@@ -99,6 +115,10 @@ export async function createDeal(formData: FormData) {
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,
+      equipmentType: toEquipmentType(parsed.equipmentType),
+      projectType: toProjectType(parsed.projectType),
+      endUseSegment: toEndUseSegment(parsed.endUseSegment),
+      competitorBrand: toNullable(parsed.competitorBrand),
     },
   });
 
@@ -129,6 +149,10 @@ export async function updateDeal(dealId: string, formData: FormData) {
       closedAt: parsed.stage === "WON" || parsed.stage === "LOST" ? (existing.closedAt ?? new Date()) : null,
       lostReasonCategory: parsed.stage === "LOST" ? existing.lostReasonCategory : null,
       lostReason: parsed.stage === "LOST" ? existing.lostReason : null,
+      equipmentType: toEquipmentType(parsed.equipmentType),
+      projectType: toProjectType(parsed.projectType),
+      endUseSegment: toEndUseSegment(parsed.endUseSegment),
+      competitorBrand: toNullable(parsed.competitorBrand),
     },
   });
   await syncSaleLineItemsForDeal(dealId);

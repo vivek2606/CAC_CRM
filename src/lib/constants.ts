@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, ProjectType, EndUseSegment } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -149,6 +149,55 @@ export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
   ROOFTOP: "Rooftop",
   LARGE_DUCT: "Large Duct",
   MIXED_PRODUCT: "Mixed Product",
+};
+
+export const PROJECT_TYPES: ProjectType[] = ["NEW_INSTALLATION", "REPLACEMENT", "EXPANSION"];
+
+export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  NEW_INSTALLATION: "New Installation",
+  REPLACEMENT: "Replacement",
+  EXPANSION: "Expansion",
+};
+
+// First 3 steps of the same validated categorical order used for LEAD_SOURCE_COLORS.
+export const PROJECT_TYPE_COLORS: Record<ProjectType, string> = {
+  NEW_INSTALLATION: "#3b82f6",
+  REPLACEMENT: "#f97316",
+  EXPANSION: "#14b8a6",
+};
+
+export const END_USE_SEGMENTS: EndUseSegment[] = [
+  "RESIDENTIAL",
+  "COMMERCIAL_OFFICE",
+  "HOSPITALITY",
+  "RETAIL",
+  "HEALTHCARE",
+  "INDUSTRIAL",
+  "GOVERNMENT_INSTITUTIONAL",
+  "REAL_ESTATE_DEVELOPER",
+];
+
+export const END_USE_SEGMENT_LABELS: Record<EndUseSegment, string> = {
+  RESIDENTIAL: "Residential",
+  COMMERCIAL_OFFICE: "Commercial / Office",
+  HOSPITALITY: "Hospitality",
+  RETAIL: "Retail",
+  HEALTHCARE: "Healthcare",
+  INDUSTRIAL: "Industrial",
+  GOVERNMENT_INSTITUTIONAL: "Government / Institutional",
+  REAL_ESTATE_DEVELOPER: "Real Estate Developer",
+};
+
+// Full 8-step validated categorical order used for LEAD_SOURCE_COLORS.
+export const END_USE_SEGMENT_COLORS: Record<EndUseSegment, string> = {
+  RESIDENTIAL: "#3b82f6",
+  COMMERCIAL_OFFICE: "#f97316",
+  HOSPITALITY: "#14b8a6",
+  RETAIL: "#f59e0b",
+  HEALTHCARE: "#ec4899",
+  INDUSTRIAL: "#16a34a",
+  GOVERNMENT_INSTITUTIONAL: "#7c3aed",
+  REAL_ESTATE_DEVELOPER: "#ef4444",
 };
 
 export const ACTIVITY_TYPES: ActivityType[] = ["CALL", "EMAIL", "MEETING", "TASK", "NOTE"];

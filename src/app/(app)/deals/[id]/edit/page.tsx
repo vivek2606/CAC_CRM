@@ -53,6 +53,10 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               accountId: deal.accountId,
               contactId: deal.contactId,
               ownerId: deal.ownerId,
+              equipmentType: deal.equipmentType,
+              projectType: deal.projectType,
+              endUseSegment: deal.endUseSegment,
+              competitorBrand: deal.competitorBrand,
             }}
             submitLabel="Save Changes"
           />

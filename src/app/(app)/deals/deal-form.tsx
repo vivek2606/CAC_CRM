@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { OPEN_DEAL_STAGES, DEAL_STAGE_LABELS } from "@/lib/constants";
-import type { DealStage } from "@prisma/client";
+import {
+  OPEN_DEAL_STAGES,
+  DEAL_STAGE_LABELS,
+  EQUIPMENT_TYPES,
+  EQUIPMENT_TYPE_LABELS,
+  PROJECT_TYPES,
+  PROJECT_TYPE_LABELS,
+  END_USE_SEGMENTS,
+  END_USE_SEGMENT_LABELS,
+} from "@/lib/constants";
+import type { DealStage, EquipmentType, ProjectType, EndUseSegment } from "@prisma/client";
 
 type Option = { id: string; label: string };
 
@@ -29,6 +38,10 @@ export function DealForm({
     accountId?: string | null;
     contactId?: string | null;
     ownerId?: string;
+    equipmentType?: EquipmentType | null;
+    projectType?: ProjectType | null;
+    endUseSegment?: EndUseSegment | null;
+    competitorBrand?: string | null;
   };
   submitLabel: string;
 }) {
@@ -94,6 +107,64 @@ export function DealForm({
             min={0}
             max={100}
             defaultValue={defaultValues?.probability}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type</label>
+          <select
+            name="equipmentType"
+            defaultValue={defaultValues?.equipmentType ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {EQUIPMENT_TYPES.map((e) => (
+              <option key={e} value={e}>
+                {EQUIPMENT_TYPE_LABELS[e]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Project type</label>
+          <select
+            name="projectType"
+            defaultValue={defaultValues?.projectType ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {PROJECT_TYPES.map((p) => (
+              <option key={p} value={p}>
+                {PROJECT_TYPE_LABELS[p]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">End-use segment</label>
+          <select
+            name="endUseSegment"
+            defaultValue={defaultValues?.endUseSegment ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {END_USE_SEGMENTS.map((s) => (
+              <option key={s} value={s}>
+                {END_USE_SEGMENT_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Competing brand</label>
+          <input
+            name="competitorBrand"
+            placeholder="e.g. Daikin, LG, Gree"
+            defaultValue={defaultValues?.competitorBrand ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

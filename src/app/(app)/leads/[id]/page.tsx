@@ -10,6 +10,8 @@ import {
   winProbabilityColor,
   LEAD_SOURCE_LABELS,
   EQUIPMENT_TYPE_LABELS,
+  PROJECT_TYPE_LABELS,
+  END_USE_SEGMENT_LABELS,
 } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
@@ -133,6 +135,24 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Equipment</dt>
                   <dd className="text-slate-700">{EQUIPMENT_TYPE_LABELS[lead.equipmentType]}</dd>
+                </div>
+              )}
+              {lead.projectType && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Project type</dt>
+                  <dd className="text-slate-700">{PROJECT_TYPE_LABELS[lead.projectType]}</dd>
+                </div>
+              )}
+              {lead.endUseSegment && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Segment</dt>
+                  <dd className="text-slate-700">{END_USE_SEGMENT_LABELS[lead.endUseSegment]}</dd>
+                </div>
+              )}
+              {lead.competitorBrand && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Competing brand</dt>
+                  <dd className="text-slate-700">{lead.competitorBrand}</dd>
                 </div>
               )}
               <div className="flex justify-between">

@@ -4,7 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LOST_REASON_LABELS } from "@/lib/constants";
+import {
+  DEAL_STAGE_LABELS,
+  DEAL_STAGE_COLORS,
+  LOST_REASON_LABELS,
+  EQUIPMENT_TYPE_LABELS,
+  PROJECT_TYPE_LABELS,
+  END_USE_SEGMENT_LABELS,
+} from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
 import { deleteDeal } from "../actions";
@@ -128,6 +135,30 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                 <dt className="text-slate-500">Expected close</dt>
                 <dd className="text-slate-700">{formatDate(deal.expectedCloseDate)}</dd>
               </div>
+              {deal.equipmentType && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Equipment</dt>
+                  <dd className="text-slate-700">{EQUIPMENT_TYPE_LABELS[deal.equipmentType]}</dd>
+                </div>
+              )}
+              {deal.projectType && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Project type</dt>
+                  <dd className="text-slate-700">{PROJECT_TYPE_LABELS[deal.projectType]}</dd>
+                </div>
+              )}
+              {deal.endUseSegment && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Segment</dt>
+                  <dd className="text-slate-700">{END_USE_SEGMENT_LABELS[deal.endUseSegment]}</dd>
+                </div>
+              )}
+              {deal.competitorBrand && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Competing brand</dt>
+                  <dd className="text-slate-700">{deal.competitorBrand}</dd>
+                </div>
+              )}
               {deal.closedAt && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Closed on</dt>

@@ -14,6 +14,12 @@ import {
   LOST_REASONS,
   LOST_REASON_LABELS,
   LOST_REASON_COLORS,
+  PROJECT_TYPES,
+  PROJECT_TYPE_LABELS,
+  PROJECT_TYPE_COLORS,
+  END_USE_SEGMENTS,
+  END_USE_SEGMENT_LABELS,
+  END_USE_SEGMENT_COLORS,
 } from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
@@ -21,6 +27,7 @@ import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
 import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
+import { DistributionPieChart } from "./distribution-pie-chart";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
@@ -52,6 +59,8 @@ export default async function ReportsPage() {
           createdAt: true,
           lostReasonCategory: true,
           sourceTxnNo: true,
+          projectType: true,
+          endUseSegment: true,
         },
       },
       leads: {
@@ -209,6 +218,43 @@ export default async function ReportsPage() {
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count);
 
+  // 6. New installation vs. replacement vs. expansion, and 7. end-use
+  // segment - both fed by the new deal-form fields, so only deals entered
+  // (or edited) since this feature shipped will have a value here.
+  const projectTypeGroups = new Map<string, { count: number; value: number }>();
+  for (const deal of teamDeals) {
+    if (!deal.projectType) continue;
+    const g = projectTypeGroups.get(deal.projectType) ?? { count: 0, value: 0 };
+    g.count += 1;
+    g.value += deal.value;
+    projectTypeGroups.set(deal.projectType, g);
+  }
+  const projectTypeData = PROJECT_TYPES.map((type) => ({
+    label: PROJECT_TYPE_LABELS[type],
+    count: projectTypeGroups.get(type)?.count ?? 0,
+    value: projectTypeGroups.get(type)?.value ?? 0,
+    fill: PROJECT_TYPE_COLORS[type],
+  }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const segmentGroups = new Map<string, { count: number; value: number }>();
+  for (const deal of teamDeals) {
+    if (!deal.endUseSegment) continue;
+    const g = segmentGroups.get(deal.endUseSegment) ?? { count: 0, value: 0 };
+    g.count += 1;
+    g.value += deal.value;
+    segmentGroups.set(deal.endUseSegment, g);
+  }
+  const segmentData = END_USE_SEGMENTS.map((segment) => ({
+    label: END_USE_SEGMENT_LABELS[segment],
+    count: segmentGroups.get(segment)?.count ?? 0,
+    value: segmentGroups.get(segment)?.value ?? 0,
+    fill: END_USE_SEGMENT_COLORS[segment],
+  }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+
   return (
     <div>
       <PageHeader
@@ -295,6 +341,28 @@ export default async function ReportsPage() {
               <p className="text-sm text-slate-400 py-6 text-center">No lost deals with a reason yet.</p>
             ) : (
               <LostReasonChart data={lostReasonData} />
+            )}
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">New installation vs. replacement</h2>
+            <p className="text-xs text-slate-400 mb-3">Deals by project type, from the Project type field.</p>
+            {projectTypeData.length === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No deals with a project type set yet.</p>
+            ) : (
+              <DistributionPieChart data={projectTypeData} />
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Deals by end-use segment</h2>
+            <p className="text-xs text-slate-400 mb-3">Which verticals the pipeline is coming from.</p>
+            {segmentData.length === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
+            ) : (
+              <DistributionPieChart data={segmentData} />
             )}
           </Card>
         </div>

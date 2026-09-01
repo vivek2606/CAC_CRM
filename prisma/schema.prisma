@@ -40,6 +40,23 @@ enum EquipmentType {
   MIXED_PRODUCT
 }
 
+enum ProjectType {
+  NEW_INSTALLATION
+  REPLACEMENT
+  EXPANSION
+}
+
+enum EndUseSegment {
+  RESIDENTIAL
+  COMMERCIAL_OFFICE
+  HOSPITALITY
+  RETAIL
+  HEALTHCARE
+  INDUSTRIAL
+  GOVERNMENT_INSTITUTIONAL
+  REAL_ESTATE_DEVELOPER
+}
+
 enum DealStage {
   QUALIFICATION
   NEEDS_ANALYSIS
@@ -179,6 +196,12 @@ model Lead {
   winProbability Int?
   source        LeadSource  @default(DIRECT)
   equipmentType EquipmentType?
+  // Business-insight fields: what kind of project this is, which vertical
+  // it's for, and which competing brand (if any) is also being quoted -
+  // feed the Team Reports segment/project-type breakdowns.
+  projectType   ProjectType?
+  endUseSegment EndUseSegment?
+  competitorBrand String?
   value         Float?
   email         String?
   phone         String?
@@ -214,6 +237,12 @@ model Deal {
   probability   Int         @default(20)
   expectedCloseDate DateTime?
   closedAt      DateTime?
+  // Same business-insight fields as Lead - carried over automatically when a
+  // lead converts, or set directly for deals created without one.
+  equipmentType EquipmentType?
+  projectType   ProjectType?
+  endUseSegment EndUseSegment?
+  competitorBrand String?
   // A fixed category (for the "why we lose" breakdown) plus this pre-existing
   // free-text field, now used for optional extra detail rather than the
   // whole reason - kept as-is (not renamed) so no existing data moves.
