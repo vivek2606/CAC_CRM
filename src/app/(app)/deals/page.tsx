@@ -28,8 +28,14 @@ export default async function DealsPage({
     prisma.deal.count({ where: { ownerId: ownerFilter, stage: { in: ["WON", "LOST"] } } }),
   ]);
 
+  // The current 6 active core sales reps, plus Sikiru (Service Manager) -
+  // not the full historical SALES_MANAGER-role roster.
   const owners = user.role === "HEAD"
-    ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+    ? await prisma.user.findMany({
+        where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      })
     : [];
 
   return (
