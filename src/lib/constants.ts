@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, ProjectType, EndUseSegment } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -149,21 +149,6 @@ export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
   ROOFTOP: "Rooftop",
   LARGE_DUCT: "Large Duct",
   MIXED_PRODUCT: "Mixed Product",
-};
-
-export const PROJECT_TYPES: ProjectType[] = ["NEW_INSTALLATION", "REPLACEMENT", "EXPANSION"];
-
-export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
-  NEW_INSTALLATION: "New Installation",
-  REPLACEMENT: "Replacement",
-  EXPANSION: "Expansion",
-};
-
-// First 3 steps of the same validated categorical order used for LEAD_SOURCE_COLORS.
-export const PROJECT_TYPE_COLORS: Record<ProjectType, string> = {
-  NEW_INSTALLATION: "#3b82f6",
-  REPLACEMENT: "#f97316",
-  EXPANSION: "#14b8a6",
 };
 
 export const END_USE_SEGMENTS: EndUseSegment[] = [

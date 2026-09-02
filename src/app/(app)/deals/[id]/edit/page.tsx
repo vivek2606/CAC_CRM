@@ -54,7 +54,6 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               contactId: deal.contactId,
               ownerId: deal.ownerId,
               equipmentType: deal.equipmentType,
-              projectType: deal.projectType,
               endUseSegment: deal.endUseSegment,
               competitorBrand: deal.competitorBrand,
             }}

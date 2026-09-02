@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { DealStage, LostReason, EquipmentType, ProjectType, EndUseSegment } from "@prisma/client";
+import type { DealStage, LostReason, EquipmentType, EndUseSegment } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -78,7 +78,6 @@ const dealSchema = z.object({
   contactId: z.string().optional(),
   ownerId: z.string().min(1),
   equipmentType: z.string().optional(),
-  projectType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
 });
@@ -91,12 +90,31 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
   return value && value.trim() !== "" ? (value as EquipmentType) : null;
 }
 
-function toProjectType(value: string | undefined): ProjectType | null {
-  return value && value.trim() !== "" ? (value as ProjectType) : null;
-}
-
 function toEndUseSegment(value: string | undefined): EndUseSegment | null {
   return value && value.trim() !== "" ? (value as EndUseSegment) : null;
+}
+
+const dealLineItemSchema = z.object({
+  productId: z.string().min(1, "Choose a product"),
+  qty: z.coerce.number().positive("Quantity must be greater than zero"),
+  unitPrice: z.coerce.number().min(0, "Unit price can't be negative"),
+});
+
+// The New Deal form serializes its optional product rows as a JSON array in
+// a hidden "lineItems" field - parse it defensively since it's client-built.
+function parseLineItems(raw: FormDataEntryValue | undefined): z.infer<typeof dealLineItemSchema>[] {
+  if (typeof raw !== "string" || raw.trim() === "") return [];
+  let items: unknown;
+  try {
+    items = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => dealLineItemSchema.safeParse(item))
+    .filter((result) => result.success)
+    .map((result) => result.data);
 }
 
 export async function createDeal(formData: FormData) {
@@ -104,6 +122,7 @@ export async function createDeal(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
   const ownerId = user.role === "HEAD" ? parsed.ownerId : user.id;
+  const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
 
   const deal = await prisma.deal.create({
     data: {
@@ -116,9 +135,9 @@ export async function createDeal(formData: FormData) {
       contactId: toNullable(parsed.contactId),
       ownerId,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      projectType: toProjectType(parsed.projectType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
+      items: lineItems.length > 0 ? { createMany: { data: lineItems } } : undefined,
     },
   });
 
@@ -150,7 +169,6 @@ export async function updateDeal(dealId: string, formData: FormData) {
       lostReasonCategory: parsed.stage === "LOST" ? existing.lostReasonCategory : null,
       lostReason: parsed.stage === "LOST" ? existing.lostReason : null,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      projectType: toProjectType(parsed.projectType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
     },
@@ -200,12 +218,6 @@ export async function updateDealStage(
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/");
 }
-
-const dealLineItemSchema = z.object({
-  productId: z.string().min(1, "Choose a product"),
-  qty: z.coerce.number().positive("Quantity must be greater than zero"),
-  unitPrice: z.coerce.number().min(0, "Unit price can't be negative"),
-});
 
 export async function addDealLineItem(dealId: string, formData: FormData) {
   const user = await requireUser();

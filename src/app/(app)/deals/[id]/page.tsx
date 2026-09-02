@@ -9,7 +9,6 @@ import {
   DEAL_STAGE_COLORS,
   LOST_REASON_LABELS,
   EQUIPMENT_TYPE_LABELS,
-  PROJECT_TYPE_LABELS,
   END_USE_SEGMENT_LABELS,
 } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
@@ -139,12 +138,6 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Equipment</dt>
                   <dd className="text-slate-700">{EQUIPMENT_TYPE_LABELS[deal.equipmentType]}</dd>
-                </div>
-              )}
-              {deal.projectType && (
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Project type</dt>
-                  <dd className="text-slate-700">{PROJECT_TYPE_LABELS[deal.projectType]}</dd>
                 </div>
               )}
               {deal.endUseSegment && (

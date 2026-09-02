@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType, DealStage, ProjectType, EndUseSegment } from "@prisma/client";
+import type { EquipmentType, DealStage, EndUseSegment } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -15,7 +15,6 @@ const leadSchema = z.object({
   winProbability: z.string().optional(),
   source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]),
   equipmentType: z.string().optional(),
-  projectType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
@@ -33,10 +32,6 @@ function toNullable(value: string | undefined) {
 
 function toEquipmentType(value: string | undefined): EquipmentType | null {
   return value && value.trim() !== "" ? (value as EquipmentType) : null;
-}
-
-function toProjectType(value: string | undefined): ProjectType | null {
-  return value && value.trim() !== "" ? (value as ProjectType) : null;
 }
 
 function toEndUseSegment(value: string | undefined): EndUseSegment | null {
@@ -64,7 +59,6 @@ export async function createLead(formData: FormData) {
       winProbability: toWinProbability(parsed.winProbability),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      projectType: toProjectType(parsed.projectType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
       value: parsed.value ?? null,
@@ -101,7 +95,6 @@ export async function updateLead(leadId: string, formData: FormData) {
       winProbability: toWinProbability(parsed.winProbability),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      projectType: toProjectType(parsed.projectType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
       value: parsed.value ?? null,
@@ -151,7 +144,6 @@ export async function convertLeadToDeal(leadId: string) {
       accountId: lead.accountId,
       contactId: lead.contactId,
       equipmentType: lead.equipmentType,
-      projectType: lead.projectType,
       endUseSegment: lead.endUseSegment,
       competitorBrand: lead.competitorBrand,
     },
@@ -220,7 +212,6 @@ export async function bulkConvertLeadsByProbability(
         accountId: lead.accountId,
         contactId: lead.contactId,
         equipmentType: lead.equipmentType,
-        projectType: lead.projectType,
         endUseSegment: lead.endUseSegment,
         competitorBrand: lead.competitorBrand,
       },

@@ -14,9 +14,6 @@ import {
   LOST_REASONS,
   LOST_REASON_LABELS,
   LOST_REASON_COLORS,
-  PROJECT_TYPES,
-  PROJECT_TYPE_LABELS,
-  PROJECT_TYPE_COLORS,
   END_USE_SEGMENTS,
   END_USE_SEGMENT_LABELS,
   END_USE_SEGMENT_COLORS,
@@ -59,7 +56,6 @@ export default async function ReportsPage() {
           createdAt: true,
           lostReasonCategory: true,
           sourceTxnNo: true,
-          projectType: true,
           endUseSegment: true,
         },
       },
@@ -218,26 +214,8 @@ export default async function ReportsPage() {
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count);
 
-  // 6. New installation vs. replacement vs. expansion, and 7. end-use
-  // segment - both fed by the new deal-form fields, so only deals entered
-  // (or edited) since this feature shipped will have a value here.
-  const projectTypeGroups = new Map<string, { count: number; value: number }>();
-  for (const deal of teamDeals) {
-    if (!deal.projectType) continue;
-    const g = projectTypeGroups.get(deal.projectType) ?? { count: 0, value: 0 };
-    g.count += 1;
-    g.value += deal.value;
-    projectTypeGroups.set(deal.projectType, g);
-  }
-  const projectTypeData = PROJECT_TYPES.map((type) => ({
-    label: PROJECT_TYPE_LABELS[type],
-    count: projectTypeGroups.get(type)?.count ?? 0,
-    value: projectTypeGroups.get(type)?.value ?? 0,
-    fill: PROJECT_TYPE_COLORS[type],
-  }))
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count);
-
+  // 6. End-use segment distribution - fed by the deal-form field, so only
+  // deals entered (or edited) since this feature shipped will have a value here.
   const segmentGroups = new Map<string, { count: number; value: number }>();
   for (const deal of teamDeals) {
     if (!deal.endUseSegment) continue;
@@ -345,27 +323,15 @@ export default async function ReportsPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">New installation vs. replacement</h2>
-            <p className="text-xs text-slate-400 mb-3">Deals by project type, from the Project type field.</p>
-            {projectTypeData.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No deals with a project type set yet.</p>
-            ) : (
-              <DistributionPieChart data={projectTypeData} />
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Deals by end-use segment</h2>
-            <p className="text-xs text-slate-400 mb-3">Which verticals the pipeline is coming from.</p>
-            {segmentData.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
-            ) : (
-              <DistributionPieChart data={segmentData} />
-            )}
-          </Card>
-        </div>
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Deals by end-use segment</h2>
+          <p className="text-xs text-slate-400 mb-3">Which verticals the pipeline is coming from.</p>
+          {segmentData.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
+          ) : (
+            <DistributionPieChart data={segmentData} />
+          )}
+        </Card>
 
         <Card>
           <div className="flex items-center justify-end p-4 pb-0">
