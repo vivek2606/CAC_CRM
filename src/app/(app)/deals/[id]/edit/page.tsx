@@ -44,6 +44,8 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
             }))}
             defaultValues={{
               title: deal.title,
+              customerName: deal.customerName,
+              customerPhone: deal.customerPhone,
               stage: deal.stage === "WON" || deal.stage === "LOST" ? "QUALIFICATION" : deal.stage,
               value: deal.value,
               probability: deal.probability,

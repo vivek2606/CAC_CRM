@@ -32,6 +32,7 @@ export function LeadForm({
   contacts: (Option & { accountId: string | null })[];
   defaultValues?: {
     title?: string;
+    customerName?: string | null;
     company?: string | null;
     status?: LeadStatus;
     winProbability?: number | null;
@@ -62,6 +63,17 @@ export function LeadForm({
             required
             defaultValue={defaultValues?.title}
             placeholder="e.g. Enterprise plan inquiry"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name *</label>
+          <input
+            name="customerName"
+            required
+            defaultValue={defaultValues?.customerName ?? ""}
+            placeholder="e.g. Adaeze Okafor"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -185,9 +197,10 @@ export function LeadForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone *</label>
           <input
             name="phone"
+            required
             defaultValue={defaultValues?.phone ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />

@@ -22,7 +22,10 @@ export async function searchAll(query: string): Promise<SearchResults> {
 
   const [leads, accounts, contacts, deals] = await Promise.all([
     prisma.lead.findMany({
-      where: { ownerId: { in: ownerIds }, OR: [{ title: insensitive }, { company: insensitive }] },
+      where: {
+        ownerId: { in: ownerIds },
+        OR: [{ title: insensitive }, { company: insensitive }, { customerName: insensitive }],
+      },
       select: { id: true, title: true, company: true },
       take: 5,
       orderBy: { updatedAt: "desc" },
@@ -40,7 +43,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.deal.findMany({
-      where: { ownerId: { in: ownerIds }, title: insensitive },
+      where: { ownerId: { in: ownerIds }, OR: [{ title: insensitive }, { customerName: insensitive }] },
       select: { id: true, title: true, stage: true },
       take: 5,
       orderBy: { updatedAt: "desc" },

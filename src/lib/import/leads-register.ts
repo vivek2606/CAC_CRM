@@ -25,6 +25,7 @@ export type TransformedContact = {
 export type TransformedLead = {
   importKey: string;
   title: string;
+  customerName: string;
   status: LeadStatusValue;
   winProbability: number | null;
   source: LeadSourceValue;
@@ -349,6 +350,7 @@ export function transformLeadsRegister(rows: RawLeadRow[]): TransformResult {
     leads.push({
       importKey: `leadsheet:${row.slNo}`,
       title: row.projectName?.trim() || row.equipment?.trim() || `Lead — ${accountName}`,
+      customerName: canonicalizeName(row.contactPerson).trim() || accountName,
       status: mapStatus(row.status),
       winProbability: mapWinProbability(row.status),
       source: mapLeadSourceEnum(leadSource, accountName),

@@ -160,6 +160,7 @@ export async function importLeadsRegister(
   // Leads
   const leadCreateData = result.leads.map((l) => ({
     title: l.title,
+    customerName: l.customerName,
     status: l.status,
     winProbability: l.winProbability,
     source: l.source,

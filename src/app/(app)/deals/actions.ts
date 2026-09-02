@@ -70,6 +70,8 @@ async function syncSaleLineItemsForDeal(dealId: string) {
 
 const dealSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  customerName: z.string().min(1, "Customer name is required"),
+  customerPhone: z.string().min(1, "Customer phone is required"),
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]),
   value: z.coerce.number().min(0),
   probability: z.coerce.number().min(0).max(100).optional(),
@@ -127,6 +129,8 @@ export async function createDeal(formData: FormData) {
   const deal = await prisma.deal.create({
     data: {
       title: parsed.title,
+      customerName: parsed.customerName,
+      customerPhone: parsed.customerPhone,
       stage: parsed.stage,
       value: parsed.value,
       probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[parsed.stage],
@@ -158,6 +162,8 @@ export async function updateDeal(dealId: string, formData: FormData) {
     where: { id: dealId },
     data: {
       title: parsed.title,
+      customerName: parsed.customerName,
+      customerPhone: parsed.customerPhone,
       stage: parsed.stage,
       value: parsed.value,
       probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[parsed.stage],

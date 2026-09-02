@@ -10,6 +10,7 @@ import type { EquipmentType, DealStage, EndUseSegment } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  customerName: z.string().min(1, "Customer name is required"),
   company: z.string().optional(),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
   winProbability: z.string().optional(),
@@ -19,7 +20,7 @@ const leadSchema = z.object({
   competitorBrand: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
   email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().optional(),
+  phone: z.string().min(1, "Customer phone is required"),
   notes: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
@@ -54,6 +55,7 @@ export async function createLead(formData: FormData) {
   const lead = await prisma.lead.create({
     data: {
       title: parsed.title,
+      customerName: parsed.customerName,
       company: toNullable(parsed.company),
       status: parsed.status,
       winProbability: toWinProbability(parsed.winProbability),
@@ -63,7 +65,7 @@ export async function createLead(formData: FormData) {
       competitorBrand: toNullable(parsed.competitorBrand),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: toNullable(parsed.phone),
+      phone: parsed.phone,
       notes: toNullable(parsed.notes),
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
@@ -90,6 +92,7 @@ export async function updateLead(leadId: string, formData: FormData) {
     where: { id: leadId },
     data: {
       title: parsed.title,
+      customerName: parsed.customerName,
       company: toNullable(parsed.company),
       status: parsed.status,
       winProbability: toWinProbability(parsed.winProbability),
@@ -99,7 +102,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       competitorBrand: toNullable(parsed.competitorBrand),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: toNullable(parsed.phone),
+      phone: parsed.phone,
       notes: toNullable(parsed.notes),
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
@@ -146,6 +149,8 @@ export async function convertLeadToDeal(leadId: string) {
       equipmentType: lead.equipmentType,
       endUseSegment: lead.endUseSegment,
       competitorBrand: lead.competitorBrand,
+      customerName: lead.customerName,
+      customerPhone: lead.phone,
     },
   });
 
@@ -214,6 +219,8 @@ export async function bulkConvertLeadsByProbability(
         equipmentType: lead.equipmentType,
         endUseSegment: lead.endUseSegment,
         competitorBrand: lead.competitorBrand,
+        customerName: lead.customerName,
+        customerPhone: lead.phone,
       },
     });
 

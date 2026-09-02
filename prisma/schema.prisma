@@ -184,6 +184,10 @@ model Contact {
 model Lead {
   id            String      @id @default(cuid())
   title         String
+  // Required in the form going forward, but left nullable here (like phone
+  // below) so historical/bulk-imported leads that predate this field don't
+  // block a schema migration.
+  customerName  String?
   company       String?
   status        LeadStatus  @default(NEW)
   // Probability this lead closes, as a percentage in steps of 10 (10-100).
@@ -197,6 +201,8 @@ model Lead {
   competitorBrand String?
   value         Float?
   email         String?
+  // Required in the form going forward (the customer's contact number) -
+  // stays nullable here for the same reason as customerName above.
   phone         String?
   notes         String?
   createdAt     DateTime    @default(now())
@@ -235,6 +241,11 @@ model Deal {
   equipmentType EquipmentType?
   endUseSegment EndUseSegment?
   competitorBrand String?
+  // Required in the form going forward - the customer's name and contact
+  // number, carried over automatically from Lead on conversion. Nullable
+  // here for the same reason as Lead.customerName/phone.
+  customerName  String?
+  customerPhone String?
   // A fixed category (for the "why we lose" breakdown) plus this pre-existing
   // free-text field, now used for optional extra detail rather than the
   // whole reason - kept as-is (not renamed) so no existing data moves.

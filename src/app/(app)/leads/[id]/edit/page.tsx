@@ -44,6 +44,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
             }))}
             defaultValues={{
               title: lead.title,
+              customerName: lead.customerName,
               company: lead.company,
               status: lead.status,
               winProbability: lead.winProbability,

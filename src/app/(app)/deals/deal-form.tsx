@@ -38,6 +38,8 @@ export function DealForm({
   products?: ProductOption[];
   defaultValues?: {
     title?: string;
+    customerName?: string | null;
+    customerPhone?: string | null;
     stage?: DealStage;
     value?: number;
     probability?: number;
@@ -101,6 +103,27 @@ export function DealForm({
             required
             defaultValue={defaultValues?.title}
             placeholder="e.g. Acme Corp - New Business"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name *</label>
+          <input
+            name="customerName"
+            required
+            defaultValue={defaultValues?.customerName ?? ""}
+            placeholder="e.g. Adaeze Okafor"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone *</label>
+          <input
+            name="customerPhone"
+            required
+            defaultValue={defaultValues?.customerPhone ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

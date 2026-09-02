@@ -109,6 +109,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
             <dl className="space-y-3 text-sm">
               <div className="flex justify-between">
+                <dt className="text-slate-500">Customer</dt>
+                <dd className="text-slate-700 font-medium">{lead.customerName ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between">
                 <dt className="text-slate-500">Status</dt>
                 <dd>
                   <Badge bg={colors.bg} text={colors.text}>
