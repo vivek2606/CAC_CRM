@@ -1,5 +1,7 @@
 "use client";
 
+import { AccountAutocomplete } from "@/components/account-autocomplete";
+
 type Option = { id: string; label: string };
 
 export function ContactForm({
@@ -19,12 +21,16 @@ export function ContactForm({
     lastName?: string;
     email?: string | null;
     phone?: string | null;
+    whatsappNumber?: string | null;
     jobTitle?: string | null;
+    department?: string | null;
     accountId?: string | null;
     ownerId?: string;
   };
   submitLabel: string;
 }) {
+  const defaultAccountLabel = accounts.find((a) => a.id === defaultValues?.accountId)?.label ?? "";
+
   return (
     <form action={action} className="space-y-5 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -55,19 +61,22 @@ export function ContactForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Account</label>
-          <select
-            name="accountId"
-            defaultValue={defaultValues?.accountId ?? ""}
+          <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+          <input
+            name="department"
+            placeholder="e.g. Procurement, Facilities"
+            defaultValue={defaultValues?.department ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">None</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </select>
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Account</label>
+          <AccountAutocomplete
+            name="accountId"
+            accounts={accounts}
+            defaultAccountId={defaultValues?.accountId}
+            defaultLabel={defaultAccountLabel}
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
@@ -83,6 +92,15 @@ export function ContactForm({
           <input
             name="phone"
             defaultValue={defaultValues?.phone ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp number</label>
+          <input
+            name="whatsappNumber"
+            placeholder="If different from phone"
+            defaultValue={defaultValues?.whatsappNumber ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

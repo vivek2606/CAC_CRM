@@ -5,20 +5,28 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
+import type { AccountType } from "@prisma/client";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
   industry: z.string().optional(),
+  accountType: z.string().optional(),
   website: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
+  state: z.string().optional(),
   country: z.string().optional(),
+  registrationNumber: z.string().optional(),
   ownerId: z.string().min(1),
 });
 
 function toNullable(value: string | undefined) {
   return value && value.trim() !== "" ? value : null;
+}
+
+function toAccountType(value: string | undefined): AccountType | null {
+  return value && value.trim() !== "" ? (value as AccountType) : null;
 }
 
 export async function createAccount(formData: FormData) {
@@ -31,11 +39,14 @@ export async function createAccount(formData: FormData) {
     data: {
       name: parsed.name,
       industry: toNullable(parsed.industry),
+      accountType: toAccountType(parsed.accountType),
       website: toNullable(parsed.website),
       phone: toNullable(parsed.phone),
       address: toNullable(parsed.address),
       city: toNullable(parsed.city),
+      state: toNullable(parsed.state),
       country: toNullable(parsed.country),
+      registrationNumber: toNullable(parsed.registrationNumber),
       ownerId,
     },
   });
@@ -58,11 +69,14 @@ export async function updateAccount(accountId: string, formData: FormData) {
     data: {
       name: parsed.name,
       industry: toNullable(parsed.industry),
+      accountType: toAccountType(parsed.accountType),
       website: toNullable(parsed.website),
       phone: toNullable(parsed.phone),
       address: toNullable(parsed.address),
       city: toNullable(parsed.city),
+      state: toNullable(parsed.state),
       country: toNullable(parsed.country),
+      registrationNumber: toNullable(parsed.registrationNumber),
       ownerId,
     },
   });

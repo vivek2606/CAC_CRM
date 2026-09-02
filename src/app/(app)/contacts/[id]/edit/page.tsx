@@ -38,7 +38,9 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
               lastName: contact.lastName,
               email: contact.email,
               phone: contact.phone,
+              whatsappNumber: contact.whatsappNumber,
               jobTitle: contact.jobTitle,
+              department: contact.department,
               accountId: contact.accountId,
               ownerId: contact.ownerId,
             }}

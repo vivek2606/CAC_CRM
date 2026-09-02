@@ -32,11 +32,14 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
             defaultValues={{
               name: account.name,
               industry: account.industry,
+              accountType: account.accountType,
               website: account.website,
               phone: account.phone,
               address: account.address,
               city: account.city,
+              state: account.state,
               country: account.country,
+              registrationNumber: account.registrationNumber,
               ownerId: account.ownerId,
             }}
             submitLabel="Save Changes"

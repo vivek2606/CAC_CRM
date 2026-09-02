@@ -1,5 +1,8 @@
 "use client";
 
+import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
+import type { AccountType } from "@prisma/client";
+
 type Option = { id: string; label: string };
 
 export function AccountForm({
@@ -15,11 +18,14 @@ export function AccountForm({
   defaultValues?: {
     name?: string;
     industry?: string | null;
+    accountType?: AccountType | null;
     website?: string | null;
     phone?: string | null;
     address?: string | null;
     city?: string | null;
+    state?: string | null;
     country?: string | null;
+    registrationNumber?: string | null;
     ownerId?: string;
   };
   submitLabel: string;
@@ -35,6 +41,21 @@ export function AccountForm({
             defaultValue={defaultValues?.name}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Account type</label>
+          <select
+            name="accountType"
+            defaultValue={defaultValues?.accountType ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {ACCOUNT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {ACCOUNT_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Industry</label>
@@ -61,6 +82,15 @@ export function AccountForm({
           />
         </div>
         <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">RC number / Tax ID</label>
+          <input
+            name="registrationNumber"
+            placeholder="e.g. RC 1234567"
+            defaultValue={defaultValues?.registrationNumber ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
           <input
             name="city"
@@ -69,10 +99,19 @@ export function AccountForm({
           />
         </div>
         <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">State</label>
+          <input
+            name="state"
+            placeholder="e.g. Lagos"
+            defaultValue={defaultValues?.state ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
           <input
             name="country"
-            defaultValue={defaultValues?.country ?? "India"}
+            defaultValue={defaultValues?.country ?? "Nigeria"}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

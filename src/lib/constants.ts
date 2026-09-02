@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment, AccountType } from "@prisma/client";
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
@@ -183,6 +183,26 @@ export const END_USE_SEGMENT_COLORS: Record<EndUseSegment, string> = {
   INDUSTRIAL: "#16a34a",
   GOVERNMENT_INSTITUTIONAL: "#7c3aed",
   REAL_ESTATE_DEVELOPER: "#ef4444",
+};
+
+export const ACCOUNT_TYPES: AccountType[] = [
+  "CONTRACTOR",
+  "CONSULTANT",
+  "ARCHITECT",
+  "DEVELOPER",
+  "DISTRIBUTOR",
+  "END_USER",
+  "GOVERNMENT",
+];
+
+export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  CONTRACTOR: "Contractor",
+  CONSULTANT: "Consultant",
+  ARCHITECT: "Architect",
+  DEVELOPER: "Real Estate Developer",
+  DISTRIBUTOR: "Distributor / Dealer",
+  END_USER: "End User",
+  GOVERNMENT: "Government",
 };
 
 export const ACTIVITY_TYPES: ActivityType[] = ["CALL", "EMAIL", "MEETING", "TASK", "NOTE"];

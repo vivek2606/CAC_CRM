@@ -120,6 +120,12 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
             <dl className="space-y-3 text-sm">
+              {contact.department && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Department</dt>
+                  <dd className="text-slate-700">{contact.department}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">Email</dt>
                 <dd className="text-slate-700 truncate max-w-[160px]">{contact.email ?? "—"}</dd>
@@ -128,6 +134,12 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                 <dt className="text-slate-500">Phone</dt>
                 <dd className="text-slate-700">{contact.phone ?? "—"}</dd>
               </div>
+              {contact.whatsappNumber && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">WhatsApp</dt>
+                  <dd className="text-slate-700">{contact.whatsappNumber}</dd>
+                </div>
+              )}
               {contact.account && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Account</dt>

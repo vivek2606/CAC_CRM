@@ -4,7 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from "@/lib/constants";
+import {
+  DEAL_STAGE_LABELS,
+  DEAL_STAGE_COLORS,
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_COLORS,
+  ACCOUNT_TYPE_LABELS,
+} from "@/lib/constants";
 import { DeleteAccountButton } from "../delete-account-button";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -137,6 +143,12 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
             <dl className="space-y-3 text-sm">
+              {account.accountType && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Account type</dt>
+                  <dd className="text-slate-700">{ACCOUNT_TYPE_LABELS[account.accountType]}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">Industry</dt>
                 <dd className="text-slate-700">{account.industry ?? "—"}</dd>
@@ -149,10 +161,22 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                 <dt className="text-slate-500">Phone</dt>
                 <dd className="text-slate-700">{account.phone ?? "—"}</dd>
               </div>
+              {account.registrationNumber && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">RC number / Tax ID</dt>
+                  <dd className="text-slate-700">{account.registrationNumber}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">City</dt>
                 <dd className="text-slate-700">{account.city ?? "—"}</dd>
               </div>
+              {account.state && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">State</dt>
+                  <dd className="text-slate-700">{account.state}</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-slate-500">Country</dt>
                 <dd className="text-slate-700">{account.country ?? "—"}</dd>

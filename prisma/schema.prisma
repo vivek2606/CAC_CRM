@@ -83,6 +83,16 @@ enum ActivityStatus {
   CANCELLED
 }
 
+enum AccountType {
+  CONTRACTOR
+  CONSULTANT
+  ARCHITECT
+  DEVELOPER
+  DISTRIBUTOR
+  END_USER
+  GOVERNMENT
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String
@@ -139,11 +149,16 @@ model Account {
   name        String
   code        String?   @unique
   industry    String?
+  accountType AccountType?
   website     String?
   phone       String?
   address     String?
   city        String?
+  state       String?
   country     String?
+  // Nigerian CAC RC number / TIN, for invoicing and KYC - free text since
+  // formats vary and this isn't validated against an external registry.
+  registrationNumber String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -161,7 +176,9 @@ model Contact {
   lastName    String
   email       String?
   phone       String?
+  whatsappNumber String?
   jobTitle    String?
+  department  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
