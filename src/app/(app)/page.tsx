@@ -12,6 +12,7 @@ import {
   STALE_DEAL_DAYS,
 } from "@/lib/constants";
 import { PipelineChart } from "./pipeline-chart";
+import { ActivityTypeIcon } from "./activity-type-icon";
 import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -211,7 +212,12 @@ export default async function DashboardPage() {
                   return (
                   <li key={a.id} className="flex items-start gap-3">
                     <div className="mt-0.5">
-                      <Badge>{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
+                      <Badge>
+                        <span className="inline-flex items-center gap-1">
+                          <ActivityTypeIcon type={a.type} />
+                          {ACTIVITY_TYPE_LABELS[a.type]}
+                        </span>
+                      </Badge>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-800 truncate">{a.subject}</p>

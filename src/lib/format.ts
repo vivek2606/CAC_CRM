@@ -41,6 +41,19 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   }).format(new Date(date));
 }
 
+export function formatTime(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("en-NG", { hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+}
+
+// A due date stored with no specific time defaults to midnight - use this to
+// decide whether a due-date label should also show the time of day.
+export function hasTimeComponent(date: Date | string | null | undefined): boolean {
+  if (!date) return false;
+  const d = new Date(date);
+  return d.getHours() !== 0 || d.getMinutes() !== 0;
+}
+
 export function initials(name: string): string {
   return name
     .split(" ")

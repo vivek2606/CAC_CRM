@@ -1,11 +1,47 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { PageHeader, Card, Badge, EmptyState, Avatar } from "@/components/ui";
-import { formatDateTime, relativeDueLabel } from "@/lib/format";
+import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { ACTIVITY_TYPE_LABELS, ACTIVITY_TYPES } from "@/lib/constants";
-import { toggleActivityStatus, addActivity } from "../shared-actions";
+import { addActivity } from "../shared-actions";
+import { ActivityRow, type ActivityRowData } from "../activity-row";
 import type { ActivityStatus, ActivityType } from "@prisma/client";
+
+type FullActivity = ActivityRowData & {
+  owner: { name: string; avatarColor: string };
+  lead: { id: string; title: string } | null;
+  deal: { id: string; title: string } | null;
+  contact: { id: string; firstName: string; lastName: string } | null;
+};
+
+// Buckets for the pending view, so "what do I need to do" reads as a plan
+// rather than one long date-sorted list. Boundaries are calendar-day based
+// (not exact-time) - a specific overdue-by-hours item still gets its red
+// styling from ActivityRow within whichever bucket it lands in.
+const BUCKET_ORDER = ["Overdue", "Today", "This Week", "Later", "No Due Date"] as const;
+type Bucket = (typeof BUCKET_ORDER)[number];
+
+function bucketFor(dueAt: Date | null): Bucket {
+  if (!dueAt) return "No Due Date";
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const weekEnd = new Date(todayStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  if (dueAt < todayStart) return "Overdue";
+  if (dueAt < tomorrowStart) return "Today";
+  if (dueAt < weekEnd) return "This Week";
+  return "Later";
+}
+
+function relatedFor(a: FullActivity) {
+  if (a.deal) return { href: `/deals/${a.deal.id}`, label: a.deal.title };
+  if (a.lead) return { href: `/leads/${a.lead.id}`, label: a.lead.title };
+  if (a.contact) return { href: `/contacts/${a.contact.id}`, label: `${a.contact.firstName} ${a.contact.lastName}` };
+  return null;
+}
 
 export default async function ActivitiesPage({
   searchParams,
@@ -47,6 +83,17 @@ export default async function ActivitiesPage({
 
   const addStandaloneActivity = addActivity.bind(null, { ownerId: user.id });
 
+  // Bucket the list only for the primary "Pending" view - Completed/All stay
+  // a flat, most-relevant-first list (bucketing a mix of done + not-done
+  // items by due date doesn't read as a plan the same way).
+  const grouped: Partial<Record<Bucket, FullActivity[]>> = {};
+  if (statusFilter === "PENDING") {
+    for (const a of activities) {
+      const bucket = bucketFor(a.dueAt);
+      (grouped[bucket] ??= []).push(a);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Activities" description="Calls, meetings, emails and tasks across your sales cycle" />
@@ -73,7 +120,7 @@ export default async function ActivitiesPage({
             />
             <input
               name="dueAt"
-              type="date"
+              type="datetime-local"
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button
@@ -129,59 +176,52 @@ export default async function ActivitiesPage({
           </button>
         </form>
 
-        <Card>
-          {activities.length === 0 ? (
+        {activities.length === 0 ? (
+          <Card>
             <EmptyState title="Nothing here" description="No activities match your filters." />
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {activities.map((a) => {
-                const toggle = toggleActivityStatus.bind(null, a.id, "/activities");
-                const relatedHref = a.deal ? `/deals/${a.deal.id}` : a.lead ? `/leads/${a.lead.id}` : a.contact ? `/contacts/${a.contact.id}` : null;
-                const relatedLabel = a.deal?.title ?? a.lead?.title ?? (a.contact ? `${a.contact.firstName} ${a.contact.lastName}` : null);
-                return (
-                  <li key={a.id} className="flex items-center gap-3 px-4 py-3">
-                    <form action={toggle}>
-                      <button
-                        type="submit"
-                        className={`h-5 w-5 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                          a.status === "COMPLETED"
-                            ? "bg-emerald-500 border-emerald-500 text-white"
-                            : "border-slate-300 hover:border-slate-400"
-                        }`}
-                        aria-label="Toggle complete"
-                      >
-                        {a.status === "COMPLETED" && "✓"}
-                      </button>
-                    </form>
-                    <Badge>{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`text-sm ${
-                          a.status === "COMPLETED" ? "text-slate-400 line-through" : "text-slate-800"
-                        }`}
-                      >
-                        {a.subject}
-                      </p>
-                      {relatedHref && relatedLabel && (
-                        <Link href={relatedHref} className="text-xs text-indigo-600 hover:text-indigo-700">
-                          {relatedLabel}
-                        </Link>
-                      )}
-                    </div>
-                    {user.role === "HEAD" && (
-                      <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                        <Avatar name={a.owner.name} color={a.owner.avatarColor} size={6} />
-                      </div>
-                    )}
-                    <span className="text-xs text-slate-400 shrink-0 w-28 text-right">
-                      {a.status === "COMPLETED" ? formatDateTime(a.completedAt) : relativeDueLabel(a.dueAt)}
-                    </span>
-                  </li>
-                );
-              })}
+          </Card>
+        ) : statusFilter === "PENDING" ? (
+          <div className="space-y-4">
+            {BUCKET_ORDER.filter((b) => grouped[b]?.length).map((bucket) => (
+              <Card key={bucket}>
+                <div className="px-4 pt-3 pb-1">
+                  <h2
+                    className={`text-xs font-semibold uppercase tracking-wide ${
+                      bucket === "Overdue" ? "text-rose-600" : bucket === "Today" ? "text-amber-600" : "text-slate-400"
+                    }`}
+                  >
+                    {bucket} ({grouped[bucket]!.length})
+                  </h2>
+                </div>
+                <ul className="divide-y divide-slate-100 px-4">
+                  {grouped[bucket]!.map((a) => (
+                    <ActivityRow
+                      key={a.id}
+                      activity={a}
+                      path="/activities"
+                      owner={user.role === "HEAD" ? a.owner : undefined}
+                      related={relatedFor(a)}
+                    />
+                  ))}
+                </ul>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <ul className="divide-y divide-slate-100 px-4">
+              {activities.map((a) => (
+                <ActivityRow
+                  key={a.id}
+                  activity={a}
+                  path="/activities"
+                  owner={user.role === "HEAD" ? a.owner : undefined}
+                  related={relatedFor(a)}
+                />
+              ))}
             </ul>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </div>
   );
