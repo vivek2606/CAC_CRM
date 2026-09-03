@@ -1,5 +1,9 @@
 import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment, AccountType } from "@prisma/client";
 
+// A deal's itemized total discounted more than this far below catalog price
+// needs Head approval before it can be marked Won.
+export const DISCOUNT_APPROVAL_THRESHOLD_PCT = 15;
+
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
   "NEEDS_ANALYSIS",

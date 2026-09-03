@@ -119,6 +119,7 @@ model User {
   notes         Note[]    @relation("NoteAuthor")
   targets       Target[]  @relation("SalesTarget")
   saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
+  approvedDealDiscounts Deal[] @relation("DiscountApprover")
 }
 
 model Target {
@@ -268,6 +269,16 @@ model Deal {
   // whole reason - kept as-is (not renamed) so no existing data moves.
   lostReasonCategory LostReason?
   lostReason    String?
+  // Assigned once, the first time a quote is generated for this deal - kept
+  // stable across re-prints even if line items change afterward.
+  quoteNumber   Int?        @unique
+  // Set when a Head approves a deal whose itemized total is discounted past
+  // DISCOUNT_APPROVAL_THRESHOLD_PCT below catalog price - required before
+  // the deal can be marked Won. Cleared whenever line items change, so a
+  // stale approval can't cover a since-modified quote.
+  discountApprovedAt   DateTime?
+  discountApprovedById String?
+  discountApprovedBy   User?    @relation("DiscountApprover", fields: [discountApprovedById], references: [id])
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

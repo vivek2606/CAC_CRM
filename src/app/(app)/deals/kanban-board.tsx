@@ -33,9 +33,15 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       return;
     }
 
+    const previousStage = deal.stage;
     setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
-    startTransition(() => {
-      updateDealStage(dealId, stage);
+    startTransition(async () => {
+      try {
+        await updateDealStage(dealId, stage);
+      } catch (e) {
+        setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage: previousStage } : d)));
+        alert(e instanceof Error ? e.message : "Could not update this deal.");
+      }
     });
   }
 

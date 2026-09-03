@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { getLatestPriceByProduct } from "@/lib/pricing";
+import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -13,10 +15,10 @@ import {
 } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
-import { deleteDeal } from "../actions";
+import { deleteDeal, viewQuote, approveDealDiscount } from "../actions";
 import { StageActions } from "../stage-actions";
 import { DealItemsSection } from "../deal-items-section";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,6 +34,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, avatarColor: true } } } },
       sourceLead: { select: { id: true, title: true } },
       items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
+      discountApprovedBy: { select: { name: true } },
     },
   });
 
@@ -40,22 +43,23 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
 
   const colors = DEAL_STAGE_COLORS[deal.stage];
   const deleteAction = deleteDeal.bind(null, deal.id);
+  const viewQuoteAction = viewQuote.bind(null, deal.id);
 
-  const [products, recentPrices] = await Promise.all([
+  const [products, latestPriceByProduct] = await Promise.all([
     prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
-    prisma.pricelist.findMany({ orderBy: { month: "desc" }, select: { productId: true, landedPrice: true, dealerPrice: true } }),
+    getLatestPriceByProduct(),
   ]);
-  const latestPriceByProduct = new Map<string, number>();
-  for (const p of recentPrices) {
-    if (!latestPriceByProduct.has(p.productId)) {
-      latestPriceByProduct.set(p.productId, p.landedPrice ?? p.dealerPrice);
-    }
-  }
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
     defaultPrice: latestPriceByProduct.get(p.id) ?? null,
   }));
+
+  const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);
+  const stageActionsBlockReason =
+    discount?.needsApproval
+      ? `Discounted ${discount.discountPct.toFixed(1)}% below list - needs Head approval before this can be marked Won.`
+      : null;
 
   return (
     <div>
@@ -64,7 +68,18 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         description={deal.account?.name ?? undefined}
         action={
           <div className="flex items-center gap-2">
-            <StageActions dealId={deal.id} stage={deal.stage} />
+            <StageActions dealId={deal.id} stage={deal.stage} blockWonReason={stageActionsBlockReason} />
+            {deal.items.length > 0 && (
+              <form action={viewQuoteAction}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  View Quote
+                </button>
+              </form>
+            )}
             <Link
               href={`/deals/${deal.id}/edit`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
@@ -94,6 +109,37 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
             </p>
             <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
           </Card>
+
+          {discount && discount.discountPct > 0.5 && (
+            <Card className="p-5">
+              <h2 className="text-sm font-semibold text-slate-900 mb-1 flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-slate-400" />
+                Discount
+              </h2>
+              <p className="text-sm text-slate-600">
+                Quoted <span className="font-medium text-slate-800">{discount.discountPct.toFixed(1)}%</span> below list
+                price ({formatCurrency(discount.discountAmount)} off {formatCurrency(discount.referenceTotal)}).
+              </p>
+              {discount.needsApproval ? (
+                user.role === "HEAD" ? (
+                  <form action={approveDealDiscount.bind(null, deal.id)} className="mt-3">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
+                    >
+                      Approve discount
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-2 text-sm text-amber-600 font-medium">Needs Head approval before this can be marked Won.</p>
+                )
+              ) : deal.discountApprovedAt ? (
+                <p className="mt-2 text-sm text-emerald-600">
+                  Approved by {deal.discountApprovedBy?.name ?? "Head"} on {formatDate(deal.discountApprovedAt)}.
+                </p>
+              ) : null}
+            </Card>
+          )}
 
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Activities</h2>

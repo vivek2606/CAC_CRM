@@ -4,8 +4,10 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import { getLatestPriceByProduct } from "@/lib/pricing";
+import { computeDealDiscount } from "@/lib/discount";
 import type { DealStage, LostReason, EquipmentType, EndUseSegment } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -203,8 +205,18 @@ export async function updateDealStage(
   lostReasonNote?: string
 ) {
   const user = await requireUser();
-  const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
+  const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
+
+  if (stage === "WON") {
+    const referencePrices = await getLatestPriceByProduct();
+    const discount = computeDealDiscount(existing.items, referencePrices, existing.discountApprovedAt);
+    if (discount?.needsApproval) {
+      throw new Error(
+        `Discounted ${discount.discountPct.toFixed(1)}% below list price - needs Head approval before this can be marked Won.`
+      );
+    }
+  }
 
   const isClosed = stage === "WON" || stage === "LOST";
 
@@ -225,6 +237,16 @@ export async function updateDealStage(
   revalidatePath("/");
 }
 
+// Any change to a deal's line items invalidates a standing discount
+// approval - it was granted against a specific quoted total, not a
+// blanket pass for whatever the deal becomes afterward.
+async function revokeDiscountApproval(dealId: string) {
+  await prisma.deal.update({
+    where: { id: dealId },
+    data: { discountApprovedAt: null, discountApprovedById: null },
+  });
+}
+
 export async function addDealLineItem(dealId: string, formData: FormData) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
@@ -236,6 +258,7 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
     data: { dealId, productId: parsed.productId, qty: parsed.qty, unitPrice: parsed.unitPrice },
   });
   await syncSaleLineItemsForDeal(dealId);
+  await revokeDiscountApproval(dealId);
 
   revalidatePath(`/deals/${dealId}`);
 }
@@ -247,6 +270,44 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
 
   await prisma.dealLineItem.delete({ where: { id: lineItemId } });
   await syncSaleLineItemsForDeal(dealId);
+  await revokeDiscountApproval(dealId);
 
   revalidatePath(`/deals/${dealId}`);
+}
+
+export async function approveDealDiscount(dealId: string) {
+  const head = await requireHead();
+
+  await prisma.deal.update({
+    where: { id: dealId },
+    data: { discountApprovedAt: new Date(), discountApprovedById: head.id },
+  });
+
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/deals");
+}
+
+// Assigns a stable quote number the first time a quote is generated for
+// this deal (idempotent after that), then sends the rep to the printable
+// quote page. Retries once on the rare chance two people generate a quote
+// number at the same instant.
+export async function viewQuote(dealId: string) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
+  if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+
+  if (!deal.quoteNumber) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const max = await prisma.deal.aggregate({ _max: { quoteNumber: true } });
+      const next = (max._max.quoteNumber ?? 0) + 1;
+      try {
+        await prisma.deal.update({ where: { id: dealId }, data: { quoteNumber: next } });
+        break;
+      } catch {
+        if (attempt === 2) throw new Error("Could not assign a quote number - try again.");
+      }
+    }
+  }
+
+  redirect(`/quote/${dealId}`);
 }

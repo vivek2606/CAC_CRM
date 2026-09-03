@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { getLatestPriceByProduct } from "@/lib/pricing";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../deal-form";
 import { createDeal } from "../actions";
@@ -8,7 +9,7 @@ export default async function NewDealPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const [owners, accounts, contacts, products, recentPrices] = await Promise.all([
+  const [owners, accounts, contacts, products, latestPriceByProduct] = await Promise.all([
     user.role === "HEAD"
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
@@ -18,14 +19,8 @@ export default async function NewDealPage() {
       select: { id: true, firstName: true, lastName: true, accountId: true },
     }),
     prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
-    prisma.pricelist.findMany({ orderBy: { month: "desc" }, select: { productId: true, landedPrice: true, dealerPrice: true } }),
+    getLatestPriceByProduct(),
   ]);
-  const latestPriceByProduct = new Map<string, number>();
-  for (const p of recentPrices) {
-    if (!latestPriceByProduct.has(p.productId)) {
-      latestPriceByProduct.set(p.productId, p.landedPrice ?? p.dealerPrice);
-    }
-  }
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,

@@ -28,3 +28,9 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+}
