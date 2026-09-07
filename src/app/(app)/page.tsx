@@ -15,6 +15,36 @@ import { PipelineChart } from "./pipeline-chart";
 import { ActivityTypeIcon } from "./activity-type-icon";
 import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle } from "lucide-react";
 
+function TargetProgressRow({
+  label,
+  target,
+  actual,
+  emphasized,
+}: {
+  label: string;
+  target: number;
+  actual: number;
+  emphasized?: boolean;
+}) {
+  const pct = target > 0 ? Math.round((actual / target) * 100) : null;
+  const barWidth = Math.min(pct ?? 0, 100);
+  const barColor = pct != null && pct >= 100 ? "bg-emerald-500" : "bg-indigo-500";
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className={emphasized ? "text-sm font-medium text-slate-800" : "text-sm text-slate-600"}>{label}</span>
+        <span className={emphasized ? "text-sm font-semibold text-slate-900" : "text-xs text-slate-500"}>
+          {formatCompactCurrency(actual)} / {formatCompactCurrency(target)}
+          {pct != null && <span className="ml-1.5 text-slate-400">({pct}%)</span>}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${barWidth}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
@@ -31,6 +61,13 @@ export default async function DashboardPage() {
   const staleThreshold = new Date();
   staleThreshold.setDate(staleThreshold.getDate() - STALE_DEAL_DAYS);
 
+  // Target.month is an exact UTC first-of-month DateTime (see /targets),
+  // computed separately from startOfMonth above since that one isn't
+  // guaranteed UTC-aligned and an exact match is required to look targets up.
+  const now = new Date();
+  const targetMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const targetMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
   const [
     openDeals,
     wonThisMonth,
@@ -41,10 +78,11 @@ export default async function DashboardPage() {
     staleDeals,
     recentDeals,
     users,
+    targetReps,
   ] = await Promise.all([
     prisma.deal.findMany({
       where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
-      select: { stage: true, value: true },
+      select: { stage: true, value: true, accountId: true },
     }),
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
@@ -104,9 +142,43 @@ export default async function DashboardPage() {
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    // Same "core active sales team" definition /targets uses, so target
+    // achievement here matches that page exactly.
+    user.role === "HEAD"
+      ? prisma.user.findMany({
+          where: { isActive: true, title: "Sales Manager" },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([{ id: user.id, name: user.name ?? "Me" }]),
   ]);
 
+  const targetRepIds = targetReps.map((r) => r.id);
+  const [targets, wonForTargets] = await Promise.all([
+    prisma.target.findMany({ where: { userId: { in: targetRepIds }, month: targetMonth } }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: targetRepIds }, stage: "WON", closedAt: { gte: targetMonth, lt: targetMonthEnd } },
+      select: { ownerId: true, value: true },
+    }),
+  ]);
+  const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
+  const actualByUserIdForTarget = new Map<string, number>();
+  for (const d of wonForTargets) {
+    actualByUserIdForTarget.set(d.ownerId, (actualByUserIdForTarget.get(d.ownerId) ?? 0) + d.value);
+  }
+  const targetRows = targetReps.map((r) => ({
+    id: r.id,
+    name: r.name.split(" ")[0],
+    target: targetByUserId.get(r.id) ?? 0,
+    actual: actualByUserIdForTarget.get(r.id) ?? 0,
+  }));
+  const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
+  const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
+  const myTarget = targetByUserId.get(user.id) ?? 0;
+  const myActualForTarget = actualByUserIdForTarget.get(user.id) ?? 0;
+
   const openPipelineValue = openDeals.reduce((sum, d) => sum + d.value, 0);
+  const openDealsNoAccount = openDeals.filter((d) => !d.accountId).length;
   const wonCount = closedDeals.filter((d) => d.stage === "WON").length;
   const winRate = closedDeals.length > 0 ? Math.round((wonCount / closedDeals.length) * 100) : 0;
 
@@ -148,9 +220,9 @@ export default async function DashboardPage() {
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            label="Open Pipeline"
-            value={formatCompactCurrency(openPipelineValue)}
-            sub={`${openDeals.length} active deals`}
+            label="Open Deals"
+            value={String(openDeals.length)}
+            sub={`${formatCompactCurrency(openPipelineValue)} pipeline value`}
             icon={<Wallet className="h-4 w-4 text-indigo-500" />}
           />
           <StatCard
@@ -173,6 +245,37 @@ export default async function DashboardPage() {
           />
         </div>
 
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-900">
+              {user.role === "HEAD" ? "Team target this month" : "My target this month"}
+            </h2>
+            <Link href="/targets" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+              View targets <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          {user.role === "HEAD" ? (
+            targetRows.length === 0 ? (
+              <EmptyState title="No active reps found" />
+            ) : totalTarget === 0 && totalActualForTarget === 0 ? (
+              <EmptyState title="No targets set for this month" description="Set targets from the Targets page." />
+            ) : (
+              <div className="space-y-4">
+                <TargetProgressRow label="Whole team" target={totalTarget} actual={totalActualForTarget} emphasized />
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  {targetRows.map((r) => (
+                    <TargetProgressRow key={r.id} label={r.name} target={r.target} actual={r.actual} />
+                  ))}
+                </div>
+              </div>
+            )
+          ) : myTarget === 0 && myActualForTarget === 0 ? (
+            <EmptyState title="No target set for this month" description="Ask your Head of Sales to set one." />
+          ) : (
+            <TargetProgressRow label="This month" target={myTarget} actual={myActualForTarget} emphasized />
+          )}
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 p-5">
             <div className="flex items-center justify-between mb-2">
@@ -185,6 +288,14 @@ export default async function DashboardPage() {
               <PipelineChart data={stageData} />
             ) : (
               <EmptyState title="No open deals yet" description="Deals in progress will appear here." />
+            )}
+            {openDealsNoAccount > 0 && (
+              <p className="mt-3 text-xs text-slate-400">
+                <AlertTriangle className="h-3 w-3 inline -mt-0.5 mr-1 text-amber-500" />
+                {openDealsNoAccount} of {openDeals.length} open deal{openDeals.length === 1 ? "" : "s"} (
+                {Math.round((openDealsNoAccount / openDeals.length) * 100)}%) have no linked account - harder to
+                track by customer or spot duplicates.
+              </p>
             )}
           </Card>
 
