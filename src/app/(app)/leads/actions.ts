@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType, DealStage, EndUseSegment } from "@prisma/client";
+import type { EquipmentType, DealStage, EndUseSegment, Lead } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -127,22 +127,16 @@ export async function deleteLead(leadId: string) {
   redirect("/leads");
 }
 
-export async function convertLeadToDeal(leadId: string) {
-  const user = await requireUser();
-  const lead = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } });
-  if (!canAccessOwner(user, lead.ownerId)) {
-    throw new Error("You do not have access to this lead.");
-  }
-  if (lead.status === "CONVERTED") {
-    redirect(`/leads/${leadId}`);
-  }
-
+// Shared by every conversion path (single, probability-based bulk, and
+// manual checkbox-selected bulk) - creates the Deal with everything carried
+// over from the Lead, and marks the Lead Converted.
+async function createDealFromLead(lead: Lead, stage: DealStage, probability: number) {
   const deal = await prisma.deal.create({
     data: {
       title: lead.title,
-      stage: "QUALIFICATION",
+      stage,
       value: lead.value ?? 0,
-      probability: STAGE_DEFAULT_PROBABILITY.QUALIFICATION,
+      probability,
       ownerId: lead.ownerId,
       accountId: lead.accountId,
       contactId: lead.contactId,
@@ -155,13 +149,62 @@ export async function convertLeadToDeal(leadId: string) {
   });
 
   await prisma.lead.update({
-    where: { id: leadId },
+    where: { id: lead.id },
     data: { status: "CONVERTED", convertedDealId: deal.id },
   });
+
+  return deal;
+}
+
+export async function convertLeadToDeal(leadId: string) {
+  const user = await requireUser();
+  const lead = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } });
+  if (!canAccessOwner(user, lead.ownerId)) {
+    throw new Error("You do not have access to this lead.");
+  }
+  if (lead.status === "CONVERTED") {
+    redirect(`/leads/${leadId}`);
+  }
+
+  const deal = await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION);
 
   revalidatePath("/leads");
   revalidatePath("/deals");
   redirect(`/deals/${deal.id}`);
+}
+
+export type BulkConvertSelectedSummary = { converted: number; skipped: number; totalValue: number };
+export type BulkConvertSelectedState = { error?: string; summary?: BulkConvertSelectedSummary };
+
+// Converts exactly the leads the rep tick-marked on the Leads tab, each
+// starting at Qualification - unlike the probability-tiered bulk convert
+// below, a hand-picked mixed selection shouldn't assume a Hot/Warm/Cold
+// stage. Silently skips any lead the caller can't access or that's already
+// converted, rather than failing the whole batch.
+export async function bulkConvertSelectedLeads(leadIds: string[]): Promise<BulkConvertSelectedState> {
+  const user = await requireUser();
+  if (leadIds.length === 0) return { error: "No leads selected." };
+
+  const leads = await prisma.lead.findMany({ where: { id: { in: leadIds } } });
+
+  let converted = 0;
+  let skipped = 0;
+  let totalValue = 0;
+
+  for (const lead of leads) {
+    if (!canAccessOwner(user, lead.ownerId) || lead.status === "CONVERTED") {
+      skipped++;
+      continue;
+    }
+    await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION);
+    converted++;
+    totalValue += lead.value ?? 0;
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/deals");
+
+  return { summary: { converted, skipped, totalValue } };
 }
 
 // Per instruction: Hot (90%) -> Negotiation, Warm (60%) -> Proposal,
@@ -207,27 +250,7 @@ export async function bulkConvertLeadsByProbability(
     const stage = STAGE_BY_WIN_PROBABILITY[lead.winProbability!];
     if (!stage) continue;
 
-    const deal = await prisma.deal.create({
-      data: {
-        title: lead.title,
-        stage,
-        value: lead.value ?? 0,
-        probability: STAGE_DEFAULT_PROBABILITY[stage],
-        ownerId: lead.ownerId,
-        accountId: lead.accountId,
-        contactId: lead.contactId,
-        equipmentType: lead.equipmentType,
-        endUseSegment: lead.endUseSegment,
-        competitorBrand: lead.competitorBrand,
-        customerName: lead.customerName,
-        customerPhone: lead.phone,
-      },
-    });
-
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { status: "CONVERTED", convertedDealId: deal.id },
-    });
+    await createDealFromLead(lead, stage, STAGE_DEFAULT_PROBABILITY[stage]);
 
     if (stage === "NEGOTIATION") negotiation++;
     else if (stage === "PROPOSAL") proposal++;

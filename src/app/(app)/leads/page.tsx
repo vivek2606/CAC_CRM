@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { PageHeader, NewButton, Card, Badge, EmptyState, Avatar } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, LEAD_STATUSES } from "@/lib/constants";
+import { PageHeader, NewButton, Card } from "@/components/ui";
+import { LEAD_STATUS_LABELS, LEAD_STATUSES } from "@/lib/constants";
 import { BulkConvertButton } from "./bulk-convert-button";
+import { LeadsTable } from "./leads-table";
 import type { LeadStatus } from "@prisma/client";
 
 export const maxDuration = 60;
@@ -105,53 +105,7 @@ export default async function LeadsPage({
         </form>
 
         <Card>
-          {leads.length === 0 ? (
-            <EmptyState title="No leads found" description="Try adjusting your filters, or create a new lead." />
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-medium">Lead</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Source</th>
-                  <th className="px-4 py-3 font-medium">Value</th>
-                  <th className="px-4 py-3 font-medium">Owner</th>
-                  <th className="px-4 py-3 font-medium">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {leads.map((lead) => {
-                  const colors = LEAD_STATUS_COLORS[lead.status];
-                  return (
-                    <tr key={lead.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <Link href={`/leads/${lead.id}`} className="font-medium text-slate-800 hover:text-indigo-600">
-                          {lead.title}
-                        </Link>
-                        {lead.company && <p className="text-xs text-slate-400">{lead.company}</p>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge bg={colors.bg} text={colors.text}>
-                          {LEAD_STATUS_LABELS[lead.status]}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">{LEAD_SOURCE_LABELS[lead.source]}</td>
-                      <td className="px-4 py-3 text-slate-700">{lead.value ? formatCurrency(lead.value) : "—"}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar name={lead.owner.name} color={lead.owner.avatarColor} size={6} />
-                          <span className="text-slate-600">{lead.owner.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-400">{formatDate(lead.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-          )}
+          <LeadsTable leads={leads} />
         </Card>
       </div>
     </div>
