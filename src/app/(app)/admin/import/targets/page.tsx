@@ -25,7 +25,10 @@ export default async function ImportTargetsPage() {
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>The file needs three columns: <strong>Sales Person</strong>, <strong>Month</strong>, <strong>Target</strong>.</li>
             <li>Month can be written as 2026-08, Aug-2026, August 2026, or 8/2026.</li>
-            <li>One row per sales person per month — Target is the full month&apos;s Naira sales value goal.</li>
+            <li>
+              One row per sales person per month — Target is the month&apos;s sales value goal, in{" "}
+              <strong>millions of Naira</strong> (e.g. enter 50 for a ₦50,000,000 target).
+            </li>
             <li>Safe to re-run — re-uploading updates a rep&apos;s target for a month instead of duplicating it.</li>
             <li>You can also set or adjust a single rep&apos;s target by hand from the Targets page.</li>
           </ul>

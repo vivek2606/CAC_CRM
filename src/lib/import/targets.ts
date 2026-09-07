@@ -40,7 +40,11 @@ export function transformTargets(rows: RawTargetRow[]): TargetsTransformResult {
     const normalized = normalizeSalesmanName(row.salesPerson);
     const repNameKey = NICKNAME_TO_FULL_NAME[normalized] ?? normalized;
 
-    targets.push({ repNameKey, month, targetValue: row.target });
+    // The Target sheet's "Target" column is written in millions of Naira
+    // (e.g. 50 for ₦50,000,000) - convert to the full Naira value stored on
+    // Target.targetValue, the same unit as Deal.value/actual sales, so the
+    // Actual-vs-Target comparison on /targets is comparing like with like.
+    targets.push({ repNameKey, month, targetValue: row.target * 1_000_000 });
   }
 
   return {

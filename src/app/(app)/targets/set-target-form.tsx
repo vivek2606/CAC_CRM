@@ -32,14 +32,14 @@ export function SetTargetForm({
       </div>
       <input type="hidden" name="month" value={month} />
       <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1">Target for {month}</label>
+        <label className="block text-xs font-medium text-slate-500 mb-1">Target for {month} (full Naira, not millions)</label>
         <input
           type="number"
           name="targetValue"
           min="0"
           step="1000"
           required
-          placeholder="e.g. 5000000"
+          placeholder="e.g. 5000000 for ₦5,000,000"
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
