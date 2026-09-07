@@ -72,11 +72,15 @@ export function StatCard({
   value,
   sub,
   icon,
+  chart,
 }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?: ReactNode;
   icon?: ReactNode;
+  // Optional sparkline/mini-chart rendered below the sub-caption, for a
+  // stat that also has a trend worth showing at a glance.
+  chart?: ReactNode;
 }) {
   return (
     <Card className="p-4">
@@ -86,6 +90,7 @@ export function StatCard({
       </div>
       <p className="text-2xl font-semibold text-slate-900 mt-1">{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+      {chart && <div className="-mx-1 -mb-1 mt-2">{chart}</div>}
     </Card>
   );
 }

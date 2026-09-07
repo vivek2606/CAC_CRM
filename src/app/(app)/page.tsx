@@ -13,7 +13,10 @@ import {
 } from "@/lib/constants";
 import { PipelineChart } from "./pipeline-chart";
 import { ActivityTypeIcon } from "./activity-type-icon";
-import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle } from "lucide-react";
+import { Sparkline } from "./sparkline";
+import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange } from "lucide-react";
+
+const SPARKLINE_MONTHS = 6;
 
 function TargetProgressRow({
   label,
@@ -68,6 +71,7 @@ export default async function DashboardPage() {
   const targetMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const targetMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  const sparklineStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SPARKLINE_MONTHS - 1), 1));
 
   const [
     openDeals,
@@ -81,6 +85,7 @@ export default async function DashboardPage() {
     recentDeals,
     users,
     targetReps,
+    sparklineDeals,
   ] = await Promise.all([
     prisma.deal.findMany({
       where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
@@ -158,6 +163,12 @@ export default async function DashboardPage() {
           select: { id: true, name: true },
         })
       : Promise.resolve([{ id: user.id, name: user.name ?? "Me" }]),
+    // Trailing months for the YTD sparkline - a light trend strip, not the
+    // primary data path (the YTD stat above it already carries the number).
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: sparklineStart, lt: targetMonthEnd } },
+      select: { value: true, closedAt: true },
+    }),
   ]);
 
   const targetRepIds = targetReps.map((r) => r.id);
@@ -186,6 +197,21 @@ export default async function DashboardPage() {
 
   const openPipelineValue = openDeals.reduce((sum, d) => sum + d.value, 0);
   const openDealsNoAccount = openDeals.filter((d) => !d.accountId).length;
+
+  const sparklineByMonth = new Map<string, number>();
+  for (const d of sparklineDeals) {
+    if (!d.closedAt) continue;
+    const key = `${d.closedAt.getUTCFullYear()}-${d.closedAt.getUTCMonth()}`;
+    sparklineByMonth.set(key, (sparklineByMonth.get(key) ?? 0) + d.value);
+  }
+  const sparklineData = Array.from({ length: SPARKLINE_MONTHS }, (_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SPARKLINE_MONTHS - 1 - i), 1));
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    return {
+      label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }),
+      value: sparklineByMonth.get(key) ?? 0,
+    };
+  });
   const wonCount = closedDeals.filter((d) => d.stage === "WON").length;
   const winRate = closedDeals.length > 0 ? Math.round((wonCount / closedDeals.length) * 100) : 0;
 
@@ -212,6 +238,7 @@ export default async function DashboardPage() {
       };
     })
     .sort((a, b) => b.wonValue - a.wonValue || b.openValue - a.openValue);
+  const maxLeaderboardWonValue = Math.max(1, ...leaderboard.map((r) => r.wonValue));
 
   return (
     <div>
@@ -225,7 +252,7 @@ export default async function DashboardPage() {
       />
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
             label="Open Deals"
             value={String(openDeals.length)}
@@ -237,6 +264,20 @@ export default async function DashboardPage() {
             value={formatCompactCurrency(wonThisMonth._sum.value ?? 0)}
             sub={`${wonThisMonth._count} deal${wonThisMonth._count === 1 ? "" : "s"} closed`}
             icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+          />
+          <StatCard
+            label="Year to Date"
+            value={formatCompactCurrency(wonYTD._sum.value ?? 0)}
+            sub={
+              <>
+                {wonYTD._count} won since Jan 1 ·{" "}
+                <Link href="/reports/category" className="text-indigo-600 hover:text-indigo-700">
+                  compare years
+                </Link>
+              </>
+            }
+            icon={<CalendarRange className="h-4 w-4 text-violet-500" />}
+            chart={<Sparkline data={sparklineData} />}
           />
           <StatCard
             label="Active Leads"
@@ -281,19 +322,6 @@ export default async function DashboardPage() {
           ) : (
             <TargetProgressRow label="This month" target={myTarget} actual={myActualForTarget} emphasized />
           )}
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-semibold text-slate-900">Year to date, {now.getUTCFullYear()}</h2>
-            <Link href="/reports/category" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-              Compare years &amp; categories <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(wonYTD._sum.value ?? 0)}</p>
-          <p className="text-xs text-slate-400 mt-1">
-            {wonYTD._count} won deal{wonYTD._count === 1 ? "" : "s"} since Jan 1, {user.role === "HEAD" ? "whole department" : "your sales"}
-          </p>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -371,8 +399,8 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 p-5">
+        <div className={user.role === "HEAD" ? "grid grid-cols-1 lg:grid-cols-3 gap-6" : ""}>
+          <Card className={`p-5 ${user.role === "HEAD" ? "lg:col-span-2" : ""}`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-900">Recently updated deals</h2>
               <Link href="/deals" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
@@ -425,9 +453,15 @@ export default async function DashboardPage() {
                     <Avatar name={rep.name} color={rep.avatarColor} size={7} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-800 truncate">{rep.name}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-400 mb-1">
                         {formatCompactCurrency(rep.wonValue)} won this month
                       </p>
+                      <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-500"
+                          style={{ width: `${Math.max(2, (rep.wonValue / maxLeaderboardWonValue) * 100)}%` }}
+                        />
+                      </div>
                     </div>
                     <span className="text-xs font-medium text-slate-500 shrink-0">
                       {formatCompactCurrency(rep.openValue)} open
