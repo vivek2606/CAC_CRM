@@ -13,6 +13,7 @@ import {
   PAYMENT_TERMS_LABELS,
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -261,18 +262,13 @@ export function DealForm({
                 {items.map((row, index) => (
                   <div key={index} className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[160px]">
-                      <select
+                      <SearchableSelect
+                        options={products}
                         value={row.productId}
-                        onChange={(e) => handleProductChange(index, e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="">Choose a model...</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
+                        onSelect={(opt) => handleProductChange(index, opt?.id ?? "")}
+                        placeholder="Type to search models..."
+                        emptyLabel="unset"
+                      />
                     </div>
                     <div className="w-20">
                       <input
@@ -326,35 +322,23 @@ export function DealForm({
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Account</label>
-          <select
+          <SearchableSelect
             name="accountId"
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">None</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </select>
+            options={accounts}
+            defaultValue={accountId}
+            onSelect={(opt) => setAccountId(opt?.id ?? "")}
+            placeholder="Type to search accounts..."
+          />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Contact</label>
-          <select
+          <SearchableSelect
             name="contactId"
+            options={visibleContacts}
             defaultValue={defaultValues?.contactId ?? ""}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">None</option>
-            {visibleContacts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            placeholder="Type to search contacts..."
+          />
         </div>
 
         {isHead && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { AccountAutocomplete } from "@/components/account-autocomplete";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type Option = { id: string; label: string };
 
@@ -29,8 +29,6 @@ export function ContactForm({
   };
   submitLabel: string;
 }) {
-  const defaultAccountLabel = accounts.find((a) => a.id === defaultValues?.accountId)?.label ?? "";
-
   return (
     <form action={action} className="space-y-5 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -71,11 +69,11 @@ export function ContactForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Account</label>
-          <AccountAutocomplete
+          <SearchableSelect
             name="accountId"
-            accounts={accounts}
-            defaultAccountId={defaultValues?.accountId}
-            defaultLabel={defaultAccountLabel}
+            options={accounts}
+            defaultValue={defaultValues?.accountId ?? ""}
+            placeholder="Type to search accounts..."
           />
         </div>
         <div>

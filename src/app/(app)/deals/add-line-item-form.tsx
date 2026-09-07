@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addDealLineItem } from "./actions";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type ProductOption = { id: string; label: string; defaultPrice: number | null };
 
@@ -19,7 +20,11 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
   return (
     <form
       action={action}
-      onSubmit={() => {
+      onSubmit={(e) => {
+        if (!productId) {
+          e.preventDefault();
+          return;
+        }
         setProductId("");
         setUnitPrice("");
       }}
@@ -27,22 +32,13 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
     >
       <div className="flex-1 min-w-[180px]">
         <label className="block text-xs font-medium text-slate-500 mb-1">Product</label>
-        <select
+        <SearchableSelect
           name="productId"
-          required
+          options={products}
           value={productId}
-          onChange={(e) => handleProductChange(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="" disabled>
-            Choose a product...
-          </option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+          onSelect={(opt) => handleProductChange(opt?.id ?? "")}
+          placeholder="Type to search models..."
+        />
       </div>
       <div className="w-20">
         <label className="block text-xs font-medium text-slate-500 mb-1">Qty</label>

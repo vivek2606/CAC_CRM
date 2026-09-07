@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type ProductOption = { id: string; code: string; model: string; brand: string };
 
@@ -23,26 +24,24 @@ export function PricelistForm({
 }) {
   const [productId, setProductId] = useState(defaultValues?.productId ?? products[0]?.id ?? "");
   const selectedProduct = products.find((p) => p.id === productId);
+  const productOptions = products.map((p) => ({ id: p.id, label: `${p.code} — ${p.brand} ${p.model}` }));
 
   return (
     <form action={action} className="space-y-5 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Product Code *</label>
-          <select
-            name="productId"
-            required
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            {products.length === 0 && <option value="">No products yet</option>}
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.code} — {p.brand} {p.model}
-              </option>
-            ))}
-          </select>
+          {products.length === 0 ? (
+            <p className="text-sm text-slate-400">No products yet</p>
+          ) : (
+            <SearchableSelect
+              name="productId"
+              options={productOptions}
+              value={productId}
+              onSelect={(opt) => setProductId(opt?.id ?? "")}
+              placeholder="Type to search products..."
+            />
+          )}
           {selectedProduct && (
             <p className="text-xs text-slate-400 mt-1">Model: {selectedProduct.model}</p>
           )}
