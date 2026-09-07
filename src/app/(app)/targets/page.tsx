@@ -260,7 +260,18 @@ export default async function TargetsPage({
                     <tr key={r.id}>
                       <td className="px-4 py-3 font-medium text-slate-800">{r.name}</td>
                       <td className="px-4 py-3 text-slate-600">{formatCurrency(target)}</td>
-                      <td className="px-4 py-3 text-slate-600">{formatCurrency(actual)}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {actual > 0 ? (
+                          <Link
+                            href={`/deals/closed?stage=WON&month=${monthStr}&owner=${r.id}`}
+                            className="text-indigo-600 hover:text-indigo-700"
+                          >
+                            {formatCurrency(actual)}
+                          </Link>
+                        ) : (
+                          formatCurrency(actual)
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{pct == null ? "—" : `${pct}%`}</td>
                     </tr>
                   );

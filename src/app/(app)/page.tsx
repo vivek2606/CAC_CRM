@@ -18,6 +18,10 @@ import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, Calenda
 
 const SPARKLINE_MONTHS = 6;
 
+function monthValue(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function TargetProgressRow({
   label,
   target,
@@ -262,7 +266,17 @@ export default async function DashboardPage() {
           <StatCard
             label="Won This Month"
             value={formatCompactCurrency(wonThisMonth._sum.value ?? 0)}
-            sub={`${wonThisMonth._count} deal${wonThisMonth._count === 1 ? "" : "s"} closed`}
+            sub={
+              <>
+                {wonThisMonth._count} deal{wonThisMonth._count === 1 ? "" : "s"} closed ·{" "}
+                <Link
+                  href={`/deals/closed?stage=WON&month=${monthValue(targetMonth)}`}
+                  className="text-indigo-600 hover:text-indigo-700"
+                >
+                  view
+                </Link>
+              </>
+            }
             icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
           />
           <StatCard
@@ -446,9 +460,13 @@ export default async function DashboardPage() {
                   Full report <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
-              <ul className="space-y-3">
+              <ul className="space-y-1">
                 {leaderboard.map((rep, i) => (
-                  <li key={rep.id} className="flex items-center gap-3">
+                  <li key={rep.id}>
+                  <Link
+                    href={`/deals/closed?stage=WON&month=${monthValue(targetMonth)}&owner=${rep.id}`}
+                    className="flex items-center gap-3 py-1.5 -mx-2 px-2 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
                     <span className="text-xs font-semibold text-slate-400 w-4">{i + 1}</span>
                     <Avatar name={rep.name} color={rep.avatarColor} size={7} />
                     <div className="min-w-0 flex-1">
@@ -466,6 +484,7 @@ export default async function DashboardPage() {
                     <span className="text-xs font-medium text-slate-500 shrink-0">
                       {formatCompactCurrency(rep.openValue)} open
                     </span>
+                  </Link>
                   </li>
                 ))}
               </ul>
