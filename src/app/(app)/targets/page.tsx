@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { PageHeader, Card } from "@/components/ui";
+import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { TargetChart } from "./target-chart";
+import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
 import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { CategoryChart } from "../reports/category-chart";
+
+const TREND_MONTHS = 12;
+
+function shortMonthLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+}
 
 function parseMonthParam(raw: string | undefined): Date {
   const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
@@ -25,7 +33,7 @@ function monthLabel(date: Date): string {
 export default async function TargetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; rep?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
@@ -33,7 +41,11 @@ export default async function TargetsPage({
   const monthStr = monthValue(month);
   const nextMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
 
-  const reps =
+  // allReps: the full active sales team (Head) or just yourself (rep) -
+  // always available so "Set a target" can target anyone regardless of
+  // the filter below. reps: the same list, narrowed to one person when
+  // Head picks an individual instead of leaving it on "Whole department".
+  const allReps =
     user.role === "HEAD"
       ? await prisma.user.findMany({
           where: { isActive: true, title: "Sales Manager" },
@@ -42,13 +54,37 @@ export default async function TargetsPage({
         })
       : [{ id: user.id, name: user.name ?? "Me" }];
 
+  const selectedRepId = user.role === "HEAD" ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
+  const reps = selectedRepId ? allReps.filter((r) => r.id === selectedRepId) : allReps;
   const repIds = reps.map((r) => r.id);
 
-  const [targets, wonDeals] = await Promise.all([
+  // Trend window: the last TREND_MONTHS calendar months ending at the
+  // current real-world month - independent of the month picker above, so
+  // switching months to inspect one in detail doesn't shift the trend.
+  const now = new Date();
+  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) => {
+    const idx = now.getUTCMonth() - (TREND_MONTHS - 1 - i);
+    return new Date(Date.UTC(now.getUTCFullYear(), idx, 1));
+  });
+  const trendStart = trendMonths[0];
+  const trendEnd = new Date(Date.UTC(trendMonths[TREND_MONTHS - 1].getUTCFullYear(), trendMonths[TREND_MONTHS - 1].getUTCMonth() + 1, 1));
+
+  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
     prisma.deal.findMany({
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
       select: { ownerId: true, value: true },
+    }),
+    prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: trendMonths } } }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: trendStart, lt: trendEnd } },
+      select: { value: true, closedAt: true },
+    }),
+    // Category mix behind this month's actual - reuses the same product
+    // categories as the Sales by Category report.
+    prisma.saleLineItem.findMany({
+      where: { ownerId: { in: repIds }, month: { gte: month, lt: nextMonth } },
+      select: { value: true, product: { select: { category: true } } },
     }),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
@@ -65,11 +101,41 @@ export default async function TargetsPage({
   const totalTarget = rows.reduce((s, r) => s + r.target, 0);
   const totalActual = rows.reduce((s, r) => s + r.actual, 0);
 
+  const trendTargetByMonth = new Map<string, number>();
+  for (const t of trendTargets) {
+    const key = monthValue(t.month);
+    trendTargetByMonth.set(key, (trendTargetByMonth.get(key) ?? 0) + t.targetValue);
+  }
+  const trendActualByMonth = new Map<string, number>();
+  for (const d of trendDeals) {
+    if (!d.closedAt) continue;
+    const key = monthValue(new Date(Date.UTC(d.closedAt.getUTCFullYear(), d.closedAt.getUTCMonth(), 1)));
+    trendActualByMonth.set(key, (trendActualByMonth.get(key) ?? 0) + d.value);
+  }
+  const trendRows: TargetTrendRow[] = trendMonths.map((m) => {
+    const key = monthValue(m);
+    return {
+      month: shortMonthLabel(m),
+      target: trendTargetByMonth.get(key) ?? 0,
+      actual: trendActualByMonth.get(key) ?? 0,
+    };
+  });
+
+  const categoryByName = new Map<string, number>();
+  for (const li of categoryLineItems) {
+    categoryByName.set(li.product.category, (categoryByName.get(li.product.category) ?? 0) + li.value);
+  }
+  const categoryRows = Array.from(categoryByName.entries())
+    .map(([category, value]) => ({ category, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const scopeLabel = user.role === "HEAD" ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
+
   return (
     <div>
       <PageHeader
         title="Targets"
-        description={`Target vs. actual sales for ${monthLabel(month)}`}
+        description={`Target vs. actual sales for ${monthLabel(month)} - ${scopeLabel}`}
         action={
           user.role === "HEAD" ? (
             <Link href="/admin/import/targets" className="text-sm text-indigo-600 hover:text-indigo-700">
@@ -79,14 +145,33 @@ export default async function TargetsPage({
         }
       />
       <div className="p-6 space-y-4">
-        <form className="flex items-center gap-3" action="/targets">
-          <label className="text-sm text-slate-500">Month</label>
-          <input
-            type="month"
-            name="month"
-            defaultValue={monthStr}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <form className="flex flex-wrap items-end gap-3" action="/targets">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Month</label>
+            <input
+              type="month"
+              name="month"
+              defaultValue={monthStr}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          {user.role === "HEAD" && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Sales Person</label>
+              <select
+                name="rep"
+                defaultValue={selectedRepId ?? "all"}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">Whole department</option>
+                {allReps.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             type="submit"
             className="rounded-lg bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-700 transition-colors"
@@ -116,6 +201,32 @@ export default async function TargetsPage({
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Target vs. Actual, per sales rep</h2>
           <TargetChart data={rows} />
         </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-slate-900">Monthly trend</h2>
+              <span className="text-xs text-slate-400">Last {TREND_MONTHS} months</span>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">Target vs. actual sales, {scopeLabel}.</p>
+            <TargetTrendChart data={trendRows} />
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-slate-900">This month&apos;s sales by category</h2>
+              <Link href="/reports/category" className="text-xs text-indigo-600 hover:text-indigo-700">
+                Full category report →
+              </Link>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">{monthLabel(month)}, {scopeLabel}.</p>
+            {categoryRows.length === 0 ? (
+              <EmptyState title="No sales recorded this month" />
+            ) : (
+              <CategoryChart data={categoryRows} />
+            )}
+          </Card>
+        </div>
 
         <Card>
           <div className="flex items-center justify-end p-4 pb-0">
@@ -165,7 +276,7 @@ export default async function TargetsPage({
             <p className="text-xs text-slate-500 mb-4">
               For a one-off change. To set targets for the whole team at once, use the bulk upload above.
             </p>
-            <SetTargetForm reps={reps} month={monthStr} />
+            <SetTargetForm reps={allReps} month={monthStr} />
           </Card>
         )}
       </div>

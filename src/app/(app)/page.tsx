@@ -67,10 +67,12 @@ export default async function DashboardPage() {
   const now = new Date();
   const targetMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const targetMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
 
   const [
     openDeals,
     wonThisMonth,
+    wonYTD,
     closedDeals,
     activeLeads,
     upcomingActivities,
@@ -86,6 +88,11 @@ export default async function DashboardPage() {
     }),
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
+      _sum: { value: true },
+      _count: true,
+    }),
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfYear } },
       _sum: { value: true },
       _count: true,
     }),
@@ -274,6 +281,19 @@ export default async function DashboardPage() {
           ) : (
             <TargetProgressRow label="This month" target={myTarget} actual={myActualForTarget} emphasized />
           )}
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-sm font-semibold text-slate-900">Year to date, {now.getUTCFullYear()}</h2>
+            <Link href="/reports/category" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+              Compare years &amp; categories <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(wonYTD._sum.value ?? 0)}</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {wonYTD._count} won deal{wonYTD._count === 1 ? "" : "s"} since Jan 1, {user.role === "HEAD" ? "whole department" : "your sales"}
+          </p>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
