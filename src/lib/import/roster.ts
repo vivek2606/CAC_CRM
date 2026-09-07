@@ -1,9 +1,15 @@
 export type RosterEntry = {
+  // Exactly as it appears in the Orion ERP export - this is the matching
+  // key for lookupRosterEntry() and must not change, or a future Sales
+  // Register re-import stops recognizing this person's rows.
   name: string;
   division: "Sales" | "Service" | "Design" | "Others" | "Retail";
   active: boolean;
   email?: string;
   title?: string;
+  // Overrides the title-cased `name` as the display name shown in the CRM,
+  // for entries whose raw ERP spelling is unusable as-is (e.g. "CHRIS- CAC").
+  displayName?: string;
 };
 
 // Historical salesperson roster from the Orion ERP sales register (2020-2026).
@@ -27,7 +33,7 @@ export const SALES_REGISTER_ROSTER: RosterEntry[] = [
   { name: "CHARLES UKAZU", division: "Others", active: false },
   { name: "CHIOMA ADUMEKWE", division: "Sales", active: true, email: "chioma.a@somotexnig.com", title: "Sales Manager" },
   { name: "Chioma Catherine Akobundu", division: "Sales", active: false },
-  { name: "CHRIS- CAC", division: "Sales", active: true, email: "cac-techsales@somotexnig.com", title: "Sales Manager" },
+  { name: "CHRIS- CAC", displayName: "Chris", division: "Sales", active: true, email: "cac-techsales@somotexnig.com", title: "Sales Manager" },
   { name: "Chris Nwafor (CPD/SAB)", division: "Others", active: false },
   { name: "CHUCKS AJAJA -ONI", division: "Others", active: false },
   { name: "CHUKS ROWLAND", division: "Others", active: false },

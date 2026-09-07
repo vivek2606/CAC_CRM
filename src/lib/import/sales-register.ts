@@ -148,7 +148,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     if (roster?.active) {
       userMap.set(key, {
         key,
-        name: titleCase(roster.name),
+        name: roster.displayName ?? titleCase(roster.name),
         email: roster.email!,
         isActive: true,
         title: roster.title ?? "Sales Manager",
