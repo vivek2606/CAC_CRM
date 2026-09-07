@@ -16,12 +16,23 @@ function firstOfMonth(date: Date): Date {
 
 // Keeps SaleLineItem (the source for Sales by Category / month / year
 // reporting) in sync with a deal's own line items whenever it's WON, and
-// clears them out again if the deal is ever moved off WON.
+// clears them out again if the deal is ever moved off WON. Also keeps
+// Deal.value itself in sync with the itemized products any time the deal
+// is itemized - not just at the moment of winning - so a deal's headline
+// value (shown on the Kanban card, pipeline totals, dashboard, etc.) never
+// drifts from the qty x rate the rep actually entered for its products.
 async function syncSaleLineItemsForDeal(dealId: string) {
   const deal = await prisma.deal.findUniqueOrThrow({
     where: { id: dealId },
     include: { items: true },
   });
+
+  if (deal.items.length > 0) {
+    const total = deal.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+    if (total !== deal.value) {
+      await prisma.deal.update({ where: { id: dealId }, data: { value: total } });
+    }
+  }
 
   if (deal.stage !== "WON" || !deal.closedAt) {
     await prisma.saleLineItem.deleteMany({ where: { dealId } });
@@ -59,14 +70,6 @@ async function syncSaleLineItemsForDeal(dealId: string) {
         ownerId: deal.ownerId,
       },
     });
-  }
-
-  // If the rep itemized the deal, the itemized total is the true value -
-  // keep Deal.value consistent with it at the moment of winning, the same
-  // invariant the historical Sales Register import already relies on.
-  if (deal.items.length > 0) {
-    const total = deal.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
-    await prisma.deal.update({ where: { id: dealId }, data: { value: total } });
   }
 }
 
