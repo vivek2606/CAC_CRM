@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
+import { DEAL_STAGES, OPEN_DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
 import { formatCompactCurrency } from "@/lib/format";
 import { Avatar } from "@/components/ui";
 import { updateDealStage } from "./actions";
@@ -24,6 +24,12 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // This board only ever holds open-pipeline deals (see OPEN_DEAL_STAGES) -
+  // Won and Lost deals live on /deals/closed instead. So moving a card to
+  // either removes it from the board rather than leaving it "parked" in a
+  // column here: it would look fine until the next reload, when the page's
+  // own query (scoped to open stages) simply wouldn't send it back, making
+  // it seem to vanish.
   function moveDeal(dealId: string, stage: DealStage) {
     const deal = items.find((d) => d.id === dealId);
     if (!deal || deal.stage === stage) return;
@@ -33,13 +39,15 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       return;
     }
 
-    const previousStage = deal.stage;
-    setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
+    const leavesBoard = !OPEN_DEAL_STAGES.includes(stage);
+    setItems((prev) =>
+      leavesBoard ? prev.filter((d) => d.id !== dealId) : prev.map((d) => (d.id === dealId ? { ...d, stage } : d))
+    );
     startTransition(async () => {
       try {
         await updateDealStage(dealId, stage);
       } catch (e) {
-        setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage: previousStage } : d)));
+        setItems((prev) => (leavesBoard ? [...prev, deal] : prev.map((d) => (d.id === dealId ? deal : d))));
         alert(e instanceof Error ? e.message : "Could not update this deal.");
       }
     });
@@ -50,9 +58,15 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     setPendingLostDealId(null);
     if (!dealId) return;
 
-    setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage: "LOST" } : d)));
-    startTransition(() => {
-      updateDealStage(dealId, "LOST", category, note || undefined);
+    const deal = items.find((d) => d.id === dealId);
+    setItems((prev) => prev.filter((d) => d.id !== dealId));
+    startTransition(async () => {
+      try {
+        await updateDealStage(dealId, "LOST", category, note || undefined);
+      } catch (e) {
+        if (deal) setItems((prev) => [...prev, deal]);
+        alert(e instanceof Error ? e.message : "Could not update this deal.");
+      }
     });
   }
 
@@ -65,7 +79,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   return (
     <>
     <div className={`flex gap-4 overflow-x-auto pb-4 ${isPending ? "opacity-70" : ""}`}>
-      {DEAL_STAGES.map((stage) => {
+      {OPEN_DEAL_STAGES.map((stage) => {
         const colors = DEAL_STAGE_COLORS[stage];
         const stageDeals = items.filter((d) => d.stage === stage);
         const stageValue = stageDeals.reduce((sum, d) => sum + d.value, 0);
