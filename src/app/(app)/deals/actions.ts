@@ -34,43 +34,72 @@ async function syncSaleLineItemsForDeal(dealId: string) {
     }
   }
 
-  if (deal.stage !== "WON" || !deal.closedAt) {
-    await prisma.saleLineItem.deleteMany({ where: { dealId } });
-    return;
+  // Dashboard, Targets, and Closed Deals all read Deal.value/stage/closedAt
+  // directly, so they're already correct at this point regardless of what
+  // happens below. Sales by Category is the one report that depends on this
+  // derived SaleLineItem data instead - so a failure here must never bubble
+  // up and undo (or make the rep think it failed to mark) an otherwise-
+  // successful Won/Lost transition. Log it and let resyncCategoryData()
+  // below repair the gap on demand instead.
+  try {
+    if (deal.stage !== "WON" || !deal.closedAt) {
+      await prisma.saleLineItem.deleteMany({ where: { dealId } });
+      return;
+    }
+
+    const docDate = deal.closedAt;
+    const month = firstOfMonth(docDate);
+    const currentSourceKeys = deal.items.map((item) => `deal-item:${item.id}`);
+
+    await prisma.$transaction([
+      prisma.saleLineItem.deleteMany({
+        where: { dealId, sourceKey: { notIn: currentSourceKeys.length > 0 ? currentSourceKeys : [""] } },
+      }),
+      ...deal.items.map((item) =>
+        prisma.saleLineItem.upsert({
+          where: { sourceKey: `deal-item:${item.id}` },
+          create: {
+            sourceKey: `deal-item:${item.id}`,
+            docDate,
+            month,
+            qty: item.qty,
+            value: item.qty * item.unitPrice,
+            productId: item.productId,
+            ownerId: deal.ownerId,
+            dealId: deal.id,
+          },
+          update: {
+            docDate,
+            month,
+            qty: item.qty,
+            value: item.qty * item.unitPrice,
+            productId: item.productId,
+            ownerId: deal.ownerId,
+          },
+        })
+      ),
+    ]);
+  } catch (e) {
+    console.error(`syncSaleLineItemsForDeal: failed to sync Sales by Category data for deal ${dealId}`, e);
   }
+}
 
-  const docDate = deal.closedAt;
-  const month = firstOfMonth(docDate);
-  const currentSourceKeys = deal.items.map((item) => `deal-item:${item.id}`);
-
-  await prisma.saleLineItem.deleteMany({
-    where: { dealId, sourceKey: { notIn: currentSourceKeys.length > 0 ? currentSourceKeys : [""] } },
+// One-click repair for Sales by Category / Targets' category mix: re-runs
+// the sync above for every Won, itemized deal, so any deal whose category
+// data fell out of step (the sync above failed partway at some point in the
+// past, before it was made non-fatal and transactional) gets picked up
+// without needing direct database access.
+export async function resyncCategoryData() {
+  await requireHead();
+  const deals = await prisma.deal.findMany({
+    where: { stage: "WON", items: { some: {} } },
+    select: { id: true },
   });
-
-  for (const item of deal.items) {
-    const sourceKey = `deal-item:${item.id}`;
-    await prisma.saleLineItem.upsert({
-      where: { sourceKey },
-      create: {
-        sourceKey,
-        docDate,
-        month,
-        qty: item.qty,
-        value: item.qty * item.unitPrice,
-        productId: item.productId,
-        ownerId: deal.ownerId,
-        dealId: deal.id,
-      },
-      update: {
-        docDate,
-        month,
-        qty: item.qty,
-        value: item.qty * item.unitPrice,
-        productId: item.productId,
-        ownerId: deal.ownerId,
-      },
-    });
+  for (const deal of deals) {
+    await syncSaleLineItemsForDeal(deal.id);
   }
+  revalidatePath("/reports/category");
+  revalidatePath("/targets");
 }
 
 const dealSchema = z.object({

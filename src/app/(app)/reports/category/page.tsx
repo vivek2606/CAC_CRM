@@ -7,6 +7,7 @@ import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { CategoryChart } from "../category-chart";
 import { CategoryYearCompareChart, type CategoryYearRow } from "../category-year-chart";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { resyncCategoryData } from "../../deals/actions";
 
 type Mode = "month" | "year" | "compare";
 
@@ -253,6 +254,19 @@ function CategoryReportShell({
         }
       />
       <div className="p-6 space-y-4">
+        {user.role === "HEAD" && (
+          <div className="flex justify-end">
+            <form action={resyncCategoryData}>
+              <button
+                type="submit"
+                className="text-xs text-slate-400 hover:text-indigo-600 transition-colors underline decoration-dotted"
+                title="If a recently-won deal isn't showing up here yet, click this to recompute category data for every won deal."
+              >
+                Not seeing a recent win? Resync category data
+              </button>
+            </form>
+          </div>
+        )}
         <form className="flex flex-wrap items-end gap-3" action="/reports/category">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">View by</label>
