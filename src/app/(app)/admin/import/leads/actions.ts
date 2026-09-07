@@ -51,13 +51,22 @@ export async function importLeadsRegister(
 
   const result = transformLeadsRegister(rows);
 
-  // Re-running this import replaces its own previously-imported rows (rather
-  // than duplicating them), so it's always safe to re-upload the same or an
-  // updated file.
+  // Re-running this import replaces its own previously-imported rows that
+  // are still pending (rather than duplicating them) - but a lead that's
+  // already been converted to a Deal is left alone. Deleting it here would
+  // orphan that Deal, and the row below would recreate the same enquiry as
+  // a fresh, unconverted lead - letting it be converted a second time and
+  // silently double-counting its value in Open Pipeline.
   const { count: leadsReplaced } = await prisma.lead.deleteMany({
-    where: { importKey: { startsWith: "leadsheet:" } },
+    where: { importKey: { startsWith: "leadsheet:" }, status: { not: "CONVERTED" } },
   });
-  await prisma.contact.deleteMany({ where: { importKey: { startsWith: "leadsheet:contact:" } } });
+  // Same reasoning for contacts: this import never creates a Deal, so a
+  // contact linked to one only got there via a real conversion - deleting
+  // and recreating it here would silently null out that Deal's contact
+  // link (Deal.contactId is ON DELETE SET NULL).
+  await prisma.contact.deleteMany({
+    where: { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } },
+  });
 
   // Resolve each ownerKey (a roster-normalized rep name) to a real User id.
   const uniqueOwnerKeys = Array.from(new Set(result.leads.map((l) => l.ownerKey)));
@@ -142,8 +151,12 @@ export async function importLeadsRegister(
     accountId: accountIdByName.get(c.accountName) ?? null,
     importKey: c.importKey,
   }));
+  // skipDuplicates: a contact still linked to a Deal was preserved above and
+  // still holds this importKey.
   const contactsResult =
-    contactCreateData.length > 0 ? await prisma.contact.createMany({ data: contactCreateData }) : { count: 0 };
+    contactCreateData.length > 0
+      ? await prisma.contact.createMany({ data: contactCreateData, skipDuplicates: true })
+      : { count: 0 };
 
   // Re-fetch to map contactKey -> id (createMany doesn't return rows).
   const dbContacts = await prisma.contact.findMany({
@@ -173,7 +186,10 @@ export async function importLeadsRegister(
     contactId: contactIdByKey.get(l.contactKey) ?? null,
     importKey: l.importKey,
   }));
-  const leadsResult = await prisma.lead.createMany({ data: leadCreateData });
+  // skipDuplicates: a lead already converted (and so preserved above,
+  // untouched by the delete step) still holds this importKey - don't
+  // recreate it as a second, unconverted copy.
+  const leadsResult = await prisma.lead.createMany({ data: leadCreateData, skipDuplicates: true });
 
   const totalLeadValue = result.leads.reduce((sum, l) => sum + (l.value ?? 0), 0);
 
