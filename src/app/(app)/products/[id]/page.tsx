@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { deleteProduct } from "../actions";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -86,7 +86,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                       <td className="py-2.5 text-slate-700">
                         {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
                       </td>
-                      <td className="py-2.5 text-slate-500">₦{entry.exchangeRate.toFixed(2)} / $1</td>
+                      <td className="py-2.5 text-slate-500">₦{formatNumber(entry.exchangeRate)} / $1</td>
                     </tr>
                   ))}
                 </tbody>

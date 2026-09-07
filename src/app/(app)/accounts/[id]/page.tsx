@@ -143,6 +143,12 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
             <dl className="space-y-3 text-sm">
+              {account.code && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Customer code</dt>
+                  <dd className="text-slate-700 font-mono">{account.code}</dd>
+                </div>
+              )}
               {account.accountType && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Account type</dt>

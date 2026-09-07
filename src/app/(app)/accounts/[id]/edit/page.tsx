@@ -31,6 +31,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             defaultValues={{
               name: account.name,
+              code: account.code,
               industry: account.industry,
               accountType: account.accountType,
               website: account.website,

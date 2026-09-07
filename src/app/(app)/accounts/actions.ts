@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
-import type { AccountType } from "@prisma/client";
+import { Prisma, type AccountType } from "@prisma/client";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  code: z.string().optional(),
   industry: z.string().optional(),
   accountType: z.string().optional(),
   website: z.string().optional(),
@@ -29,27 +30,40 @@ function toAccountType(value: string | undefined): AccountType | null {
   return value && value.trim() !== "" ? (value as AccountType) : null;
 }
 
+// Account.code is unique (it's the identity key the Sales Register import
+// dedupes customers on) - a manually-typed duplicate should read as a
+// normal validation error, not crash the request.
+function rethrowFriendly(e: unknown): never {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    throw new Error("That customer code is already used by another account.");
+  }
+  throw e;
+}
+
 export async function createAccount(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = accountSchema.parse(raw);
   const ownerId = user.role === "HEAD" ? parsed.ownerId : user.id;
 
-  const account = await prisma.account.create({
-    data: {
-      name: parsed.name,
-      industry: toNullable(parsed.industry),
-      accountType: toAccountType(parsed.accountType),
-      website: toNullable(parsed.website),
-      phone: toNullable(parsed.phone),
-      address: toNullable(parsed.address),
-      city: toNullable(parsed.city),
-      state: toNullable(parsed.state),
-      country: toNullable(parsed.country),
-      registrationNumber: toNullable(parsed.registrationNumber),
-      ownerId,
-    },
-  });
+  const account = await prisma.account
+    .create({
+      data: {
+        name: parsed.name,
+        code: toNullable(parsed.code),
+        industry: toNullable(parsed.industry),
+        accountType: toAccountType(parsed.accountType),
+        website: toNullable(parsed.website),
+        phone: toNullable(parsed.phone),
+        address: toNullable(parsed.address),
+        city: toNullable(parsed.city),
+        state: toNullable(parsed.state),
+        country: toNullable(parsed.country),
+        registrationNumber: toNullable(parsed.registrationNumber),
+        ownerId,
+      },
+    })
+    .catch(rethrowFriendly);
 
   revalidatePath("/accounts");
   redirect(`/accounts/${account.id}`);
@@ -64,22 +78,25 @@ export async function updateAccount(accountId: string, formData: FormData) {
   const parsed = accountSchema.parse(raw);
   const ownerId = user.role === "HEAD" ? parsed.ownerId : existing.ownerId;
 
-  await prisma.account.update({
-    where: { id: accountId },
-    data: {
-      name: parsed.name,
-      industry: toNullable(parsed.industry),
-      accountType: toAccountType(parsed.accountType),
-      website: toNullable(parsed.website),
-      phone: toNullable(parsed.phone),
-      address: toNullable(parsed.address),
-      city: toNullable(parsed.city),
-      state: toNullable(parsed.state),
-      country: toNullable(parsed.country),
-      registrationNumber: toNullable(parsed.registrationNumber),
-      ownerId,
-    },
-  });
+  await prisma.account
+    .update({
+      where: { id: accountId },
+      data: {
+        name: parsed.name,
+        code: toNullable(parsed.code),
+        industry: toNullable(parsed.industry),
+        accountType: toAccountType(parsed.accountType),
+        website: toNullable(parsed.website),
+        phone: toNullable(parsed.phone),
+        address: toNullable(parsed.address),
+        city: toNullable(parsed.city),
+        state: toNullable(parsed.state),
+        country: toNullable(parsed.country),
+        registrationNumber: toNullable(parsed.registrationNumber),
+        ownerId,
+      },
+    })
+    .catch(rethrowFriendly);
 
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${accountId}`);

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import { deletePricelistEntry } from "./actions";
 import { Trash2, Pencil } from "lucide-react";
 
@@ -119,7 +119,7 @@ export default async function PricelistPage({
                       <td className="px-4 py-3 text-slate-700">
                         {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">₦{entry.exchangeRate.toFixed(2)} / $1</td>
+                      <td className="px-4 py-3 text-slate-500">₦{formatNumber(entry.exchangeRate)} / $1</td>
                       {user.role === "HEAD" && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-end">

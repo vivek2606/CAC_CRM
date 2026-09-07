@@ -88,6 +88,7 @@ export default async function AccountsPage({
                       <Link href={`/accounts/${account.id}`} className="font-medium text-slate-800 hover:text-indigo-600">
                         {account.name}
                       </Link>
+                      {account.code && <p className="text-xs text-slate-400">Code: {account.code}</p>}
                       {account.website && <p className="text-xs text-slate-400">{account.website}</p>}
                     </td>
                     <td className="px-4 py-3 text-slate-500">{account.industry ?? "—"}</td>

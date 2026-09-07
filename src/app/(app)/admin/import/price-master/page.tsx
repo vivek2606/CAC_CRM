@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
+import { formatNumber } from "@/lib/format";
 import { RateForm } from "./rate-form";
 import { ImportForm } from "./import-form";
 
@@ -41,7 +42,7 @@ export default async function ImportPriceMasterPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               {recentRates.map((r) => (
                 <span key={r.id} className="text-xs bg-slate-50 border border-slate-200 rounded-full px-3 py-1 text-slate-600">
-                  {monthLabel(r.month)}: ₦{r.rate.toLocaleString()}
+                  {monthLabel(r.month)}: ₦{formatNumber(r.rate)}
                 </span>
               ))}
             </div>

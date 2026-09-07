@@ -2,7 +2,17 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+// Comma-grouped, 2-decimal number with no currency symbol - for rates and
+// other figures that need their own prefix/suffix (e.g. "₦...  / $1").
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 

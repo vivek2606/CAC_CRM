@@ -26,7 +26,10 @@ export default async function ImportPage() {
             <li>Upload the Sales Register .xlsx file exactly as exported from Orion ERP.</li>
             <li>This creates customer accounts, the product catalog, historical price entries, and Won deals dated back to when they actually closed.</li>
             <li>Installation/service billing lines and return/credit-note lines are excluded automatically.</li>
-            <li>Safe to re-run on the same file — already-imported records are skipped, not duplicated.</li>
+            <li>
+              Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a
+              newer extract updates each customer&apos;s code to the most recent one in the file.
+            </li>
             <li>This can take a minute for a large file. Don&apos;t close the tab while it&apos;s running.</li>
           </ul>
         </Card>

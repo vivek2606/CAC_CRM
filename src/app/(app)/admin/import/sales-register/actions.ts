@@ -24,6 +24,7 @@ function randomPassword(): string {
 
 export type ImportSummary = {
   accountsCreated: number;
+  accountsUpdated: number;
   productsCreated: number;
   activeUsers: { name: string; email: string; tempPassword: string }[];
   inactiveUsersCreated: number;
@@ -125,16 +126,44 @@ export async function importSalesRegister(
     if (id) userIdByKey.set(key, id);
   }
 
-  // Accounts
-  const accountCreateData = result.accounts.map((a) => ({
-    name: a.name,
-    code: a.code,
-    city: a.city,
-    ownerId: userIdByKey.get(a.ownerKey) ?? head.id,
-  }));
-  await prisma.account.createMany({ data: accountCreateData, skipDuplicates: true });
+  // Accounts - upsert by customer name so a repeat import (new transactions
+  // for a customer already in the CRM) updates their code/city to this
+  // file's most recent value instead of leaving them stale, or - since
+  // Account.code is unique - creating a duplicate account under a new code.
+  const existingAccounts = await prisma.account.findMany({
+    where: { name: { in: result.accounts.map((a) => a.name) } },
+    select: { id: true, name: true, code: true, city: true },
+  });
+  const existingAccountByName = new Map(existingAccounts.map((a) => [a.name, a]));
+
+  const accountsToCreate = result.accounts.filter((a) => !existingAccountByName.has(a.name));
+  if (accountsToCreate.length > 0) {
+    await prisma.account.createMany({
+      data: accountsToCreate.map((a) => ({
+        name: a.name,
+        code: a.code,
+        city: a.city,
+        ownerId: userIdByKey.get(a.ownerKey) ?? head.id,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  let accountsUpdated = 0;
+  for (const a of result.accounts) {
+    const existing = existingAccountByName.get(a.name);
+    if (existing && (existing.code !== a.code || existing.city !== a.city)) {
+      try {
+        await prisma.account.update({ where: { id: existing.id }, data: { code: a.code, city: a.city } });
+        accountsUpdated++;
+      } catch {
+        // Code collided with a different existing account - leave this one as-is.
+      }
+    }
+  }
+
   const dbAccounts = await prisma.account.findMany({
-    where: { code: { in: result.accounts.map((a) => a.code) } },
+    where: { name: { in: result.accounts.map((a) => a.name) } },
     select: { id: true, code: true, name: true },
   });
   const accountIdByName = new Map(dbAccounts.map((a) => [a.name, a.id]));
@@ -205,7 +234,8 @@ export async function importSalesRegister(
 
   return {
     summary: {
-      accountsCreated: dbAccounts.length,
+      accountsCreated: accountsToCreate.length,
+      accountsUpdated,
       productsCreated: dbProducts.length,
       activeUsers: activeCredentials,
       inactiveUsersCreated: result.users.filter((u) => !u.isActive).length,
