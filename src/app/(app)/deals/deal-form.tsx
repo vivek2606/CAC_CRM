@@ -9,9 +9,11 @@ import {
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENTS,
   END_USE_SEGMENT_LABELS,
+  PAYMENT_TERMS,
+  PAYMENT_TERMS_LABELS,
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
-import type { DealStage, EquipmentType, EndUseSegment } from "@prisma/client";
+import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
 type ProductOption = { id: string; label: string; defaultPrice: number | null };
@@ -50,6 +52,8 @@ export function DealForm({
     equipmentType?: EquipmentType | null;
     endUseSegment?: EndUseSegment | null;
     competitorBrand?: string | null;
+    paymentTerms?: PaymentTerms | null;
+    expectedDeliveryDate?: string | null;
   };
   submitLabel: string;
 }) {
@@ -167,6 +171,32 @@ export function DealForm({
             defaultValue={defaultValues?.expectedCloseDate ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Expected delivery date</label>
+          <input
+            name="expectedDeliveryDate"
+            type="date"
+            defaultValue={defaultValues?.expectedDeliveryDate ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Payment terms</label>
+          <select
+            name="paymentTerms"
+            defaultValue={defaultValues?.paymentTerms ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {PAYMENT_TERMS.map((t) => (
+              <option key={t} value={t}>
+                {PAYMENT_TERMS_LABELS[t]}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>

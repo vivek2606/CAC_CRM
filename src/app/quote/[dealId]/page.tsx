@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { COMPANY_PROFILE } from "@/lib/company-profile";
+import { PAYMENT_TERMS_LABELS } from "@/lib/constants";
 import { PrintButton } from "./print-button";
 
 export default async function QuotePage({ params }: { params: Promise<{ dealId: string }> }) {
@@ -119,8 +120,14 @@ export default async function QuotePage({ params }: { params: Promise<{ dealId: 
 
           <div className="text-xs text-slate-500 space-y-1 border-t border-slate-200 pt-4">
             <p>
-              <span className="font-medium text-slate-600">Payment terms:</span> {COMPANY_PROFILE.paymentTerms}
+              <span className="font-medium text-slate-600">Payment terms:</span>{" "}
+              {deal.paymentTerms ? PAYMENT_TERMS_LABELS[deal.paymentTerms] : COMPANY_PROFILE.paymentTerms}
             </p>
+            {deal.expectedDeliveryDate && (
+              <p>
+                <span className="font-medium text-slate-600">Expected delivery:</span> {formatDate(deal.expectedDeliveryDate)}
+              </p>
+            )}
             <p>
               <span className="font-medium text-slate-600">Validity:</span> {COMPANY_PROFILE.quoteValidityDays} days
               from date of issue.

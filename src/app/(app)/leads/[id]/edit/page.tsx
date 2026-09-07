@@ -52,6 +52,8 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
               equipmentType: lead.equipmentType,
               endUseSegment: lead.endUseSegment,
               competitorBrand: lead.competitorBrand,
+              budgetConfirmed: lead.budgetConfirmed,
+              expectedPurchaseTimeframe: lead.expectedPurchaseTimeframe,
               value: lead.value,
               email: lead.email,
               phone: lead.phone,

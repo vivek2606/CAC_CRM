@@ -11,8 +11,10 @@ import {
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENTS,
   END_USE_SEGMENT_LABELS,
+  PURCHASE_TIMEFRAMES,
+  PURCHASE_TIMEFRAME_LABELS,
 } from "@/lib/constants";
-import type { LeadStatus, LeadSource, EquipmentType, EndUseSegment } from "@prisma/client";
+import type { LeadStatus, LeadSource, EquipmentType, EndUseSegment, PurchaseTimeframe } from "@prisma/client";
 
 type Option = { id: string; label: string };
 
@@ -40,6 +42,8 @@ export function LeadForm({
     equipmentType?: EquipmentType | null;
     endUseSegment?: EndUseSegment | null;
     competitorBrand?: string | null;
+    budgetConfirmed?: boolean | null;
+    expectedPurchaseTimeframe?: PurchaseTimeframe | null;
     value?: number | null;
     email?: string | null;
     phone?: string | null;
@@ -124,6 +128,35 @@ export function LeadForm({
             {WIN_PROBABILITY_OPTIONS.map((pct) => (
               <option key={pct} value={pct}>
                 {pct}%
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Budget confirmed?</label>
+          <select
+            name="budgetConfirmed"
+            defaultValue={defaultValues?.budgetConfirmed == null ? "" : defaultValues.budgetConfirmed ? "yes" : "no"}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unknown</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Expected purchase timeframe</label>
+          <select
+            name="expectedPurchaseTimeframe"
+            defaultValue={defaultValues?.expectedPurchaseTimeframe ?? ""}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Unspecified</option>
+            {PURCHASE_TIMEFRAMES.map((t) => (
+              <option key={t} value={t}>
+                {PURCHASE_TIMEFRAME_LABELS[t]}
               </option>
             ))}
           </select>

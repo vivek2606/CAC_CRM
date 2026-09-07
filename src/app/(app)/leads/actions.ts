@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
-import type { EquipmentType, DealStage, EndUseSegment, Lead } from "@prisma/client";
+import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -18,6 +18,8 @@ const leadSchema = z.object({
   equipmentType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
+  budgetConfirmed: z.string().optional(),
+  expectedPurchaseTimeframe: z.string().optional(),
   value: z.coerce.number().min(0).optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().min(1, "Customer phone is required"),
@@ -37,6 +39,16 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
 
 function toEndUseSegment(value: string | undefined): EndUseSegment | null {
   return value && value.trim() !== "" ? (value as EndUseSegment) : null;
+}
+
+function toPurchaseTimeframe(value: string | undefined): PurchaseTimeframe | null {
+  return value && value.trim() !== "" ? (value as PurchaseTimeframe) : null;
+}
+
+function toTriStateBoolean(value: string | undefined): boolean | null {
+  if (value === "yes") return true;
+  if (value === "no") return false;
+  return null;
 }
 
 function toWinProbability(value: string | undefined): number | null {
@@ -63,6 +75,8 @@ export async function createLead(formData: FormData) {
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
+      budgetConfirmed: toTriStateBoolean(parsed.budgetConfirmed),
+      expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
       phone: parsed.phone,
@@ -100,6 +114,8 @@ export async function updateLead(leadId: string, formData: FormData) {
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
+      budgetConfirmed: toTriStateBoolean(parsed.budgetConfirmed),
+      expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
       phone: parsed.phone,

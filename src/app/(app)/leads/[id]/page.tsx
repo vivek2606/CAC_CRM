@@ -11,6 +11,7 @@ import {
   LEAD_SOURCE_LABELS,
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENT_LABELS,
+  PURCHASE_TIMEFRAME_LABELS,
 } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
@@ -150,6 +151,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Competing brand</dt>
                   <dd className="text-slate-700">{lead.competitorBrand}</dd>
+                </div>
+              )}
+              {lead.budgetConfirmed != null && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Budget confirmed</dt>
+                  <dd className="text-slate-700">{lead.budgetConfirmed ? "Yes" : "No"}</dd>
+                </div>
+              )}
+              {lead.expectedPurchaseTimeframe && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Purchase timeframe</dt>
+                  <dd className="text-slate-700">{PURCHASE_TIMEFRAME_LABELS[lead.expectedPurchaseTimeframe]}</dd>
                 </div>
               )}
               <div className="flex justify-between">

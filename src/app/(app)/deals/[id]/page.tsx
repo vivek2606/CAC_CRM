@@ -12,6 +12,7 @@ import {
   LOST_REASON_LABELS,
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENT_LABELS,
+  PAYMENT_TERMS_LABELS,
 } from "@/lib/constants";
 import { NotesSection } from "../../notes-section";
 import { ActivitiesSection } from "../../activities-section";
@@ -188,6 +189,18 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                 <dt className="text-slate-500">Expected close</dt>
                 <dd className="text-slate-700">{formatDate(deal.expectedCloseDate)}</dd>
               </div>
+              {deal.expectedDeliveryDate && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Expected delivery</dt>
+                  <dd className="text-slate-700">{formatDate(deal.expectedDeliveryDate)}</dd>
+                </div>
+              )}
+              {deal.paymentTerms && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Payment terms</dt>
+                  <dd className="text-slate-700">{PAYMENT_TERMS_LABELS[deal.paymentTerms]}</dd>
+                </div>
+              )}
               {deal.equipmentType && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Equipment</dt>

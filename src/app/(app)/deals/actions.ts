@@ -8,7 +8,7 @@ import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
-import type { DealStage, LostReason, EquipmentType, EndUseSegment } from "@prisma/client";
+import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -84,6 +84,8 @@ const dealSchema = z.object({
   equipmentType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  expectedDeliveryDate: z.string().optional(),
 });
 
 function toNullable(value: string | undefined) {
@@ -96,6 +98,10 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
 
 function toEndUseSegment(value: string | undefined): EndUseSegment | null {
   return value && value.trim() !== "" ? (value as EndUseSegment) : null;
+}
+
+function toPaymentTerms(value: string | undefined): PaymentTerms | null {
+  return value && value.trim() !== "" ? (value as PaymentTerms) : null;
 }
 
 const dealLineItemSchema = z.object({
@@ -143,6 +149,8 @@ export async function createDeal(formData: FormData) {
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
+      paymentTerms: toPaymentTerms(parsed.paymentTerms),
+      expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
       items: lineItems.length > 0 ? { createMany: { data: lineItems } } : undefined,
     },
   });
@@ -179,6 +187,8 @@ export async function updateDeal(dealId: string, formData: FormData) {
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
+      paymentTerms: toPaymentTerms(parsed.paymentTerms),
+      expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
     },
   });
   await syncSaleLineItemsForDeal(dealId);

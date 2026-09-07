@@ -1,8 +1,40 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment, AccountType } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment, AccountType, PurchaseTimeframe, PaymentTerms } from "@prisma/client";
 
 // A deal's itemized total discounted more than this far below catalog price
 // needs Head approval before it can be marked Won.
 export const DISCOUNT_APPROVAL_THRESHOLD_PCT = 15;
+
+export const PURCHASE_TIMEFRAMES: PurchaseTimeframe[] = [
+  "IMMEDIATE",
+  "SHORT_TERM",
+  "MEDIUM_TERM",
+  "LONG_TERM",
+  "RESEARCHING",
+];
+
+export const PURCHASE_TIMEFRAME_LABELS: Record<PurchaseTimeframe, string> = {
+  IMMEDIATE: "Immediate (this month)",
+  SHORT_TERM: "1–3 months",
+  MEDIUM_TERM: "3–6 months",
+  LONG_TERM: "6–12 months",
+  RESEARCHING: "Just researching",
+};
+
+export const PAYMENT_TERMS: PaymentTerms[] = [
+  "FULL_ADVANCE",
+  "PARTIAL_ADVANCE",
+  "CREDIT",
+  "LETTER_OF_CREDIT",
+  "OTHER",
+];
+
+export const PAYMENT_TERMS_LABELS: Record<PaymentTerms, string> = {
+  FULL_ADVANCE: "100% advance",
+  PARTIAL_ADVANCE: "Part advance, balance before delivery",
+  CREDIT: "Credit terms",
+  LETTER_OF_CREDIT: "Letter of Credit",
+  OTHER: "Other",
+};
 
 export const DEAL_STAGES: DealStage[] = [
   "QUALIFICATION",
