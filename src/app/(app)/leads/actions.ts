@@ -27,6 +27,7 @@ const leadSchema = z.object({
   accountId: z.string().optional(),
   contactId: z.string().optional(),
   ownerId: z.string().min(1),
+  createdAt: z.string().optional(),
 });
 
 function toNullable(value: string | undefined) {
@@ -57,6 +58,15 @@ function toWinProbability(value: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// The "Date" field lets a rep backdate a lead they're only now getting
+// around to logging - defaults to today in the form, but falls back to
+// "now" here too if it's ever missing or unparseable.
+function toEntryDate(value: string | undefined): Date {
+  if (!value) return new Date();
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
 export async function createLead(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
@@ -84,6 +94,7 @@ export async function createLead(formData: FormData) {
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,
+      createdAt: toEntryDate(parsed.createdAt),
     },
   });
 
@@ -123,6 +134,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,
+      createdAt: toEntryDate(parsed.createdAt),
     },
   });
 

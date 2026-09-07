@@ -8,11 +8,13 @@ export function MarkLostDialog({
   onConfirm,
   onCancel,
 }: {
-  onConfirm: (category: LostReason, note: string) => void;
+  onConfirm: (category: LostReason, note: string, closedAt: string) => void;
   onCancel: () => void;
 }) {
   const [category, setCategory] = useState<LostReason>("PRICE_TOO_HIGH");
   const [note, setNote] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  const [closedAt, setClosedAt] = useState(today);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
@@ -43,6 +45,15 @@ export function MarkLostDialog({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           placeholder="Anything specific worth remembering..."
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+
+        <label className="block text-xs font-medium text-slate-500 mb-1">Date lost</label>
+        <input
+          type="date"
+          value={closedAt}
+          max={today}
+          onChange={(e) => setClosedAt(e.target.value)}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
 
@@ -56,7 +67,7 @@ export function MarkLostDialog({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(category, note.trim())}
+            onClick={() => onConfirm(category, note.trim(), closedAt)}
             className="rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
           >
             Mark Lost

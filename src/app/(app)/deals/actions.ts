@@ -86,6 +86,7 @@ const dealSchema = z.object({
   competitorBrand: z.string().optional(),
   paymentTerms: z.string().optional(),
   expectedDeliveryDate: z.string().optional(),
+  createdAt: z.string().optional(),
 });
 
 function toNullable(value: string | undefined) {
@@ -102,6 +103,15 @@ function toEndUseSegment(value: string | undefined): EndUseSegment | null {
 
 function toPaymentTerms(value: string | undefined): PaymentTerms | null {
   return value && value.trim() !== "" ? (value as PaymentTerms) : null;
+}
+
+// Backs both the "Date" entry field (backdating when a deal is logged) and
+// the Mark Won/Lost close-date override - falls back to "now" if missing
+// or unparseable, matching the previous unconditional `new Date()` behavior.
+function parseDateInput(value: string | undefined): Date {
+  if (!value) return new Date();
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 const dealLineItemSchema = z.object({
@@ -152,6 +162,7 @@ export async function createDeal(formData: FormData) {
       paymentTerms: toPaymentTerms(parsed.paymentTerms),
       expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
       items: lineItems.length > 0 ? { createMany: { data: lineItems } } : undefined,
+      createdAt: parseDateInput(parsed.createdAt),
     },
   });
 
@@ -189,6 +200,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       competitorBrand: toNullable(parsed.competitorBrand),
       paymentTerms: toPaymentTerms(parsed.paymentTerms),
       expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
+      createdAt: parseDateInput(parsed.createdAt),
     },
   });
   await syncSaleLineItemsForDeal(dealId);
@@ -212,7 +224,12 @@ export async function updateDealStage(
   dealId: string,
   stage: DealStage,
   lostReasonCategory?: LostReason,
-  lostReasonNote?: string
+  lostReasonNote?: string,
+  // Lets a rep backdate when a deal actually closed (Won or Lost), for a
+  // deal they're only now getting around to updating in the CRM. Defaults
+  // to today from the Mark Won/Lost dialogs, same as the entry-date field
+  // on the forms above.
+  closedAtOverride?: string
 ) {
   const user = await requireUser();
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
@@ -235,7 +252,7 @@ export async function updateDealStage(
     data: {
       stage,
       probability: STAGE_DEFAULT_PROBABILITY[stage],
-      closedAt: isClosed ? new Date() : null,
+      closedAt: isClosed ? parseDateInput(closedAtOverride) : null,
       lostReasonCategory: stage === "LOST" ? (lostReasonCategory ?? existing.lostReasonCategory ?? "OTHER") : null,
       lostReason: stage === "LOST" ? (lostReasonNote ?? null) : null,
     },

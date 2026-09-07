@@ -52,11 +52,13 @@ export function LeadForm({
     accountId?: string | null;
     contactId?: string | null;
     ownerId?: string;
+    createdAt?: string;
   };
   submitLabel: string;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
   const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form action={action} className="space-y-5 max-w-2xl">
@@ -70,6 +72,18 @@ export function LeadForm({
             placeholder="e.g. Enterprise plan inquiry"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+          <input
+            name="createdAt"
+            type="date"
+            max={today}
+            defaultValue={defaultValues?.createdAt ?? today}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <p className="mt-1 text-xs text-slate-400">Defaults to today - backdate if logging this later than it happened.</p>
         </div>
 
         <div>

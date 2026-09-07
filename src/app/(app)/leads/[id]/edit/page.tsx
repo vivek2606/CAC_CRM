@@ -61,6 +61,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
               accountId: lead.accountId,
               contactId: lead.contactId,
               ownerId: lead.ownerId,
+              createdAt: lead.createdAt.toISOString().slice(0, 10),
             }}
             submitLabel="Save Changes"
           />

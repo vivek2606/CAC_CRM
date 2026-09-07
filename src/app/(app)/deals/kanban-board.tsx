@@ -7,6 +7,7 @@ import { formatCompactCurrency } from "@/lib/format";
 import { Avatar } from "@/components/ui";
 import { updateDealStage } from "./actions";
 import { MarkLostDialog } from "./mark-lost-dialog";
+import { MarkWonDialog } from "./mark-won-dialog";
 import type { DealStage, LostReason } from "@prisma/client";
 
 type DealCard = {
@@ -22,6 +23,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<string | null>(null);
   const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
+  const [pendingWonDealId, setPendingWonDealId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // This board only ever holds open-pipeline deals (see OPEN_DEAL_STAGES) -
@@ -39,21 +41,23 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       return;
     }
 
-    const leavesBoard = !OPEN_DEAL_STAGES.includes(stage);
-    setItems((prev) =>
-      leavesBoard ? prev.filter((d) => d.id !== dealId) : prev.map((d) => (d.id === dealId ? { ...d, stage } : d))
-    );
+    if (stage === "WON") {
+      setPendingWonDealId(dealId);
+      return;
+    }
+
+    setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
     startTransition(async () => {
       try {
         await updateDealStage(dealId, stage);
       } catch (e) {
-        setItems((prev) => (leavesBoard ? [...prev, deal] : prev.map((d) => (d.id === dealId ? deal : d))));
+        setItems((prev) => prev.map((d) => (d.id === dealId ? deal : d)));
         alert(e instanceof Error ? e.message : "Could not update this deal.");
       }
     });
   }
 
-  function confirmLost(category: LostReason, note: string) {
+  function confirmLost(category: LostReason, note: string, closedAt: string) {
     const dealId = pendingLostDealId;
     setPendingLostDealId(null);
     if (!dealId) return;
@@ -62,7 +66,24 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     setItems((prev) => prev.filter((d) => d.id !== dealId));
     startTransition(async () => {
       try {
-        await updateDealStage(dealId, "LOST", category, note || undefined);
+        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt);
+      } catch (e) {
+        if (deal) setItems((prev) => [...prev, deal]);
+        alert(e instanceof Error ? e.message : "Could not update this deal.");
+      }
+    });
+  }
+
+  function confirmWon(closedAt: string) {
+    const dealId = pendingWonDealId;
+    setPendingWonDealId(null);
+    if (!dealId) return;
+
+    const deal = items.find((d) => d.id === dealId);
+    setItems((prev) => prev.filter((d) => d.id !== dealId));
+    startTransition(async () => {
+      try {
+        await updateDealStage(dealId, "WON", undefined, undefined, closedAt);
       } catch (e) {
         if (deal) setItems((prev) => [...prev, deal]);
         alert(e instanceof Error ? e.message : "Could not update this deal.");
@@ -142,6 +163,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       })}
     </div>
     {pendingLostDealId && <MarkLostDialog onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />}
+    {pendingWonDealId && <MarkWonDialog onConfirm={confirmWon} onCancel={() => setPendingWonDealId(null)} />}
     </>
   );
 }

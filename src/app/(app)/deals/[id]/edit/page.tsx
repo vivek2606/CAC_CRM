@@ -62,6 +62,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               expectedDeliveryDate: deal.expectedDeliveryDate
                 ? deal.expectedDeliveryDate.toISOString().slice(0, 10)
                 : null,
+              createdAt: deal.createdAt.toISOString().slice(0, 10),
             }}
             submitLabel="Save Changes"
           />
