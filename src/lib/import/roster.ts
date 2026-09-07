@@ -33,7 +33,7 @@ export const SALES_REGISTER_ROSTER: RosterEntry[] = [
   { name: "CHARLES UKAZU", division: "Others", active: false },
   { name: "CHIOMA ADUMEKWE", division: "Sales", active: true, email: "chioma.a@somotexnig.com", title: "Sales Manager" },
   { name: "Chioma Catherine Akobundu", division: "Sales", active: false },
-  { name: "CHRIS- CAC", displayName: "Chris", division: "Sales", active: true, email: "cac-techsales@somotexnig.com", title: "Sales Manager" },
+  { name: "CHRIS- CAC", displayName: "Chris Mokobia", division: "Sales", active: true, email: "cac-techsales@somotexnig.com", title: "Sales Manager" },
   { name: "Chris Nwafor (CPD/SAB)", division: "Others", active: false },
   { name: "CHUCKS AJAJA -ONI", division: "Others", active: false },
   { name: "CHUKS ROWLAND", division: "Others", active: false },
