@@ -17,6 +17,7 @@ import {
   TrendingUp,
   PieChart,
   X,
+  KeyRound,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -147,6 +148,18 @@ export function Sidebar({
             </p>
           </div>
         </div>
+        <Link
+          href="/account"
+          onClick={onClose}
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+            pathname.startsWith("/account")
+              ? "bg-indigo-50 text-indigo-700"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <KeyRound className="h-4 w-4" />
+          Change password
+        </Link>
         <SignOutButton />
       </div>
     </aside>
