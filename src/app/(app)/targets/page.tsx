@@ -8,6 +8,7 @@ import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
 import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { CategoryChart } from "../reports/category-chart";
+import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 
 const TREND_MONTHS = 12;
 
@@ -69,7 +70,7 @@ export default async function TargetsPage({
   const trendStart = trendMonths[0];
   const trendEnd = new Date(Date.UTC(trendMonths[TREND_MONTHS - 1].getUTCFullYear(), trendMonths[TREND_MONTHS - 1].getUTCMonth() + 1, 1));
 
-  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems] = await Promise.all([
+  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
     prisma.deal.findMany({
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
@@ -85,6 +86,18 @@ export default async function TargetsPage({
     prisma.saleLineItem.findMany({
       where: { ownerId: { in: repIds }, month: { gte: month, lt: nextMonth } },
       select: { value: true, product: { select: { category: true } } },
+    }),
+    // Deals won without a product breakup fall back to their Equipment
+    // Type field, same as the Sales by Category report.
+    prisma.deal.findMany({
+      where: {
+        ownerId: { in: repIds },
+        stage: "WON",
+        closedAt: { gte: month, lt: nextMonth },
+        items: { none: {} },
+        equipmentType: { not: null },
+      },
+      select: { value: true, equipmentType: true },
     }),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
@@ -124,6 +137,10 @@ export default async function TargetsPage({
   const categoryByName = new Map<string, number>();
   for (const li of categoryLineItems) {
     categoryByName.set(li.product.category, (categoryByName.get(li.product.category) ?? 0) + li.value);
+  }
+  for (const d of unitemizedCategoryDeals) {
+    const key = EQUIPMENT_TYPE_LABELS[d.equipmentType!];
+    categoryByName.set(key, (categoryByName.get(key) ?? 0) + d.value);
   }
   const categoryRows = Array.from(categoryByName.entries())
     .map(([category, value]) => ({ category, value }))

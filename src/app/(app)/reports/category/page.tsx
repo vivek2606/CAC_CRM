@@ -8,6 +8,7 @@ import { CategoryChart } from "../category-chart";
 import { CategoryYearCompareChart, type CategoryYearRow } from "../category-year-chart";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { ResyncCategoryButton } from "../resync-category-button";
+import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 
 type Mode = "month" | "year" | "compare";
 
@@ -60,10 +61,25 @@ export default async function CategoryReportPage({
     const rangeStart = new Date(Date.UTC(fromYear, 0, 1));
     const rangeEnd = new Date(Date.UTC(toYear + 1, 0, 1));
 
-    const lineItems = await prisma.saleLineItem.findMany({
-      where: { month: { gte: rangeStart, lt: rangeEnd }, ...ownerWhere },
-      select: { value: true, month: true, product: { select: { category: true } } },
-    });
+    const [lineItems, unitemizedDeals] = await Promise.all([
+      prisma.saleLineItem.findMany({
+        where: { month: { gte: rangeStart, lt: rangeEnd }, ...ownerWhere },
+        select: { value: true, month: true, product: { select: { category: true } } },
+      }),
+      // Deals won without a product breakup have no SaleLineItem rows to
+      // group by product category - fall back to the deal's own Equipment
+      // Type field so they still count somewhere instead of vanishing.
+      prisma.deal.findMany({
+        where: {
+          stage: "WON",
+          closedAt: { gte: rangeStart, lt: rangeEnd },
+          items: { none: {} },
+          equipmentType: { not: null },
+          ...ownerWhere,
+        },
+        select: { value: true, equipmentType: true, closedAt: true },
+      }),
+    ]);
 
     const byCategory = new Map<string, Record<number, number>>();
     for (const li of lineItems) {
@@ -71,6 +87,13 @@ export default async function CategoryReportPage({
       const key = li.product.category;
       const existing = byCategory.get(key) ?? {};
       existing[year] = (existing[year] ?? 0) + li.value;
+      byCategory.set(key, existing);
+    }
+    for (const d of unitemizedDeals) {
+      const year = d.closedAt!.getUTCFullYear();
+      const key = EQUIPMENT_TYPE_LABELS[d.equipmentType!];
+      const existing = byCategory.get(key) ?? {};
+      existing[year] = (existing[year] ?? 0) + d.value;
       byCategory.set(key, existing);
     }
     const rows: CategoryYearRow[] = Array.from(byCategory.entries())
@@ -84,7 +107,8 @@ export default async function CategoryReportPage({
         const totalB = years.reduce((s, y) => s + Number(b[String(y)] ?? 0), 0);
         return totalB - totalA;
       });
-    const totalValue = lineItems.reduce((s, li) => s + li.value, 0);
+    const totalValue =
+      lineItems.reduce((s, li) => s + li.value, 0) + unitemizedDeals.reduce((s, d) => s + d.value, 0);
 
     return (
       <CategoryReportShell
@@ -132,10 +156,25 @@ export default async function CategoryReportPage({
     periodLabel = monthLabel(rangeStart);
   }
 
-  const lineItems = await prisma.saleLineItem.findMany({
-    where: { month: { gte: rangeStart, lt: rangeEnd }, ...ownerWhere },
-    select: { value: true, qty: true, product: { select: { category: true } } },
-  });
+  const [lineItems, unitemizedDeals] = await Promise.all([
+    prisma.saleLineItem.findMany({
+      where: { month: { gte: rangeStart, lt: rangeEnd }, ...ownerWhere },
+      select: { value: true, qty: true, product: { select: { category: true } } },
+    }),
+    // Deals won without a product breakup have no SaleLineItem rows to
+    // group by product category - fall back to the deal's own Equipment
+    // Type field so they still count somewhere instead of vanishing.
+    prisma.deal.findMany({
+      where: {
+        stage: "WON",
+        closedAt: { gte: rangeStart, lt: rangeEnd },
+        items: { none: {} },
+        equipmentType: { not: null },
+        ...ownerWhere,
+      },
+      select: { value: true, equipmentType: true },
+    }),
+  ]);
 
   const byCategory = new Map<string, { value: number; qty: number }>();
   for (const li of lineItems) {
@@ -143,6 +182,12 @@ export default async function CategoryReportPage({
     const existing = byCategory.get(key) ?? { value: 0, qty: 0 };
     existing.value += li.value;
     existing.qty += li.qty;
+    byCategory.set(key, existing);
+  }
+  for (const d of unitemizedDeals) {
+    const key = EQUIPMENT_TYPE_LABELS[d.equipmentType!];
+    const existing = byCategory.get(key) ?? { value: 0, qty: 0 };
+    existing.value += d.value;
     byCategory.set(key, existing);
   }
   const rows = Array.from(byCategory.entries())
