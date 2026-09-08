@@ -12,7 +12,7 @@ export default async function ImportLeadsPage() {
     <div>
       <PageHeader
         title="Import Leads"
-        description="One-time import from the Hot Leads tracking sheet"
+        description="Bulk-upload new leads using the same fields as the New Lead form"
         action={
           <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
             ← All imports
@@ -22,16 +22,24 @@ export default async function ImportLeadsPage() {
       <div className="p-6 space-y-4">
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
+          <p className="text-sm text-slate-600 mb-3">
+            The first row of the .xlsx file must have exactly these column headers, in any order. Only{" "}
+            <strong>Lead title</strong>, <strong>Customer name</strong>, <strong>Customer phone</strong>, and{" "}
+            <strong>Assigned to</strong> need a value in every row — leave any other cell blank if it doesn&apos;t
+            apply.
+          </p>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
-            <li>Upload the Hot Leads .xlsx file exactly as maintained today.</li>
-            <li>Each row becomes a Lead, with its Account and Contact created or matched by name.</li>
-            <li>Rows marked Won in the sheet are skipped entirely — those are already-billed sales and will come in later via the Sales Register import instead.</li>
-            <li>Status is set to Qualified (Hot/Warm/Cold) or Unqualified (Lost) as usual; Hot/Warm/Cold also sets a Winning Probability of 90%/60%/30%.</li>
-            <li>Equipment is mapped onto VRF, Atom, Floor Standing, Rooftop, Large Duct, or Mixed Product.</li>
-            <li>Source is mapped onto Cold Call, Website, Contractor, Consultant, Architect, Direct, Referral, or Event.</li>
-            <li>Where the Lead Source column actually named a person, it&apos;s relabeled &quot;Contractor&quot; and the name is kept under Influencer in the notes.</li>
-            <li>Project, site, quote date, and the original tracker status are kept in the Lead&apos;s notes.</li>
-            <li>Safe to re-run — re-uploading replaces this import&apos;s own leads/contacts instead of duplicating them. Run the Sales Register import first so the 5 sales reps already exist.</li>
+            <li>
+              Lead title, Date, Customer name, Company, Estimated value, Status, Winning probability, Budget
+              confirmed, Expected purchase timeframe, Source, Equipment type, End-use segment, Competing brand,
+              Email, Customer phone, Linked account, Linked contact, Assigned to, Notes.
+            </li>
+            <li>Status, Source, Equipment type, End-use segment, and Expected purchase timeframe accept the exact same option text shown in the Lead form&apos;s dropdowns (e.g. &quot;Qualified&quot;, &quot;Cold Call&quot;, &quot;Atom Mini VRF&quot;) — anything blank or unrecognized falls back to the form&apos;s own default.</li>
+            <li>Budget confirmed accepts Yes/No, left blank for unknown.</li>
+            <li>Assigned to must match a rep&apos;s exact name as shown in the CRM — anything that doesn&apos;t match is assigned to you instead and flagged after import.</li>
+            <li>Linked account/Linked contact create or match by name; if left blank, the Account is created from Company (or Customer name if no company), and the Contact from Customer name.</li>
+            <li>Winning probability accepts 10–100 in steps of 10; anything else is left unspecified.</li>
+            <li>Safe to re-run — a row with the same Lead title + Customer phone as before replaces it instead of duplicating it, unless it&apos;s already been converted to a Deal.</li>
           </ul>
         </Card>
         <Card className="p-6">

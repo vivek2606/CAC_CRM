@@ -3,8 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { parseLeadsRegisterBuffer } from "@/lib/import/parse-leads-register";
-import { transformLeadsRegister, aliasedAwayDisplayNames } from "@/lib/import/leads-register";
-import { lookupRosterEntry } from "@/lib/import/roster";
+import { transformLeadsRegister } from "@/lib/import/leads-register";
+import type { LeadStatus } from "@prisma/client";
 
 export type ImportSummary = {
   accountsCreated: number;
@@ -12,11 +12,7 @@ export type ImportSummary = {
   leadsCreated: number;
   leadsReplaced: number;
   totalLeadValue: number;
-  hotCount: number;
-  warmCount: number;
-  coldCount: number;
-  lostCount: number;
-  excludedWonRows: number;
+  byStatus: Record<LeadStatus, number>;
   unresolvedOwners: string[];
   skippedFileRows: number;
 };
@@ -68,23 +64,18 @@ export async function importLeadsRegister(
     where: { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } },
   });
 
-  // Resolve each ownerKey (a roster-normalized rep name) to a real User id.
+  // Resolve each ownerKey (the "Assigned to" column, normalized) against the
+  // real reps already in the CRM by their display name - not the ERP roster,
+  // since this sheet is filled in using the same names shown in the app.
+  const allUsers = await prisma.user.findMany({ select: { id: true, name: true } });
+  const userIdByNormalizedName = new Map(
+    allUsers.map((u) => [u.name.trim().toLowerCase().replace(/\s+/g, " "), u.id])
+  );
   const uniqueOwnerKeys = Array.from(new Set(result.leads.map((l) => l.ownerKey)));
-  const ownerEmailByKey = new Map<string, string>();
-  for (const key of uniqueOwnerKeys) {
-    const roster = lookupRosterEntry(key);
-    if (roster?.active && roster.email) ownerEmailByKey.set(key, roster.email);
-  }
-  const ownerUsers = await prisma.user.findMany({
-    where: { email: { in: Array.from(ownerEmailByKey.values()) } },
-    select: { id: true, email: true },
-  });
-  const userIdByEmail = new Map(ownerUsers.map((u) => [u.email, u.id]));
   const unresolvedOwners: string[] = [];
   const ownerIdByKey = new Map<string, string>();
   for (const key of uniqueOwnerKeys) {
-    const email = ownerEmailByKey.get(key);
-    const id = email ? userIdByEmail.get(email) : undefined;
+    const id = userIdByNormalizedName.get(key);
     if (id) {
       ownerIdByKey.set(key, id);
     } else {
@@ -117,24 +108,6 @@ export async function importLeadsRegister(
   const accountIdByName = new Map(
     result.accounts.map((a) => [a.name, accountIdByNormalizedName.get(a.name.trim().toLowerCase())!])
   );
-
-  // Clean up any leftover duplicate account left behind under a pre-merge
-  // name from an earlier run of this import, now that it's unused.
-  const staleNames = aliasedAwayDisplayNames();
-  if (staleNames.length > 0) {
-    const staleAccounts = await prisma.account.findMany({
-      where: { name: { in: staleNames } },
-      include: {
-        _count: { select: { contacts: true, leads: true, deals: true } },
-      },
-    });
-    for (const a of staleAccounts) {
-      const c = a._count;
-      if (c.contacts + c.leads + c.deals === 0) {
-        await prisma.account.delete({ where: { id: a.id } });
-      }
-    }
-  }
 
   // Contacts: one per (account, contact person) pair in this file, owned by the lead's rep.
   const contactOwnerByKey = new Map<string, string>();
@@ -174,17 +147,24 @@ export async function importLeadsRegister(
   const leadCreateData = result.leads.map((l) => ({
     title: l.title,
     customerName: l.customerName,
+    company: l.company,
     status: l.status,
     winProbability: l.winProbability,
     source: l.source,
     equipmentType: l.equipmentType,
+    endUseSegment: l.endUseSegment,
+    competitorBrand: l.competitorBrand,
+    budgetConfirmed: l.budgetConfirmed,
+    expectedPurchaseTimeframe: l.expectedPurchaseTimeframe,
     value: l.value,
+    email: l.email,
     phone: l.phone,
     notes: l.notes,
     ownerId: ownerIdByKey.get(l.ownerKey) ?? head.id,
     accountId: accountIdByName.get(l.accountName) ?? null,
     contactId: contactIdByKey.get(l.contactKey) ?? null,
     importKey: l.importKey,
+    ...(l.createdAt ? { createdAt: l.createdAt, updatedAt: l.createdAt } : {}),
   }));
   // skipDuplicates: a lead already converted (and so preserved above,
   // untouched by the delete step) still holds this importKey - don't
@@ -200,11 +180,7 @@ export async function importLeadsRegister(
       leadsCreated: leadsResult.count,
       leadsReplaced,
       totalLeadValue,
-      hotCount: result.leads.filter((l) => l.winProbability === 90).length,
-      warmCount: result.leads.filter((l) => l.winProbability === 60).length,
-      coldCount: result.leads.filter((l) => l.winProbability === 30).length,
-      lostCount: result.leads.filter((l) => l.status === "UNQUALIFIED").length,
-      excludedWonRows: result.summary.excludedWonRows,
+      byStatus: result.summary.byStatus,
       unresolvedOwners: Array.from(new Set(unresolvedOwners)),
       skippedFileRows,
     },

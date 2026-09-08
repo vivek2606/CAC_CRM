@@ -1,39 +1,50 @@
 import ExcelJS from "exceljs";
 
+// Column names match the New Lead form's field labels exactly (minus the
+// "*"/"?"/"(₦)" decoration), so anyone filling the sheet can just look at
+// the form to know what goes in each column.
 export type RawLeadRow = {
-  slNo: number;
-  salesPerson: string;
-  location: string | null;
-  projectName: string | null;
-  contactPerson: string;
-  contactNo: string | null;
-  leadSource: string | null;
-  influencerDetails: string | null;
-  customerName: string | null;
-  site: string | null;
-  equipment: string | null;
-  amount: number | null;
-  quoteSent: string | null;
+  title: string;
+  date: Date | null;
+  customerName: string;
+  company: string | null;
+  value: number | null;
   status: string | null;
-  currentStatus: string | null;
+  winProbability: number | null;
+  budgetConfirmed: string | null;
+  expectedPurchaseTimeframe: string | null;
+  source: string | null;
+  equipmentType: string | null;
+  endUseSegment: string | null;
+  competitorBrand: string | null;
+  email: string | null;
+  phone: string;
+  linkedAccount: string | null;
+  linkedContact: string | null;
+  assignedTo: string;
+  notes: string | null;
 };
 
 const REQUIRED_COLUMNS = [
-  "Sl. No.",
-  "Sales Person",
-  "Location",
-  "Project Name",
-  "Contact Person",
-  "Contact No.",
-  "Lead Source",
-  "Influencer Details",
-  "Customer Name",
-  "Site",
-  "Equipment",
-  "Amount",
-  "Quote Sent",
+  "Lead title",
+  "Date",
+  "Customer name",
+  "Company",
+  "Estimated value",
   "Status",
-  "Current Status",
+  "Winning probability",
+  "Budget confirmed",
+  "Expected purchase timeframe",
+  "Source",
+  "Equipment type",
+  "End-use segment",
+  "Competing brand",
+  "Email",
+  "Customer phone",
+  "Linked account",
+  "Linked contact",
+  "Assigned to",
+  "Notes",
 ];
 
 export async function parseLeadsRegisterBuffer(
@@ -50,8 +61,7 @@ export async function parseLeadsRegisterBuffer(
     headers[colNumber] = String(cell.value ?? "").trim();
   });
 
-  // Header names have trailing/inconsistent whitespace in the source file (e.g. "Amount ").
-  const idx = (name: string) => headers.findIndex((h) => h?.trim() === name || h?.trim() === `${name} `);
+  const idx = (name: string) => headers.findIndex((h) => h?.trim() === name);
   const missing = REQUIRED_COLUMNS.filter((c) => idx(c) === -1);
   if (missing.length > 0) {
     throw new Error(`Missing expected column(s): ${missing.join(", ")}`);
@@ -85,31 +95,43 @@ export async function parseLeadsRegisterBuffer(
       const n = Number(v);
       return Number.isNaN(n) ? null : n;
     };
+    const getDate = (col: string): Date | null => {
+      const v = getRaw(col);
+      if (v instanceof Date) return v;
+      if (v == null) return null;
+      const d = new Date(String(v));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
 
-    const slNo = getNum("Sl. No.");
-    const salesPerson = getStr("Sales Person");
-    const contactPerson = getStr("Contact Person");
-    if (slNo == null || !salesPerson || !contactPerson) {
+    const title = getStr("Lead title");
+    const customerName = getStr("Customer name");
+    const phone = getStr("Customer phone");
+    const assignedTo = getStr("Assigned to");
+    if (!title || !customerName || !phone || !assignedTo) {
       skippedRows++;
       return;
     }
 
     rows.push({
-      slNo,
-      salesPerson,
-      location: getStr("Location"),
-      projectName: getStr("Project Name"),
-      contactPerson,
-      contactNo: getStr("Contact No."),
-      leadSource: getStr("Lead Source"),
-      influencerDetails: getStr("Influencer Details"),
-      customerName: getStr("Customer Name"),
-      site: getStr("Site"),
-      equipment: getStr("Equipment"),
-      amount: getNum("Amount"),
-      quoteSent: getStr("Quote Sent"),
+      title,
+      date: getDate("Date"),
+      customerName,
+      company: getStr("Company"),
+      value: getNum("Estimated value"),
       status: getStr("Status"),
-      currentStatus: getStr("Current Status"),
+      winProbability: getNum("Winning probability"),
+      budgetConfirmed: getStr("Budget confirmed"),
+      expectedPurchaseTimeframe: getStr("Expected purchase timeframe"),
+      source: getStr("Source"),
+      equipmentType: getStr("Equipment type"),
+      endUseSegment: getStr("End-use segment"),
+      competitorBrand: getStr("Competing brand"),
+      email: getStr("Email"),
+      phone,
+      linkedAccount: getStr("Linked account"),
+      linkedContact: getStr("Linked contact"),
+      assignedTo,
+      notes: getStr("Notes"),
     });
   });
 
