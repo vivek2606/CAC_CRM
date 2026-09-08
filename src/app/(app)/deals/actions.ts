@@ -89,17 +89,22 @@ async function syncSaleLineItemsForDeal(dealId: string) {
 // data fell out of step (the sync above failed partway at some point in the
 // past, before it was made non-fatal and transactional) gets picked up
 // without needing direct database access.
-export async function resyncCategoryData() {
+export async function resyncCategoryData(): Promise<{ checked: number; repaired: number }> {
   await requireHead();
   const deals = await prisma.deal.findMany({
     where: { stage: "WON", items: { some: {} } },
     select: { id: true },
   });
+  let repaired = 0;
   for (const deal of deals) {
+    const before = await prisma.saleLineItem.count({ where: { dealId: deal.id } });
     await syncSaleLineItemsForDeal(deal.id);
+    const after = await prisma.saleLineItem.count({ where: { dealId: deal.id } });
+    if (after !== before) repaired++;
   }
   revalidatePath("/reports/category");
   revalidatePath("/targets");
+  return { checked: deals.length, repaired };
 }
 
 const dealSchema = z.object({
