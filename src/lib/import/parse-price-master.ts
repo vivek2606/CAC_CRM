@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { normalizeCategory } from "./category";
 
 export type RawPriceMasterRow = {
   productCode: string;
@@ -61,7 +62,8 @@ export async function parsePriceMasterBuffer(
     };
 
     const productCode = getStr(idx("Product Code"));
-    const category = getStr(idx("Category"));
+    const rawCategory = getStr(idx("Category"));
+    const category = rawCategory ? normalizeCategory(rawCategory) : undefined;
     const subCategory = getStr(idx("Sub-Category"));
     const model = getStr(idx("Model"));
     const dealerPrice = getNum(idx("Dealer Price"));

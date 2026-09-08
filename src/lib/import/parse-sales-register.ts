@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { RawSalesRow } from "./sales-register";
+import { normalizeCategory } from "./category";
 
 const REQUIRED_COLUMNS = [
   "Txn No",
@@ -78,7 +79,7 @@ export async function parseSalesRegisterBuffer(
       custCode: getStr("Cust Code") ?? "",
       custName: getStr("Cust Name") ?? "",
       locnName: getStr("Locn Name"),
-      category: getStr("Category") ?? "",
+      category: normalizeCategory(getStr("Category") ?? ""),
       subCategory: getStr("Sub-Category"),
       itemCode: getStr("Item Code") ?? "",
       itemName: getStr("Item Name") ?? "",
