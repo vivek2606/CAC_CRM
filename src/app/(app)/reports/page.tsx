@@ -24,7 +24,7 @@ import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
 import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
-import { DistributionPieChart } from "./distribution-pie-chart";
+import { ShareStackedBar } from "./segment-share-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
@@ -329,7 +329,7 @@ export default async function ReportsPage() {
           {segmentData.length === 0 ? (
             <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
           ) : (
-            <DistributionPieChart data={segmentData} />
+            <ShareStackedBar data={segmentData} />
           )}
         </Card>
 

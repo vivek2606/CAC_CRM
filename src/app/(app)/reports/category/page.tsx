@@ -6,9 +6,11 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { CategoryChart } from "../category-chart";
 import { CategoryYearCompareChart, type CategoryYearRow } from "../category-year-chart";
+import { CategoryTrendChart, type CategoryTrendRow } from "../category-trend-chart";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { ResyncCategoryButton } from "../resync-category-button";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
+import { assignCategoryColors, CATEGORY_OTHER_COLOR, OTHER_CATEGORY_LABEL, MAX_CATEGORY_SLOTS } from "@/lib/category-colors";
 
 type Mode = "month" | "year" | "compare";
 
@@ -21,7 +23,12 @@ function monthLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+function shortMonthLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+}
+
 const MAX_COMPARE_YEARS = 6;
+const TREND_MONTHS = 6;
 
 export default async function CategoryReportPage({
   searchParams,
@@ -50,6 +57,81 @@ export default async function CategoryReportPage({
     user.role === "HEAD" ? reps.find((r) => r.id === selectedRepId)?.name : (user.name ?? "Me");
 
   const ownerWhere = selectedRepId ? { ownerId: selectedRepId } : {};
+
+  // Composition-over-time trend (stacked column) - shown on every mode,
+  // independent of the month/year filter above, same as Targets' own
+  // 6/12-month trend chart alongside its current-period view.
+  const now = new Date();
+  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) => {
+    const idx = now.getUTCMonth() - (TREND_MONTHS - 1 - i);
+    return new Date(Date.UTC(now.getUTCFullYear(), idx, 1));
+  });
+  const trendStart = trendMonths[0];
+  const trendEnd = new Date(Date.UTC(trendMonths[TREND_MONTHS - 1].getUTCFullYear(), trendMonths[TREND_MONTHS - 1].getUTCMonth() + 1, 1));
+
+  const [trendLineItems, trendUnitemizedDeals] = await Promise.all([
+    prisma.saleLineItem.findMany({
+      where: { month: { gte: trendStart, lt: trendEnd }, ...ownerWhere },
+      select: { value: true, month: true, product: { select: { category: true } } },
+    }),
+    prisma.deal.findMany({
+      where: {
+        stage: "WON",
+        closedAt: { gte: trendStart, lt: trendEnd },
+        items: { none: {} },
+        equipmentType: { not: null },
+        ...ownerWhere,
+      },
+      select: { value: true, equipmentType: true, closedAt: true },
+    }),
+  ]);
+
+  const trendByMonthCategory = new Map<string, Map<string, number>>();
+  const totalByCategory = new Map<string, number>();
+  function addToTrend(monthKey: string, category: string, value: number) {
+    const byCat = trendByMonthCategory.get(monthKey) ?? new Map<string, number>();
+    byCat.set(category, (byCat.get(category) ?? 0) + value);
+    trendByMonthCategory.set(monthKey, byCat);
+    totalByCategory.set(category, (totalByCategory.get(category) ?? 0) + value);
+  }
+  for (const li of trendLineItems) {
+    const key = `${li.month.getUTCFullYear()}-${String(li.month.getUTCMonth() + 1).padStart(2, "0")}`;
+    addToTrend(key, li.product.category, li.value);
+  }
+  for (const d of trendUnitemizedDeals) {
+    const c = d.closedAt!;
+    const key = `${c.getUTCFullYear()}-${String(c.getUTCMonth() + 1).padStart(2, "0")}`;
+    addToTrend(key, EQUIPMENT_TYPE_LABELS[d.equipmentType!], d.value);
+  }
+
+  // Rank categories largest-first, fold anything past the palette's slot
+  // count into "Other" rather than generating a new hue.
+  const rankedCategories = Array.from(totalByCategory.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([category]) => category);
+  const trendColorByCategory = assignCategoryColors(rankedCategories);
+  const trendCategories = rankedCategories.slice(0, MAX_CATEGORY_SLOTS);
+  const hasOther = rankedCategories.length > MAX_CATEGORY_SLOTS;
+  const trendChartCategories = hasOther ? [...trendCategories, OTHER_CATEGORY_LABEL] : trendCategories;
+
+  const trendData: CategoryTrendRow[] = trendMonths.map((m) => {
+    const key = `${m.getUTCFullYear()}-${String(m.getUTCMonth() + 1).padStart(2, "0")}`;
+    const byCat = trendByMonthCategory.get(key) ?? new Map<string, number>();
+    const row: CategoryTrendRow = { month: shortMonthLabel(m) };
+    for (const cat of trendCategories) row[cat] = byCat.get(cat) ?? 0;
+    if (hasOther) {
+      let other = 0;
+      for (const [cat, val] of byCat) if (!trendCategories.includes(cat)) other += val;
+      row[OTHER_CATEGORY_LABEL] = other;
+    }
+    return row;
+  });
+
+  // Recharts' chart is a Client Component, so this needs to be a plain
+  // serializable object crossing the Server -> Client boundary, not a
+  // function.
+  const trendColors: Record<string, string> = { [OTHER_CATEGORY_LABEL]: CATEGORY_OTHER_COLOR };
+  for (const [cat, color] of trendColorByCategory) trendColors[cat] = color;
 
   if (mode === "compare") {
     let fromYear = Number(params.fromYear) || currentYear - 2;
@@ -123,6 +205,9 @@ export default async function CategoryReportPage({
         toYear={toYear}
         periodLabel={`${fromYear}–${toYear}`}
         totalValue={totalValue}
+        trendData={trendData}
+        trendCategories={trendChartCategories}
+        trendColors={trendColors}
       >
         {rows.length === 0 ? (
           <EmptyState title="No sales in this period" description="Try a different year range." />
@@ -208,6 +293,9 @@ export default async function CategoryReportPage({
       toYear={currentYear}
       periodLabel={periodLabel}
       totalValue={totalValue}
+      trendData={trendData}
+      trendCategories={trendChartCategories}
+      trendColors={trendColors}
     >
       {rows.length === 0 ? (
         <EmptyState title="No sales in this period" description="Try a different month or year." />
@@ -268,6 +356,9 @@ function CategoryReportShell({
   toYear,
   periodLabel,
   totalValue,
+  trendData,
+  trendCategories,
+  trendColors,
   children,
 }: {
   user: Awaited<ReturnType<typeof requireUser>>;
@@ -281,6 +372,9 @@ function CategoryReportShell({
   toYear: number;
   periodLabel: string;
   totalValue: number;
+  trendData: CategoryTrendRow[];
+  trendCategories: string[];
+  trendColors: Record<string, string>;
   children: ReactNode;
 }) {
   const scopeLabel = user.role === "HEAD" ? (selectedRepId ? `for ${selectedRepName}` : "company-wide") : "for your own sales";
@@ -394,6 +488,16 @@ function CategoryReportShell({
         <Card className="p-4">
           <p className="text-sm text-slate-500">Total sales value, {periodLabel}</p>
           <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(totalValue)}</p>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Category mix, last 6 months</h2>
+          <p className="text-xs text-slate-400 mb-3">How each category&apos;s share of sales has been trending</p>
+          {trendData.every((row) => trendCategories.every((c) => (row[c] ?? 0) === 0)) ? (
+            <EmptyState title="No sales in the last 6 months" />
+          ) : (
+            <CategoryTrendChart data={trendData} categories={trendCategories} colors={trendColors} />
+          )}
         </Card>
 
         <Card className="p-5">

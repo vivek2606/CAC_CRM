@@ -9,6 +9,7 @@ import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { CategoryChart } from "../reports/category-chart";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
+import { GaugeChart } from "@/components/gauge-chart";
 
 const TREND_MONTHS = 12;
 
@@ -206,11 +207,13 @@ export default async function TargetsPage({
             <p className="text-sm text-slate-500">Total Actual</p>
             <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(totalActual)}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-slate-500">Achievement</p>
-            <p className="text-2xl font-semibold text-slate-900 mt-1">
-              {totalTarget > 0 ? `${Math.round((totalActual / totalTarget) * 100)}%` : "—"}
-            </p>
+          <Card className="p-4 flex items-center justify-center">
+            <GaugeChart
+              value={totalActual}
+              target={totalTarget}
+              valueLabel={formatCompactCurrency(totalActual)}
+              targetLabel={formatCompactCurrency(totalTarget)}
+            />
           </Card>
         </div>
 

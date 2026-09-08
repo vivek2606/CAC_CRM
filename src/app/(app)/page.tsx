@@ -14,6 +14,8 @@ import {
 import { PipelineChart } from "./pipeline-chart";
 import { ActivityTypeIcon } from "./activity-type-icon";
 import { Sparkline } from "./sparkline";
+import { GaugeChart } from "@/components/gauge-chart";
+import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
 import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange } from "lucide-react";
 
 const SPARKLINE_MONTHS = 6;
@@ -90,6 +92,10 @@ export default async function DashboardPage() {
     users,
     targetReps,
     sparklineDeals,
+    pipelineStartAgg,
+    pipelineNewAgg,
+    pipelineLostAgg,
+    pipelineWonAgg,
   ] = await Promise.all([
     prisma.deal.findMany({
       where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
@@ -173,7 +179,45 @@ export default async function DashboardPage() {
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: sparklineStart, lt: targetMonthEnd } },
       select: { value: true, closedAt: true },
     }),
+    // Pipeline movement bridge (waterfall), this month: a deal that existed
+    // before the month started was "in" the starting pipeline if it's
+    // still open now, or if it got resolved (closed) sometime during this
+    // month - either way it was open right as the month began, since a
+    // deal only ever moves open -> closed once, never back.
+    prisma.deal.aggregate({
+      where: {
+        ownerId: { in: ownerIds },
+        createdAt: { lt: targetMonth },
+        OR: [{ stage: { in: OPEN_DEAL_STAGES } }, { closedAt: { gte: targetMonth, lt: targetMonthEnd } }],
+      },
+      _sum: { value: true },
+    }),
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, createdAt: { gte: targetMonth, lt: targetMonthEnd } },
+      _sum: { value: true },
+    }),
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, stage: "LOST", closedAt: { gte: targetMonth, lt: targetMonthEnd } },
+      _sum: { value: true },
+    }),
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: targetMonth, lt: targetMonthEnd } },
+      _sum: { value: true },
+    }),
   ]);
+
+  const pipelineStart = pipelineStartAgg._sum.value ?? 0;
+  const pipelineNew = pipelineNewAgg._sum.value ?? 0;
+  const pipelineLost = pipelineLostAgg._sum.value ?? 0;
+  const pipelineWon = pipelineWonAgg._sum.value ?? 0;
+  const pipelineEnd = pipelineStart + pipelineNew - pipelineLost - pipelineWon;
+  const waterfallSteps: WaterfallStep[] = [
+    { name: "Start of month", delta: 0, display: pipelineStart, kind: "total" },
+    { name: "New deals", delta: pipelineNew, display: pipelineNew, kind: "new" },
+    { name: "Lost", delta: -pipelineLost, display: -pipelineLost, kind: "lost" },
+    { name: "Won", delta: -pipelineWon, display: -pipelineWon, kind: "won" },
+    { name: "End of month", delta: 0, display: pipelineEnd, kind: "total" },
+  ];
 
   const targetRepIds = targetReps.map((r) => r.id);
   const [targets, wonForTargets] = await Promise.all([
@@ -322,9 +366,16 @@ export default async function DashboardPage() {
             ) : totalTarget === 0 && totalActualForTarget === 0 ? (
               <EmptyState title="No targets set for this month" description="Set targets from the Targets page." />
             ) : (
-              <div className="space-y-4">
-                <TargetProgressRow label="Whole team" target={totalTarget} actual={totalActualForTarget} emphasized />
-                <div className="space-y-3 pt-3 border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center justify-center sm:border-r sm:border-slate-100 sm:pr-4">
+                  <GaugeChart
+                    value={totalActualForTarget}
+                    target={totalTarget}
+                    valueLabel={formatCompactCurrency(totalActualForTarget)}
+                    targetLabel={formatCompactCurrency(totalTarget)}
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-3">
                   {targetRows.map((r) => (
                     <TargetProgressRow key={r.id} label={r.name} target={r.target} actual={r.actual} />
                   ))}
@@ -334,8 +385,21 @@ export default async function DashboardPage() {
           ) : myTarget === 0 && myActualForTarget === 0 ? (
             <EmptyState title="No target set for this month" description="Ask your Head of Sales to set one." />
           ) : (
-            <TargetProgressRow label="This month" target={myTarget} actual={myActualForTarget} emphasized />
+            <div className="flex items-center justify-center">
+              <GaugeChart
+                value={myActualForTarget}
+                target={myTarget}
+                valueLabel={formatCompactCurrency(myActualForTarget)}
+                targetLabel={formatCompactCurrency(myTarget)}
+              />
+            </div>
           )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Pipeline movement, this month</h2>
+          <p className="text-xs text-slate-400 mb-3">How the open pipeline got from where it started to where it stands now.</p>
+          <PipelineWaterfallChart steps={waterfallSteps} />
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
