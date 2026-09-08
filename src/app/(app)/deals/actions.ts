@@ -285,6 +285,9 @@ export async function updateDealStage(
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
   if (stage === "WON") {
+    if (!existing.accountId) {
+      throw new Error("Link this deal to an account before marking it Won.");
+    }
     const referencePrices = await getLatestPriceByProduct();
     const discount = computeDealDiscount(existing.items, referencePrices, existing.discountApprovedAt);
     if (discount?.needsApproval) {

@@ -42,6 +42,10 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     }
 
     if (stage === "WON") {
+      if (!deal.account) {
+        alert("Link this deal to an account before marking it Won.");
+        return;
+      }
       setPendingWonDealId(dealId);
       return;
     }

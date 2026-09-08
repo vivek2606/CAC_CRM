@@ -9,7 +9,10 @@ import { Prisma, type AccountType } from "@prisma/client";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  code: z.string().optional(),
+  // The identity key the Sales Register import and the ERP system both key
+  // customers on - always required, not just at creation, so an account
+  // can never drift out of sync with the ERP by having it blanked out later.
+  code: z.string().min(1, "Customer code is required"),
   industry: z.string().optional(),
   accountType: z.string().optional(),
   website: z.string().optional(),

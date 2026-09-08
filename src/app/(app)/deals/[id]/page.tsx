@@ -57,8 +57,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   }));
 
   const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);
-  const stageActionsBlockReason =
-    discount?.needsApproval
+  const stageActionsBlockReason = !deal.accountId
+    ? "Link this deal to an account before marking it Won."
+    : discount?.needsApproval
       ? `Discounted ${discount.discountPct.toFixed(1)}% below list - needs Head approval before this can be marked Won.`
       : null;
 

@@ -44,15 +44,16 @@ export function AccountForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer code</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer code *</label>
           <input
             name="code"
+            required
             placeholder="e.g. CUST-00123"
             defaultValue={defaultValues?.code ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Usually filled in automatically from the Sales Register import - set it here if this account was created manually.
+            Usually filled in automatically from the Sales Register import - required so every account stays linked to the ERP system.
           </p>
         </div>
         <div>
