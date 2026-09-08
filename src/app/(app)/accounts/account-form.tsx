@@ -1,6 +1,7 @@
 "use client";
 
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
+import { CompanyNameField, type AccountNameOption } from "./company-name-field";
 import type { AccountType } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -9,12 +10,16 @@ export function AccountForm({
   action,
   isHead,
   owners,
+  accounts,
+  excludeId,
   defaultValues,
   submitLabel,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
   owners: Option[];
+  accounts: AccountNameOption[];
+  excludeId?: string;
   defaultValues?: {
     name?: string;
     code?: string | null;
@@ -36,12 +41,7 @@ export function AccountForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Company name *</label>
-          <input
-            name="name"
-            required
-            defaultValue={defaultValues?.name}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+          <CompanyNameField accounts={accounts} defaultValue={defaultValues?.name} excludeId={excludeId} />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Customer code *</label>

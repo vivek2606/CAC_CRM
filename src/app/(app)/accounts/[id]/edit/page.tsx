@@ -17,6 +17,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
     user.role === "HEAD"
       ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : [];
+  const accounts = await prisma.account.findMany({ select: { id: true, name: true, code: true } });
 
   const action = updateAccount.bind(null, account.id);
 
@@ -29,6 +30,8 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
             action={action}
             isHead={user.role === "HEAD"}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
+            accounts={accounts}
+            excludeId={account.id}
             defaultValues={{
               name: account.name,
               code: account.code,
