@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { deletePricelistEntry } from "./actions";
 import { Trash2, Pencil } from "lucide-react";
 
@@ -99,8 +99,6 @@ export default async function PricelistPage({
                   <th className="px-4 py-3 font-medium">Model</th>
                   <th className="px-4 py-3 font-medium">Month</th>
                   <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
-                  <th className="px-4 py-3 font-medium">Landed Price</th>
-                  <th className="px-4 py-3 font-medium">Exchange Rate</th>
                   {user.role === "HEAD" && <th className="px-4 py-3 font-medium" />}
                 </tr>
               </thead>
@@ -116,10 +114,6 @@ export default async function PricelistPage({
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">₦{formatNumber(entry.exchangeRate)} / $1</td>
                       {user.role === "HEAD" && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-end">
