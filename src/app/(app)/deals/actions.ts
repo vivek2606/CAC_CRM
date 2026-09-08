@@ -216,22 +216,34 @@ export async function updateDeal(dealId: string, formData: FormData) {
   const parsed = dealSchema.parse(raw);
   const ownerId = user.role === "HEAD" ? parsed.ownerId : existing.ownerId;
 
+  // A Won/Lost deal can only change stage through the dedicated Mark
+  // Won/Lost flow on the Kanban board or the deal's own page - there's no
+  // "reopen" action. The Edit Deal form's Stage dropdown only ever lists
+  // the open pipeline stages, so it has no valid way to represent WON/LOST
+  // and will submit whatever it defaulted to. Ignoring the submitted stage
+  // (and closedAt/lost-reason) here for an already-closed deal is what
+  // stops that from silently reverting it to an open stage - and un-Winning
+  // it - just because someone edited an unrelated field like the phone
+  // number.
+  const isClosed = existing.stage === "WON" || existing.stage === "LOST";
+  const stage = isClosed ? existing.stage : parsed.stage;
+
   await prisma.deal.update({
     where: { id: dealId },
     data: {
       title: parsed.title,
       customerName: parsed.customerName,
       customerPhone: parsed.customerPhone,
-      stage: parsed.stage,
+      stage,
       value: parsed.value,
-      probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[parsed.stage],
+      probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[stage],
       expectedCloseDate: parsed.expectedCloseDate ? new Date(parsed.expectedCloseDate) : null,
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,
-      closedAt: parsed.stage === "WON" || parsed.stage === "LOST" ? (existing.closedAt ?? new Date()) : null,
-      lostReasonCategory: parsed.stage === "LOST" ? existing.lostReasonCategory : null,
-      lostReason: parsed.stage === "LOST" ? existing.lostReason : null,
+      closedAt: isClosed ? existing.closedAt : null,
+      lostReasonCategory: isClosed ? existing.lostReasonCategory : null,
+      lostReason: isClosed ? existing.lostReason : null,
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),

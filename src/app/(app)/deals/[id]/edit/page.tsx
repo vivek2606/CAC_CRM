@@ -46,7 +46,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               title: deal.title,
               customerName: deal.customerName,
               customerPhone: deal.customerPhone,
-              stage: deal.stage === "WON" || deal.stage === "LOST" ? "QUALIFICATION" : deal.stage,
+              stage: deal.stage,
               value: deal.value,
               probability: deal.probability,
               expectedCloseDate: deal.expectedCloseDate
