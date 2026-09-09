@@ -11,7 +11,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const user = await requireUser();
 
-  const [product, pricelistEntries, salesAgg, soldMonths] = await Promise.all([
+  const [product, pricelistEntries, salesAgg, soldMonths, lastSale] = await Promise.all([
     prisma.product.findUnique({ where: { id } }),
     // Only entries from the Stock & Price List workflow (the current
     // going-forward price) - landedCost is set only for those, never for
@@ -31,6 +31,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       where: { productId: id },
       distinct: ["month"],
       select: { month: true },
+    }),
+    prisma.saleLineItem.findFirst({
+      where: { productId: id },
+      orderBy: { docDate: "desc" },
+      select: { docDate: true },
     }),
   ]);
 
@@ -77,7 +82,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Sales performance</h2>
-            <dl className="grid grid-cols-3 gap-4 text-sm">
+            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <dt className="text-xs text-slate-500">Units sold so far</dt>
                 <dd className="text-lg font-semibold text-slate-800 mt-0.5">{formatNumber(unitsSold)}</dd>
@@ -94,6 +99,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   {avgRate != null ? formatCurrency(avgRate) : "—"}
                 </dd>
               </div>
+              <div>
+                <dt className="text-xs text-slate-500">Last sold</dt>
+                <dd className="text-lg font-semibold text-slate-800 mt-0.5">
+                  {lastSale ? formatDate(lastSale.docDate) : "—"}
+                </dd>
+              </div>
             </dl>
             <p className="mt-3 text-xs text-slate-400">
               Based on {activeMonths} month{activeMonths === 1 ? "" : "s"} with a recorded sale, across historical
@@ -102,7 +113,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-slate-900">Current pricing</h2>
               {user.role === "HEAD" && (
                 <Link
@@ -113,6 +124,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 </Link>
               )}
             </div>
+            <p className="text-xs text-amber-600 mb-3">Dealer&apos;s Price excludes VAT @ 7.5%.</p>
             {pricelistEntries.length === 0 ? (
               <EmptyState
                 title="No current price yet"
