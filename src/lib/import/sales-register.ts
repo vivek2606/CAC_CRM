@@ -228,16 +228,29 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   // month, value) that gets lost once summed into Deal.value. A row whose
   // transaction didn't become a Deal still gets a line item here, just with
   // no dealId - see the sales-register import action.
-  const lineItems: TransformedLineItem[] = kept.map((row, idx) => ({
-    sourceKey: `${row.txnNo}-${row.itemCode}-${idx}`,
-    itemCode: row.itemCode,
-    txnNo: row.txnNo,
-    docDate: row.docDate,
-    month: firstOfMonth(row.docDate),
-    qty: row.qty,
-    value: row.netAmt,
-    ownerKey: normalizeSalesmanName(row.salesman),
-  }));
+  //
+  // sourceKey identifies "the Nth row for this Txn No + Item Code" rather
+  // than a row's raw position in the whole file - a position-based key
+  // shifts for every row once ANY earlier row in the file is filtered
+  // differently (e.g. this fix itself, which stopped filtering out returns),
+  // so re-uploading the same file could silently create duplicate line
+  // items instead of being recognized as already-imported.
+  const pairOccurrence = new Map<string, number>();
+  const lineItems: TransformedLineItem[] = kept.map((row) => {
+    const pairKey = `${row.txnNo}::${row.itemCode}`;
+    const occurrence = pairOccurrence.get(pairKey) ?? 0;
+    pairOccurrence.set(pairKey, occurrence + 1);
+    return {
+      sourceKey: `${row.txnNo}-${row.itemCode}-${occurrence}`,
+      itemCode: row.itemCode,
+      txnNo: row.txnNo,
+      docDate: row.docDate,
+      month: firstOfMonth(row.docDate),
+      qty: row.qty,
+      value: row.netAmt,
+      ownerKey: normalizeSalesmanName(row.salesman),
+    };
+  });
 
   // Exchange rate: the sheet's rate is normally constant across a month's
   // rows, so average whatever's there per month (rows with no rate recorded
