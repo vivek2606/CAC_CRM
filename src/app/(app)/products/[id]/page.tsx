@@ -73,7 +73,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <th className="py-2 font-medium">Month</th>
                     <th className="py-2 font-medium">Dealer&apos;s Price</th>
                     <th className="py-2 font-medium">Landed Price</th>
-                    <th className="py-2 font-medium">Landed Cost</th>
+                    {user.role === "HEAD" && <th className="py-2 font-medium">Landed Cost</th>}
                     <th className="py-2 font-medium">Exchange Rate</th>
                   </tr>
                 </thead>
@@ -87,9 +87,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                       <td className="py-2.5 text-slate-700">
                         {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
                       </td>
-                      <td className="py-2.5 text-slate-500">
-                        {entry.landedCost != null ? `${formatCurrency(entry.landedCost)} (excl. VAT)` : "—"}
-                      </td>
+                      {user.role === "HEAD" && (
+                        <td className="py-2.5 text-slate-500">
+                          {entry.landedCost != null ? `${formatCurrency(entry.landedCost)} (excl. VAT)` : "—"}
+                        </td>
+                      )}
                       <td className="py-2.5 text-slate-500">
                         {entry.exchangeRate != null ? `₦${formatNumber(entry.exchangeRate)} / $1` : "—"}
                       </td>
