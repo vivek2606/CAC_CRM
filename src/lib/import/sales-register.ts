@@ -70,7 +70,7 @@ export type TransformResult = {
   summary: {
     totalRowsIn: number;
     excludedServiceRows: number;
-    excludedReturnRows: number;
+    creditNoteRowsNetted: number;
     keptRows: number;
   };
 };
@@ -103,9 +103,13 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   const totalRowsIn = rows.length;
 
   const excludedService = rows.filter((r) => r.category === "Project & Service");
-  const remaining = rows.filter((r) => r.category !== "Project & Service");
-  const excludedReturns = remaining.filter((r) => !(r.netAmt > 0));
-  const kept = remaining.filter((r) => r.netAmt > 0);
+  // Return/credit-note rows (negative Qty and Net Amt) are kept, not dropped
+  // - excluding them entirely used to leave a product's total quantity/value
+  // sold overstated by whatever was later returned. They're netted into
+  // quantities, values, and pricing below; only Deal creation (further down)
+  // still requires a transaction's rows to net to a positive value.
+  const kept = rows.filter((r) => r.category !== "Project & Service");
+  const creditNoteRows = kept.filter((r) => r.netAmt < 0);
 
   // Sort ascending by date so "last write wins" == "most recent" for dedup maps.
   const sorted = [...kept].sort((a, b) => a.docDate.getTime() - b.docDate.getTime());
@@ -175,6 +179,11 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   const deals: TransformedDeal[] = [];
   for (const [txnNo, group] of dealGroups) {
     const value = group.reduce((sum, r) => sum + r.netAmt, 0);
+    // A transaction that's a pure return/credit note, or a partial return
+    // that wipes out its own order's value, doesn't become a Won deal - but
+    // its rows still feed the line items below either way, so the product
+    // quantities/values they affected are still netted correctly.
+    if (!(value > 0)) continue;
     const first = group[0];
     deals.push({
       txnNo,
@@ -203,14 +212,22 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
       });
     }
   }
-  const pricelistEntries: TransformedPricelistEntry[] = Array.from(priceGroups.values()).map((g) => ({
-    itemCode: g.itemCode,
-    month: g.month,
-    dealerPrice: g.totalQty > 0 ? g.totalAmt / g.totalQty : 0,
-  }));
+  // Skip a product/month whose returns outweigh its sales entirely - there's
+  // no meaningful positive-quantity price to report, and writing a ₦0 entry
+  // would wrongly look like "the latest price" elsewhere in the app.
+  const pricelistEntries: TransformedPricelistEntry[] = Array.from(priceGroups.values())
+    .filter((g) => g.totalQty > 0)
+    .map((g) => ({
+      itemCode: g.itemCode,
+      month: g.month,
+      dealerPrice: g.totalAmt / g.totalQty,
+    }));
 
-  // Line items: one per kept row, preserving product-level detail (category,
-  // month, value) that gets lost once summed into Deal.value.
+  // Line items: one per kept row (including returns/credit notes, with their
+  // true negative qty/value), preserving product-level detail (category,
+  // month, value) that gets lost once summed into Deal.value. A row whose
+  // transaction didn't become a Deal still gets a line item here, just with
+  // no dealId - see the sales-register import action.
   const lineItems: TransformedLineItem[] = kept.map((row, idx) => ({
     sourceKey: `${row.txnNo}-${row.itemCode}-${idx}`,
     itemCode: row.itemCode,
@@ -254,7 +271,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     summary: {
       totalRowsIn,
       excludedServiceRows: excludedService.length,
-      excludedReturnRows: excludedReturns.length,
+      creditNoteRowsNetted: creditNoteRows.length,
       keptRows: kept.length,
     },
   };

@@ -78,8 +78,9 @@ export function ImportForm() {
               </div>
             </dl>
             <p className="text-xs text-slate-400 mt-4">
-              Excluded {state.summary.excludedServiceRows} installation/service billing rows and{" "}
-              {state.summary.excludedReturnRows} return/credit-note rows.
+              Excluded {state.summary.excludedServiceRows} installation/service billing rows. Netted{" "}
+              {state.summary.creditNoteRowsNetted} return/credit-note rows into quantities, values, and pricing
+              instead of dropping them.
               {state.summary.skippedFileRows > 0 && ` Skipped ${state.summary.skippedFileRows} blank rows in the file.`}
             </p>
             {state.summary.demoAccountsRemoved.length > 0 && (

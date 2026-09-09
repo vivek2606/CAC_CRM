@@ -30,7 +30,12 @@ export default async function ImportPage() {
               if it varies row to row) — this is now the only place exchange rate comes from for months covered
               by a Sales Register file.
             </li>
-            <li>Installation/service billing lines and return/credit-note lines are excluded automatically.</li>
+            <li>Installation/service billing lines are excluded automatically.</li>
+            <li>
+              Return/credit-note lines (negative Qty and Net Amt) are netted into the affected product&apos;s
+              quantity, value, and price, rather than dropped - a transaction whose rows net to zero or below
+              just doesn&apos;t become a Won deal on its own.
+            </li>
             <li>
               Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a
               newer extract updates each customer&apos;s code to the most recent one in the file.

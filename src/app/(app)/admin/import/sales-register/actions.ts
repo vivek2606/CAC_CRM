@@ -33,7 +33,7 @@ export type ImportSummary = {
   lineItemsCreated: number;
   exchangeRatesSet: number;
   excludedServiceRows: number;
-  excludedReturnRows: number;
+  creditNoteRowsNetted: number;
   demoAccountsRemoved: string[];
   totalDealValue: number;
   skippedFileRows: number;
@@ -257,7 +257,7 @@ export async function importSalesRegister(
       lineItemsCreated: lineItemsResult.count,
       exchangeRatesSet,
       excludedServiceRows: result.summary.excludedServiceRows,
-      excludedReturnRows: result.summary.excludedReturnRows,
+      creditNoteRowsNetted: result.summary.creditNoteRowsNetted,
       demoAccountsRemoved,
       totalDealValue,
       skippedFileRows,
