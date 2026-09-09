@@ -32,7 +32,6 @@ export default async function EditPricelistEntryPage({ params }: { params: Promi
               month: monthValue,
               dealerPrice: entry.dealerPrice,
               landedPrice: entry.landedPrice,
-              exchangeRate: entry.exchangeRate ?? undefined,
             }}
             submitLabel="Save Changes"
           />

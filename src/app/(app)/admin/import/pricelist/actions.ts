@@ -81,18 +81,21 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
 
   // Prices - upsert by (product, month), same idempotent shape as every
   // other price source. dealerPrice/landedCost come straight from the sheet
-  // in Naira (both excl. VAT) - no exchange rate involved. landedCost is
-  // recorded for reference only, under its own field: it must NOT land in
-  // landedPrice, which getLatestPriceByProduct() treats as the quote-facing
-  // reference price - that has to stay Dealer's Price, not internal cost.
+  // in Naira (both excl. VAT) - no exchange rate involved anywhere in this
+  // flow. landedCost is recorded for reference only, under its own field:
+  // it must NOT land in landedPrice, which getLatestPriceByProduct() treats
+  // as the quote-facing reference price - that has to stay Dealer's Price,
+  // not internal cost. landedCost being set is also how the product detail
+  // page recognizes "this entry came from this upload" for its current-
+  // pricing view - no other price source ever sets it.
   let priceEntriesSet = 0;
   for (const entry of result.priceEntries) {
     const productId = productIdByCode.get(entry.productCode);
     if (!productId) continue;
     await prisma.pricelist.upsert({
       where: { productId_month: { productId, month: entry.month } },
-      create: { productId, month: entry.month, dealerPrice: entry.dealerPrice, landedCost: entry.landedCost, exchangeRate: null },
-      update: { dealerPrice: entry.dealerPrice, landedCost: entry.landedCost, exchangeRate: null },
+      create: { productId, month: entry.month, dealerPrice: entry.dealerPrice, landedCost: entry.landedCost },
+      update: { dealerPrice: entry.dealerPrice, landedCost: entry.landedCost },
     });
     priceEntriesSet++;
   }

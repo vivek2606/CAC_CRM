@@ -450,11 +450,6 @@ model Pricelist {
   // goods cost to land, not what to charge, so it must never surface as
   // the suggested/reference selling price a rep quotes from.
   landedCost    Float?
-  // Only set for entries priced via the Price Master upload (which converts
-  // a USD dealer price using the month's rate) or entered manually - the
-  // Stock & Price List upload supplies dealerPrice directly in Naira with
-  // no rate involved, so this is null for those rows.
-  exchangeRate  Float?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

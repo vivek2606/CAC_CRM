@@ -13,6 +13,7 @@ import {
   Package,
   Upload,
   Users,
+  DollarSign,
   TrendingUp,
   PieChart,
   X,
@@ -114,6 +115,18 @@ export function Sidebar({
             >
               <Upload className="h-4 w-4" />
               Import Data
+            </Link>
+            <Link
+              href="/admin/exchange-rate"
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                pathname.startsWith("/admin/exchange-rate")
+                  ? "bg-indigo-50 text-indigo-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <DollarSign className="h-4 w-4" />
+              Exchange Rate
             </Link>
             <Link
               href="/admin/team"

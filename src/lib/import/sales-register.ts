@@ -46,7 +46,6 @@ export type TransformedPricelistEntry = {
   itemCode: string;
   month: Date;
   dealerPrice: number;
-  exchangeRate: number;
 };
 export type TransformedLineItem = {
   sourceKey: string;
@@ -186,7 +185,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   }
 
   // Pricelist: one entry per product per month, qty-weighted average dealer price.
-  const priceGroups = new Map<string, { itemCode: string; month: Date; totalAmt: number; totalQty: number; exchangeRate: number }>();
+  const priceGroups = new Map<string, { itemCode: string; month: Date; totalAmt: number; totalQty: number }>();
   for (const row of kept) {
     const key = `${row.itemCode}::${monthKey(row.docDate)}`;
     const existing = priceGroups.get(key);
@@ -199,7 +198,6 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
         month: firstOfMonth(row.docDate),
         totalAmt: row.netAmt,
         totalQty: row.qty,
-        exchangeRate: row.exchangeRate,
       });
     }
   }
@@ -207,7 +205,6 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     itemCode: g.itemCode,
     month: g.month,
     dealerPrice: g.totalQty > 0 ? g.totalAmt / g.totalQty : 0,
-    exchangeRate: g.exchangeRate,
   }));
 
   // Line items: one per kept row, preserving product-level detail (category,

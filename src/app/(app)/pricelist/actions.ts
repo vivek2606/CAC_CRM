@@ -11,7 +11,6 @@ const pricelistSchema = z.object({
   month: z.string().min(1, "Month is required"),
   dealerPrice: z.coerce.number().min(0),
   landedPrice: z.coerce.number().min(0).nullable(),
-  exchangeRate: z.coerce.number().min(0),
 });
 
 function parseMonth(value: string): Date {
@@ -34,7 +33,6 @@ export async function createPricelistEntry(formData: FormData) {
       month: parseMonth(parsed.month),
       dealerPrice: parsed.dealerPrice,
       landedPrice: parsed.landedPrice,
-      exchangeRate: parsed.exchangeRate,
     },
   });
 
@@ -54,7 +52,6 @@ export async function updatePricelistEntry(entryId: string, formData: FormData) 
       month: parseMonth(parsed.month),
       dealerPrice: parsed.dealerPrice,
       landedPrice: parsed.landedPrice,
-      exchangeRate: parsed.exchangeRate,
     },
   });
 

@@ -111,8 +111,8 @@ export async function importPriceMaster(_prevState: ImportState | undefined, for
     const landedPrice = entry.dealerPrice * rate.rate;
     await prisma.pricelist.upsert({
       where: { productId_month: { productId, month } },
-      create: { productId, month, dealerPrice: entry.dealerPrice, exchangeRate: rate.rate, landedPrice },
-      update: { dealerPrice: entry.dealerPrice, exchangeRate: rate.rate, landedPrice },
+      create: { productId, month, dealerPrice: entry.dealerPrice, landedPrice },
+      update: { dealerPrice: entry.dealerPrice, landedPrice },
     });
     priceEntriesSet++;
   }

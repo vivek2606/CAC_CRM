@@ -226,7 +226,6 @@ export async function importSalesRegister(
       productId: productIdByCode.get(p.itemCode)!,
       month: p.month,
       dealerPrice: p.dealerPrice,
-      exchangeRate: p.exchangeRate,
     }));
   const pricelistResult = await prisma.pricelist.createMany({ data: pricelistCreateData, skipDuplicates: true });
 
