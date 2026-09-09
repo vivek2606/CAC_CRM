@@ -181,7 +181,7 @@ export const EQUIPMENT_TYPES: EquipmentType[] = [
 export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
   VRF: "VRF",
   ATOM: "Atom Mini VRF",
-  FLOOR_STANDING: "Floor Standing",
+  FLOOR_STANDING: "Floorstanding",
   ROOFTOP: "Rooftop",
   LARGE_DUCT: "Large Duct",
   MIXED_PRODUCT: "Mixed Product",

@@ -9,11 +9,12 @@
 // Same reasoning for "Floorstanding" vs "Floor Standing" - just a spacing
 // difference across source files, but Product.category is matched as an
 // exact string everywhere (capacity lookup, Sales by Category, Targets), so
-// left alone it silently splits one category into two.
+// left alone it silently splits one category into two. Canonical spelling
+// is "Floorstanding" (no space), per the Head of Sales.
 export function normalizeCategory(category: string): string {
   const trimmed = category.trim();
   const lower = trimmed.toLowerCase();
   if (lower === "atom" || lower === "atom mini vrf") return "Atom Mini VRF";
-  if (lower === "floorstanding" || lower === "floor standing") return "Floor Standing";
+  if (lower === "floorstanding" || lower === "floor standing") return "Floorstanding";
   return trimmed;
 }

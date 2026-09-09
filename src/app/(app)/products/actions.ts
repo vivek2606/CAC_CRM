@@ -53,14 +53,14 @@ export type RecomputeCapacityState = { summary?: { updated: number; unchanged: n
 
 // Recomputes Capacity (kW) from each product's model number, for the
 // categories whose model numbers encode capacity (Atom Mini VRF, VRF,
-// Rooftop, Floor Standing). Products outside those categories, or whose
+// Rooftop, Floorstanding). Products outside those categories, or whose
 // model doesn't contain a recognizable capacity code (e.g. spare parts,
 // controllers), are left untouched.
 export async function recomputeCapacities(): Promise<RecomputeCapacityState> {
   await requireHead();
 
   const products = await prisma.product.findMany({
-    where: { category: { in: ["Atom Mini VRF", "VRF", "Rooftop", "Floor Standing"] } },
+    where: { category: { in: ["Atom Mini VRF", "VRF", "Rooftop", "Floorstanding"] } },
     select: { id: true, category: true, model: true, capacityKw: true },
   });
 

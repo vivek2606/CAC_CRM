@@ -1,13 +1,13 @@
 // Manufacturer model numbers encode nominal capacity directly as digits,
 // per product category (per the Head of Sales):
-//   - Atom Mini VRF / Floor Standing: digits are kBTU/hr
+//   - Atom Mini VRF / Floorstanding: digits are kBTU/hr
 //   - VRF: digits are kW x 10
 //   - Rooftop: digits are TR x 10
 // 1 TR = 3.5 kW (company convention); kBTU/hr -> kW is derived from the same
 // convention (1 TR = 12 kBTU/hr), so the two stay internally consistent.
 const KBTU_PER_KW = 12 / 3.5;
 
-const CAPACITY_CATEGORIES = ["Atom Mini VRF", "VRF", "Rooftop", "Floor Standing"] as const;
+const CAPACITY_CATEGORIES = ["Atom Mini VRF", "VRF", "Rooftop", "Floorstanding"] as const;
 export type CapacityCategory = (typeof CAPACITY_CATEGORIES)[number];
 
 export function isCapacityCategory(category: string): category is CapacityCategory {
@@ -73,7 +73,7 @@ export function computeCapacityKw(category: string, model: string): number | nul
 
   switch (category as CapacityCategory) {
     case "Atom Mini VRF":
-    case "Floor Standing":
+    case "Floorstanding":
       return Math.round((digits / KBTU_PER_KW) * 100) / 100;
     case "VRF":
       return Math.round((digits / 10) * 100) / 100;
