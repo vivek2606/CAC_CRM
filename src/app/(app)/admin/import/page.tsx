@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Tags } from "lucide-react";
+import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Tags, Boxes } from "lucide-react";
 
 const IMPORTS = [
   {
@@ -27,6 +27,12 @@ const IMPORTS = [
     icon: Tags,
     title: "Price Master",
     description: "Upload the dealer price list for a given month, and set that month's exchange rate.",
+  },
+  {
+    href: "/admin/import/pricelist",
+    icon: Boxes,
+    title: "Stock & Price List",
+    description: "Upload current available stock with quantity, landed cost, and dealer price.",
   },
 ];
 

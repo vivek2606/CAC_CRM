@@ -16,3 +16,31 @@ export async function getLatestPriceByProduct(): Promise<Map<string, number>> {
   }
   return map;
 }
+
+// Each product's approximate current stock: the most recent Stock & Price
+// List snapshot's quantity, minus whatever's been sold (Won) since that
+// snapshot was taken - so a deal won the day of or before the snapshot is
+// already excluded (it was counted, or not, in the snapshot itself), while
+// one won after it draws down the figure shown here. A product with no
+// snapshot at all is left out of the map entirely (stock untracked for it),
+// rather than reading as zero.
+export async function getAvailableStockByProduct(): Promise<Map<string, number>> {
+  const stocks = await prisma.productStock.findMany({
+    select: { productId: true, quantity: true, asOfDate: true },
+  });
+  if (stocks.length === 0) return new Map();
+
+  const cutoff = stocks.reduce((max, s) => (s.asOfDate > max ? s.asOfDate : max), stocks[0].asOfDate);
+  const sold = await prisma.dealLineItem.groupBy({
+    by: ["productId"],
+    where: { deal: { stage: "WON", closedAt: { gt: cutoff } } },
+    _sum: { qty: true },
+  });
+  const soldByProduct = new Map(sold.map((s) => [s.productId, s._sum.qty ?? 0]));
+
+  const map = new Map<string, number>();
+  for (const s of stocks) {
+    map.set(s.productId, Math.max(0, s.quantity - (soldByProduct.get(s.productId) ?? 0)));
+  }
+  return map;
+}

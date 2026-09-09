@@ -433,14 +433,28 @@ model Product {
   pricelistEntries Pricelist[]
   saleLineItems    SaleLineItem[]
   dealLineItems    DealLineItem[]
+  stock            ProductStock?
 }
 
 model Pricelist {
   id            String    @id @default(cuid())
   month         DateTime
   dealerPrice   Float
+  // The Naira selling reference derived from a USD dealer price (Price
+  // Master upload) or entered manually - getLatestPriceByProduct() prefers
+  // this over dealerPrice as the quote-facing "catalog price", since in
+  // that flow dealerPrice is in USD and isn't directly usable as a quote.
   landedPrice   Float?
-  exchangeRate  Float
+  // Internal cost basis from the Stock & Price List upload (excl. VAT) -
+  // deliberately NOT read by getLatestPriceByProduct(): it's what the
+  // goods cost to land, not what to charge, so it must never surface as
+  // the suggested/reference selling price a rep quotes from.
+  landedCost    Float?
+  // Only set for entries priced via the Price Master upload (which converts
+  // a USD dealer price using the month's rate) or entered manually - the
+  // Stock & Price List upload supplies dealerPrice directly in Naira with
+  // no rate involved, so this is null for those rows.
+  exchangeRate  Float?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -448,4 +462,19 @@ model Pricelist {
   product       Product   @relation(fields: [productId], references: [id])
 
   @@unique([productId, month])
+}
+
+// A single current snapshot of on-hand quantity per product, wholesale-
+// replaced by each Stock & Price List upload (so a product missing from the
+// latest upload reads as zero, not stale). "Available" quantity is this
+// snapshot minus whatever's sold (Won) since asOfDate - see
+// getAvailableStockByProduct() in src/lib/pricing.ts.
+model ProductStock {
+  id          String   @id @default(cuid())
+  quantity    Int
+  asOfDate    DateTime
+  updatedAt   DateTime @updatedAt
+
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id])
 }

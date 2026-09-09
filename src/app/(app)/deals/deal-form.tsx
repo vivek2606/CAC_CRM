@@ -17,7 +17,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
-type ProductOption = { id: string; label: string; defaultPrice: number | null };
+type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
 type LineItemRow = { productId: string; qty: string; unitPrice: string };
 
 export function DealForm({
@@ -285,7 +285,9 @@ export function DealForm({
             <label className="block text-sm font-medium text-slate-700 mb-1">Products (model, quantity, rate)</label>
             {items.length > 0 && (
               <div className="mb-2 space-y-2">
-                {items.map((row, index) => (
+                {items.map((row, index) => {
+                  const selectedProduct = products?.find((p) => p.id === row.productId);
+                  return (
                   <div key={index} className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[160px]">
                       <SearchableSelect
@@ -295,6 +297,14 @@ export function DealForm({
                         placeholder="Type to search models..."
                         emptyLabel="unset"
                       />
+                      {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null) && (
+                        <p className="mt-1 text-xs text-amber-600">
+                          {selectedProduct.defaultPrice != null &&
+                            `Tentative price: ${formatCurrency(selectedProduct.defaultPrice)} (excl. 7.5% VAT)`}
+                          {selectedProduct.defaultPrice != null && selectedProduct.availableQty != null && " · "}
+                          {selectedProduct.availableQty != null && `Approx. ${selectedProduct.availableQty} unit(s) available`}
+                        </p>
+                      )}
                     </div>
                     <div className="w-20">
                       <input
@@ -327,7 +337,8 @@ export function DealForm({
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <button

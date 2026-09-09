@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
-import { getLatestPriceByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -46,14 +46,16 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const deleteAction = deleteDeal.bind(null, deal.id);
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
-  const [products, latestPriceByProduct] = await Promise.all([
+  const [products, latestPriceByProduct, availableStockByProduct] = await Promise.all([
     prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
     getLatestPriceByProduct(),
+    getAvailableStockByProduct(),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
     defaultPrice: latestPriceByProduct.get(p.id) ?? null,
+    availableQty: availableStockByProduct.get(p.id) ?? null,
   }));
 
   const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);

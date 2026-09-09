@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { getLatestPriceByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../deal-form";
 import { createDeal } from "../actions";
@@ -9,7 +9,7 @@ export default async function NewDealPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const [owners, accounts, contacts, products, latestPriceByProduct] = await Promise.all([
+  const [owners, accounts, contacts, products, latestPriceByProduct, availableStockByProduct] = await Promise.all([
     user.role === "HEAD"
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
@@ -20,11 +20,13 @@ export default async function NewDealPage() {
     }),
     prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
     getLatestPriceByProduct(),
+    getAvailableStockByProduct(),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
     defaultPrice: latestPriceByProduct.get(p.id) ?? null,
+    availableQty: availableStockByProduct.get(p.id) ?? null,
   }));
 
   return (

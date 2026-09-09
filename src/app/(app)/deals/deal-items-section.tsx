@@ -9,7 +9,7 @@ type DealItem = {
   unitPrice: number;
   product: { code: string; model: string; category: string };
 };
-type ProductOption = { id: string; label: string; defaultPrice: number | null };
+type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
 
 export function DealItemsSection({
   dealId,

@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { addDealLineItem } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
+import { formatCurrency } from "@/lib/format";
 
-type ProductOption = { id: string; label: string; defaultPrice: number | null };
+type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
 
 export function AddLineItemForm({ dealId, products }: { dealId: string; products: ProductOption[] }) {
   const [productId, setProductId] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const action = addDealLineItem.bind(null, dealId);
+  const selectedProduct = products.find((p) => p.id === productId);
 
   function handleProductChange(id: string) {
     setProductId(id);
@@ -39,6 +41,14 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
           onSelect={(opt) => handleProductChange(opt?.id ?? "")}
           placeholder="Type to search models..."
         />
+        {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null) && (
+          <p className="mt-1 text-xs text-amber-600">
+            {selectedProduct.defaultPrice != null &&
+              `Tentative price: ${formatCurrency(selectedProduct.defaultPrice)} (excl. 7.5% VAT)`}
+            {selectedProduct.defaultPrice != null && selectedProduct.availableQty != null && " · "}
+            {selectedProduct.availableQty != null && `Approx. ${selectedProduct.availableQty} unit(s) available`}
+          </p>
+        )}
       </div>
       <div className="w-20">
         <label className="block text-xs font-medium text-slate-500 mb-1">Qty</label>
