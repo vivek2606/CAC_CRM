@@ -25,6 +25,11 @@ export default async function ImportPage() {
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>Upload the Sales Register .xlsx file exactly as exported from Orion ERP.</li>
             <li>This creates customer accounts, the product catalog, historical price entries, and Won deals dated back to when they actually closed.</li>
+            <li>
+              The file&apos;s Exchange Rate column sets that month&apos;s Naira-to-USD rate automatically (averaged
+              if it varies row to row) — this is now the only place exchange rate comes from for months covered
+              by a Sales Register file.
+            </li>
             <li>Installation/service billing lines and return/credit-note lines are excluded automatically.</li>
             <li>
               Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a

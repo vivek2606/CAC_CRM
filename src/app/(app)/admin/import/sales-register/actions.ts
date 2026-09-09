@@ -31,6 +31,7 @@ export type ImportSummary = {
   dealsCreated: number;
   pricelistEntriesCreated: number;
   lineItemsCreated: number;
+  exchangeRatesSet: number;
   excludedServiceRows: number;
   excludedReturnRows: number;
   demoAccountsRemoved: string[];
@@ -229,6 +230,19 @@ export async function importSalesRegister(
     }));
   const pricelistResult = await prisma.pricelist.createMany({ data: pricelistCreateData, skipDuplicates: true });
 
+  // Exchange rate - the sole source now (Price Master's manual entry was
+  // removed). Upsert per month so a re-upload updates it if the file's rate
+  // changed, rather than leaving a stale value behind.
+  let exchangeRatesSet = 0;
+  for (const er of result.exchangeRates) {
+    await prisma.monthlyExchangeRate.upsert({
+      where: { month: er.month },
+      create: { month: er.month, rate: er.rate },
+      update: { rate: er.rate },
+    });
+    exchangeRatesSet++;
+  }
+
   const totalDealValue = result.deals.reduce((sum, d) => sum + d.value, 0);
 
   return {
@@ -241,6 +255,7 @@ export async function importSalesRegister(
       dealsCreated: dealsResult.count,
       pricelistEntriesCreated: pricelistResult.count,
       lineItemsCreated: lineItemsResult.count,
+      exchangeRatesSet,
       excludedServiceRows: result.summary.excludedServiceRows,
       excludedReturnRows: result.summary.excludedReturnRows,
       demoAccountsRemoved,

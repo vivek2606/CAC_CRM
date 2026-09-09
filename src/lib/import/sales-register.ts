@@ -57,6 +57,7 @@ export type TransformedLineItem = {
   value: number;
   ownerKey: string;
 };
+export type TransformedExchangeRate = { month: Date; rate: number };
 
 export type TransformResult = {
   accounts: TransformedAccount[];
@@ -65,6 +66,7 @@ export type TransformResult = {
   deals: TransformedDeal[];
   pricelistEntries: TransformedPricelistEntry[];
   lineItems: TransformedLineItem[];
+  exchangeRates: TransformedExchangeRate[];
   summary: {
     totalRowsIn: number;
     excludedServiceRows: number;
@@ -220,6 +222,27 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     ownerKey: normalizeSalesmanName(row.salesman),
   }));
 
+  // Exchange rate: the sheet's rate is normally constant across a month's
+  // rows, so average whatever's there per month (rows with no rate recorded
+  // read as 0 and are excluded) rather than requiring it be entered by hand
+  // elsewhere.
+  const rateGroups = new Map<string, { month: Date; total: number; count: number }>();
+  for (const row of kept) {
+    if (!(row.exchangeRate > 0)) continue;
+    const key = monthKey(row.docDate);
+    const existing = rateGroups.get(key);
+    if (existing) {
+      existing.total += row.exchangeRate;
+      existing.count += 1;
+    } else {
+      rateGroups.set(key, { month: firstOfMonth(row.docDate), total: row.exchangeRate, count: 1 });
+    }
+  }
+  const exchangeRates: TransformedExchangeRate[] = Array.from(rateGroups.values()).map((g) => ({
+    month: g.month,
+    rate: g.total / g.count,
+  }));
+
   return {
     accounts: Array.from(accountMap.values()),
     products: Array.from(productMap.values()),
@@ -227,6 +250,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     deals,
     pricelistEntries,
     lineItems,
+    exchangeRates,
     summary: {
       totalRowsIn,
       excludedServiceRows: excludedService.length,

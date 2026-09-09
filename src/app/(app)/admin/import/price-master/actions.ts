@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
@@ -11,35 +10,6 @@ function parseMonthInput(raw: string): Date | null {
   const m = raw.match(/^(\d{4})-(\d{1,2})$/);
   if (!m) return null;
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
-}
-
-// --- Exchange rate ---
-
-export type RateState = { error?: string; success?: boolean };
-
-const rateSchema = z.object({
-  month: z.string().min(1),
-  rate: z.coerce.number().positive("Exchange rate must be a positive number"),
-});
-
-export async function setExchangeRate(_prevState: RateState | undefined, formData: FormData): Promise<RateState> {
-  await requireHead();
-
-  const parsed = rateSchema.safeParse(Object.fromEntries(formData.entries()));
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
-  }
-  const month = parseMonthInput(parsed.data.month);
-  if (!month) return { error: "Please choose a valid month." };
-
-  await prisma.monthlyExchangeRate.upsert({
-    where: { month },
-    create: { month, rate: parsed.data.rate },
-    update: { rate: parsed.data.rate },
-  });
-
-  revalidatePath("/admin/import/price-master");
-  return { success: true };
 }
 
 // --- Price master upload ---
@@ -65,7 +35,10 @@ export async function importPriceMaster(_prevState: ImportState | undefined, for
 
   const rate = await prisma.monthlyExchangeRate.findUnique({ where: { month } });
   if (!rate) {
-    return { error: "Set the exchange rate for this month first, using the form above, then upload again." };
+    return {
+      error:
+        "No exchange rate is set for this month yet. It's picked up automatically from a Sales Register upload, or set manually on the Exchange Rate page - do that first, then upload again.",
+    };
   }
 
   const file = formData.get("file");
