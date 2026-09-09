@@ -29,7 +29,6 @@ export type ImportSummary = {
   activeUsers: { name: string; email: string; tempPassword: string }[];
   inactiveUsersCreated: number;
   dealsCreated: number;
-  pricelistEntriesCreated: number;
   lineItemsCreated: number;
   exchangeRatesSet: number;
   excludedServiceRows: number;
@@ -220,15 +219,9 @@ export async function importSalesRegister(
     }));
   const lineItemsResult = await prisma.saleLineItem.createMany({ data: lineItemCreateData, skipDuplicates: true });
 
-  // Pricelist
-  const pricelistCreateData = result.pricelistEntries
-    .filter((p) => productIdByCode.has(p.itemCode))
-    .map((p) => ({
-      productId: productIdByCode.get(p.itemCode)!,
-      month: p.month,
-      dealerPrice: p.dealerPrice,
-    }));
-  const pricelistResult = await prisma.pricelist.createMany({ data: pricelistCreateData, skipDuplicates: true });
+  // Deliberately no Pricelist writes here - dealer pricing only ever comes
+  // from a Stock & Price List upload or a manually-added price entry, never
+  // from historical sales figures.
 
   // Exchange rate - the sole source now (Price Master's manual entry was
   // removed). Upsert per month so a re-upload updates it if the file's rate
@@ -253,7 +246,6 @@ export async function importSalesRegister(
       activeUsers: activeCredentials,
       inactiveUsersCreated: result.users.filter((u) => !u.isActive).length,
       dealsCreated: dealsResult.count,
-      pricelistEntriesCreated: pricelistResult.count,
       lineItemsCreated: lineItemsResult.count,
       exchangeRatesSet,
       excludedServiceRows: result.summary.excludedServiceRows,

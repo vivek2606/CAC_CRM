@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -19,6 +19,7 @@ import { ActivitiesSection } from "../../activities-section";
 import { deleteDeal, viewQuote, approveDealDiscount } from "../actions";
 import { StageActions } from "../stage-actions";
 import { DealItemsSection } from "../deal-items-section";
+import { SaleLineItemsTable } from "../sale-line-items-table";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,6 +36,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, avatarColor: true } } } },
       sourceLead: { select: { id: true, title: true } },
       items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
+      lineItems: { orderBy: { docDate: "asc" }, include: { product: { select: { code: true, model: true } } } },
       discountApprovedBy: { select: { name: true } },
     },
   });
@@ -47,7 +49,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
   const [products, latestPriceByProduct, availableStockByProduct] = await Promise.all([
-    prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
+    getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
   ]);
@@ -108,10 +110,22 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-1">Products</h2>
-            <p className="text-xs text-slate-400 mb-3">
-              What&apos;s being quoted on this deal. Feeds Sales by Category once it&apos;s won.
-            </p>
-            <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
+            {deal.sourceTxnNo != null ? (
+              <>
+                <p className="text-xs text-slate-400 mb-3">
+                  Imported from the Sales Register (Invoice #{deal.sourceTxnNo}) - a historical record, not
+                  editable here.
+                </p>
+                <SaleLineItemsTable items={deal.lineItems} />
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400 mb-3">
+                  What&apos;s being quoted on this deal. Feeds Sales by Category once it&apos;s won.
+                </p>
+                <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
+              </>
+            )}
           </Card>
 
           {discount && discount.discountPct > 0.5 && (

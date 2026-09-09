@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../deal-form";
 import { createDeal } from "../actions";
@@ -18,7 +18,7 @@ export default async function NewDealPage() {
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true, accountId: true },
     }),
-    prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
+    getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
   ]);

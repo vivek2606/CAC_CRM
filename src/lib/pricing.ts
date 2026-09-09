@@ -45,6 +45,22 @@ export async function getAvailableStockByProduct(): Promise<Map<string, number>>
   return map;
 }
 
+// Products a rep can actually search for and quote - ones with a current
+// dealer price on file (from a Stock & Price List upload or a manually-added
+// price). Excludes a product known only from historical sales-register data,
+// which was never priced and has no code/model info a rep should be quoting
+// from. Used by every rep-facing product search (Products page lookup, deal
+// line-item picker) - the Head's own price-entry forms intentionally skip
+// this filter, since pricing a not-yet-priced product is exactly what those
+// are for.
+export async function getQuotableProducts(): Promise<{ id: string; code: string; model: string }[]> {
+  return prisma.product.findMany({
+    where: { pricelistEntries: { some: {} } },
+    orderBy: { model: "asc" },
+    select: { id: true, code: true, model: true },
+  });
+}
+
 // The standalone model -> tentative price lookup (TentativePrice). This has
 // no relation to Product/Pricelist at all - it's keyed purely on the model
 // name text typed into the upload sheet, for models that may not exist in

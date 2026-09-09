@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getAllTentativePrices } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getAllTentativePrices, getQuotableProducts } from "@/lib/pricing";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { formatCurrency } from "@/lib/format";
@@ -36,7 +36,7 @@ export default async function ProductsPage({
         include: { product: { select: { id: true, code: true, model: true, category: true, capacityKw: true } } },
       }),
       prisma.pricelist.count({ where }),
-      prisma.product.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, model: true } }),
+      getQuotableProducts(),
       prisma.product.findMany({
         distinct: ["category"],
         select: { category: true },

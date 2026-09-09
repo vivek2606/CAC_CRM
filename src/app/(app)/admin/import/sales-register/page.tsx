@@ -24,7 +24,16 @@ export default async function ImportPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>Upload the Sales Register .xlsx file exactly as exported from Orion ERP.</li>
-            <li>This creates customer accounts, the product catalog, historical price entries, and Won deals dated back to when they actually closed.</li>
+            <li>
+              This creates customer accounts, the product catalog, and Won deals dated back to when they actually
+              closed, each broken down into its product-level line items (item code, category, quantity, rate,
+              value) - visible on the deal&apos;s own page.
+            </li>
+            <li>
+              This never sets a product&apos;s current dealer price - that only ever comes from a Stock &amp;
+              Price List upload or a manually-added price. A product known only from historical sales, with no
+              price entry of its own, won&apos;t show up when a rep searches for it to quote.
+            </li>
             <li>
               The file&apos;s Exchange Rate column sets that month&apos;s Naira-to-USD rate automatically (averaged
               if it varies row to row) — this is now the only place exchange rate comes from for months covered
@@ -33,8 +42,8 @@ export default async function ImportPage() {
             <li>Installation/service billing lines are excluded automatically.</li>
             <li>
               Return/credit-note lines (negative Qty and Net Amt) are netted into the affected product&apos;s
-              quantity, value, and price, rather than dropped - a transaction whose rows net to zero or below
-              just doesn&apos;t become a Won deal on its own.
+              quantity and value, rather than dropped - a transaction whose rows net to zero or below just
+              doesn&apos;t become a Won deal on its own.
             </li>
             <li>
               Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a

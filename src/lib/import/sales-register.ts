@@ -42,11 +42,6 @@ export type TransformedDeal = {
   custName: string;
   ownerKey: string;
 };
-export type TransformedPricelistEntry = {
-  itemCode: string;
-  month: Date;
-  dealerPrice: number;
-};
 export type TransformedLineItem = {
   sourceKey: string;
   itemCode: string;
@@ -64,7 +59,6 @@ export type TransformResult = {
   products: TransformedProduct[];
   users: TransformedUser[];
   deals: TransformedDeal[];
-  pricelistEntries: TransformedPricelistEntry[];
   lineItems: TransformedLineItem[];
   exchangeRates: TransformedExchangeRate[];
   summary: {
@@ -195,33 +189,10 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     });
   }
 
-  // Pricelist: one entry per product per month, qty-weighted average dealer price.
-  const priceGroups = new Map<string, { itemCode: string; month: Date; totalAmt: number; totalQty: number }>();
-  for (const row of kept) {
-    const key = `${row.itemCode}::${monthKey(row.docDate)}`;
-    const existing = priceGroups.get(key);
-    if (existing) {
-      existing.totalAmt += row.netAmt;
-      existing.totalQty += row.qty;
-    } else {
-      priceGroups.set(key, {
-        itemCode: row.itemCode,
-        month: firstOfMonth(row.docDate),
-        totalAmt: row.netAmt,
-        totalQty: row.qty,
-      });
-    }
-  }
-  // Skip a product/month whose returns outweigh its sales entirely - there's
-  // no meaningful positive-quantity price to report, and writing a ₦0 entry
-  // would wrongly look like "the latest price" elsewhere in the app.
-  const pricelistEntries: TransformedPricelistEntry[] = Array.from(priceGroups.values())
-    .filter((g) => g.totalQty > 0)
-    .map((g) => ({
-      itemCode: g.itemCode,
-      month: g.month,
-      dealerPrice: g.totalAmt / g.totalQty,
-    }));
+  // Deliberately no Pricelist entries here - current dealer pricing only ever
+  // comes from a Stock & Price List upload or a manually-added price, never
+  // from historical sales, so the average rate a product sold at in the past
+  // can't leak in as "the current price."
 
   // Line items: one per kept row (including returns/credit notes, with their
   // true negative qty/value), preserving product-level detail (category,
@@ -278,7 +249,6 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     products: Array.from(productMap.values()),
     users: Array.from(userMap.values()),
     deals,
-    pricelistEntries,
     lineItems,
     exchangeRates,
     summary: {

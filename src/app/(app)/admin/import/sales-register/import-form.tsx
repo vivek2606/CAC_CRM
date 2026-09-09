@@ -55,10 +55,6 @@ export function ImportForm() {
                 <dd className="text-lg font-semibold text-slate-800">{state.summary.dealsCreated}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Price entries</dt>
-                <dd className="text-lg font-semibold text-slate-800">{state.summary.pricelistEntriesCreated}</dd>
-              </div>
-              <div>
                 <dt className="text-slate-500">Sale line items</dt>
                 <dd className="text-lg font-semibold text-slate-800">{state.summary.lineItemsCreated}</dd>
               </div>
