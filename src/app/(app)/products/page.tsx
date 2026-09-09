@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
+import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { RecomputeCapacityButton } from "./recompute-capacity-button";
+import { ProductLookup } from "./product-lookup";
 
 const PAGE_SIZE = 50;
 
@@ -29,22 +31,33 @@ export default async function ProductsPage({
       : {}),
   };
 
-  const [products, totalCount, categories] = await Promise.all([
-    prisma.product.findMany({
-      where,
-      orderBy: { code: "asc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: { _count: { select: { pricelistEntries: true } } },
-    }),
-    prisma.product.count({ where }),
-    prisma.product.findMany({
-      distinct: ["category"],
-      select: { category: true },
-      orderBy: { category: "asc" },
-    }),
-  ]);
+  const [products, totalCount, categories, allProducts, latestPriceByProduct, availableStockByProduct] =
+    await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy: { code: "asc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: { _count: { select: { pricelistEntries: true } } },
+      }),
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        distinct: ["category"],
+        select: { category: true },
+        orderBy: { category: "asc" },
+      }),
+      prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
+      getLatestPriceByProduct(),
+      getAvailableStockByProduct(),
+    ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const lookupOptions = allProducts.map((p) => ({
+    id: p.id,
+    label: `${p.model} (${p.code})`,
+    code: p.code,
+    dealerPrice: latestPriceByProduct.get(p.id) ?? null,
+    availableQty: availableStockByProduct.get(p.id) ?? null,
+  }));
 
   return (
     <div>
@@ -61,6 +74,10 @@ export default async function ProductsPage({
         }
       />
       <div className="p-6 space-y-4">
+        <Card className="p-5">
+          <ProductLookup products={lookupOptions} />
+        </Card>
+
         <form className="flex flex-wrap gap-3 items-center" action="/products">
           <input
             type="text"
