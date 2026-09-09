@@ -25,10 +25,10 @@ export async function createProduct(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = productSchema.parse({ ...raw, capacityKw: blankToNull(formData.get("capacityKw") ?? undefined) });
 
-  const product = await prisma.product.create({ data: parsed });
+  await prisma.product.create({ data: parsed });
 
   revalidatePath("/products");
-  redirect(`/products/${product.id}`);
+  redirect("/products");
 }
 
 export async function updateProduct(productId: string, formData: FormData) {
@@ -39,8 +39,7 @@ export async function updateProduct(productId: string, formData: FormData) {
   await prisma.product.update({ where: { id: productId }, data: parsed });
 
   revalidatePath("/products");
-  revalidatePath(`/products/${productId}`);
-  redirect(`/products/${productId}`);
+  redirect("/products");
 }
 
 export async function deleteProduct(productId: string) {

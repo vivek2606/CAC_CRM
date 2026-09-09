@@ -11,7 +11,6 @@ import {
   CheckSquare,
   BarChart3,
   Package,
-  Tags,
   Upload,
   Users,
   TrendingUp,
@@ -33,7 +32,6 @@ const NAV_ITEMS = [
   { href: "/contacts", label: "Contacts", icon: Contact },
   { href: "/activities", label: "Activities", icon: CheckSquare },
   { href: "/products", label: "Products", icon: Package },
-  { href: "/pricelist", label: "Price List", icon: Tags },
   { href: "/reports/category", label: "Sales by Category", icon: PieChart },
 ];
 

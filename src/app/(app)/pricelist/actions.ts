@@ -38,9 +38,8 @@ export async function createPricelistEntry(formData: FormData) {
     },
   });
 
-  revalidatePath("/pricelist");
-  revalidatePath(`/products/${parsed.productId}`);
-  redirect(`/pricelist?productId=${entry.productId}`);
+  revalidatePath("/products");
+  redirect(`/products?productId=${entry.productId}`);
 }
 
 export async function updatePricelistEntry(entryId: string, formData: FormData) {
@@ -59,15 +58,13 @@ export async function updatePricelistEntry(entryId: string, formData: FormData) 
     },
   });
 
-  revalidatePath("/pricelist");
-  revalidatePath(`/products/${parsed.productId}`);
-  redirect("/pricelist");
+  revalidatePath("/products");
+  redirect("/products");
 }
 
 export async function deletePricelistEntry(entryId: string) {
   await requireHead();
-  const entry = await prisma.pricelist.delete({ where: { id: entryId } });
-  revalidatePath("/pricelist");
-  revalidatePath(`/products/${entry.productId}`);
-  redirect("/pricelist");
+  await prisma.pricelist.delete({ where: { id: entryId } });
+  revalidatePath("/products");
+  redirect("/products");
 }
