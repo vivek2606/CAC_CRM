@@ -41,10 +41,6 @@ export function ImportForm() {
               <dd className="text-lg font-semibold text-slate-800">{state.summary.totalRowsIn}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Products created/updated</dt>
-              <dd className="text-lg font-semibold text-slate-800">{state.summary.productsUpserted}</dd>
-            </div>
-            <div>
               <dt className="text-slate-500">Tentative prices set</dt>
               <dd className="text-lg font-semibold text-slate-800">{state.summary.priceEntriesSet}</dd>
             </div>
@@ -53,6 +49,16 @@ export function ImportForm() {
             <p className="text-xs text-slate-400 mt-4">
               Skipped {state.summary.skippedFileRows} blank/incomplete row(s) in the file.
             </p>
+          )}
+          {state.summary.unmatchedModels.length > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-medium text-amber-800">
+                {state.summary.unmatchedModels.length} model{state.summary.unmatchedModels.length === 1 ? "" : "s"}{" "}
+                not found in the product catalog — add {state.summary.unmatchedModels.length === 1 ? "it" : "them"}{" "}
+                via a Stock &amp; Price List upload first, or check the spelling:
+              </p>
+              <p className="text-sm text-amber-700 mt-1">{state.summary.unmatchedModels.join(", ")}</p>
+            </div>
           )}
         </Card>
       )}

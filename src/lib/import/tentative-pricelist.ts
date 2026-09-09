@@ -1,40 +1,28 @@
 import type { RawTentativePriceRow } from "./parse-tentative-pricelist";
-import { computeCapacityKw } from "@/lib/capacity";
 
-export type TransformedProduct = {
-  code: string;
-  category: string;
-  model: string;
-  capacityKw: number | null;
-};
-export type TransformedTentativePrice = { productCode: string; dealerPrice: number };
+export type TransformedTentativePrice = { model: string; dealerPrice: number };
 
 export type TentativePricelistTransformResult = {
-  products: TransformedProduct[];
   priceEntries: TransformedTentativePrice[];
   summary: { totalRowsIn: number; keptRows: number };
 };
 
+// This sheet carries nothing but a model name and a tentative dealer price -
+// no product code, no category, and no relation to sales-register history.
+// Matching that model name against the existing product catalog happens in
+// the server action, not here.
 export function transformTentativePricelist(rows: RawTentativePriceRow[]): TentativePricelistTransformResult {
   const totalRowsIn = rows.length;
 
-  // Last row for a product code wins, in case the sheet lists it twice.
-  const productMap = new Map<string, TransformedProduct>();
+  // Last row for a model wins, in case the sheet lists it twice.
   const priceMap = new Map<string, TransformedTentativePrice>();
-
   for (const row of rows) {
-    productMap.set(row.productCode, {
-      code: row.productCode,
-      category: row.category,
-      model: row.model,
-      capacityKw: computeCapacityKw(row.category, row.model),
-    });
-    priceMap.set(row.productCode, { productCode: row.productCode, dealerPrice: row.dealerPrice });
+    const model = row.model.trim();
+    priceMap.set(model.toLowerCase(), { model, dealerPrice: row.dealerPrice });
   }
 
   return {
-    products: Array.from(productMap.values()),
     priceEntries: Array.from(priceMap.values()),
-    summary: { totalRowsIn, keptRows: productMap.size },
+    summary: { totalRowsIn, keptRows: priceMap.size },
   };
 }

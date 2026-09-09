@@ -8,9 +8,9 @@ import { transformTentativePricelist } from "@/lib/import/tentative-pricelist";
 
 export type ImportSummary = {
   totalRowsIn: number;
-  productsUpserted: number;
   priceEntriesSet: number;
   skippedFileRows: number;
+  unmatchedModels: string[];
 };
 
 export type ImportState = { error?: string; summary?: ImportSummary };
@@ -43,33 +43,36 @@ export async function importTentativePricelist(
 
   const result = transformTentativePricelist(rows);
 
-  // Products - matched by code, same as every other import. Sub-category
-  // isn't in this sheet, so a brand-new product gets "Uncategorized" and an
-  // existing one keeps whatever it already has.
-  for (const p of result.products) {
-    await prisma.product.upsert({
-      where: { code: p.code },
-      create: { code: p.code, brand: "MIDEA", category: p.category, subCategory: "Uncategorized", model: p.model, capacityKw: p.capacityKw },
-      update: { category: p.category, model: p.model, capacityKw: p.capacityKw },
-    });
+  // This sheet has nothing to match products by except the model name - no
+  // product code, no category, and nothing derived from sales-register
+  // history. A model isn't created here: it must already exist in the
+  // catalog (from a Sales Register or Stock & Price List import), and one
+  // model name can legitimately match more than one product code.
+  const allProducts = await prisma.product.findMany({ select: { id: true, model: true } });
+  const productIdsByModel = new Map<string, string[]>();
+  for (const p of allProducts) {
+    const key = p.model.trim().toLowerCase();
+    const list = productIdsByModel.get(key) ?? [];
+    list.push(p.id);
+    productIdsByModel.set(key, list);
   }
 
-  const dbProducts = await prisma.product.findMany({
-    where: { code: { in: result.products.map((p) => p.code) } },
-    select: { id: true, code: true },
-  });
-  const productIdByCode = new Map(dbProducts.map((p) => [p.code, p.id]));
-
   let priceEntriesSet = 0;
+  const unmatchedModels: string[] = [];
   for (const entry of result.priceEntries) {
-    const productId = productIdByCode.get(entry.productCode);
-    if (!productId) continue;
-    await prisma.tentativePrice.upsert({
-      where: { productId },
-      create: { productId, dealerPrice: entry.dealerPrice },
-      update: { dealerPrice: entry.dealerPrice },
-    });
-    priceEntriesSet++;
+    const productIds = productIdsByModel.get(entry.model.toLowerCase());
+    if (!productIds || productIds.length === 0) {
+      unmatchedModels.push(entry.model);
+      continue;
+    }
+    for (const productId of productIds) {
+      await prisma.tentativePrice.upsert({
+        where: { productId },
+        create: { productId, dealerPrice: entry.dealerPrice },
+        update: { dealerPrice: entry.dealerPrice },
+      });
+      priceEntriesSet++;
+    }
   }
 
   revalidatePath("/products");
@@ -78,9 +81,9 @@ export async function importTentativePricelist(
   return {
     summary: {
       totalRowsIn: result.summary.totalRowsIn,
-      productsUpserted: result.products.length,
       priceEntriesSet,
       skippedFileRows,
+      unmatchedModels,
     },
   };
 }

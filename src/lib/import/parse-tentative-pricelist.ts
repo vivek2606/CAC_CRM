@@ -1,14 +1,11 @@
 import ExcelJS from "exceljs";
-import { normalizeCategory } from "./category";
 
 export type RawTentativePriceRow = {
-  productCode: string;
   model: string;
-  category: string;
   dealerPrice: number;
 };
 
-const REQUIRED_COLUMNS = ["PRODUCT CODE", "MODEL", "CATEGORY", "Dealer's Price"];
+const REQUIRED_COLUMNS = ["MODEL", "Dealer's Price"];
 
 export async function parseTentativePricelistBuffer(
   buffer: ArrayBuffer
@@ -55,18 +52,15 @@ export async function parseTentativePricelistBuffer(
       return Number.isNaN(n) ? null : n;
     };
 
-    const productCode = getStr("PRODUCT CODE");
     const model = getStr("MODEL");
-    const rawCategory = getStr("CATEGORY");
-    const category = rawCategory ? normalizeCategory(rawCategory) : null;
     const dealerPrice = getNum("Dealer's Price");
 
-    if (!productCode || !model || !category || dealerPrice == null) {
+    if (!model || dealerPrice == null) {
       skippedRows++;
       return;
     }
 
-    rows.push({ productCode, model, category, dealerPrice });
+    rows.push({ model, dealerPrice });
   });
 
   return { rows, skippedRows };

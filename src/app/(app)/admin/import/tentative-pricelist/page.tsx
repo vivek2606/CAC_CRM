@@ -33,15 +33,19 @@ export default async function TentativePricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: <strong>PRODUCT CODE</strong>, <strong>MODEL</strong>, <strong>CATEGORY</strong>,
-              and <strong>Dealer&apos;s Price</strong>.
+              Columns required: just <strong>MODEL</strong> and <strong>Dealer&apos;s Price</strong> — nothing
+              else, and nothing to do with the Sales Register or its historical prices.
             </li>
             <li>
               This is a separate list from Stock &amp; Price List, for items that can still be quoted to a
               customer even though none are on hand right now - a rep looking up the model sees this price
               labeled as tentative instead of &quot;Out of stock.&quot;
             </li>
-            <li>Products are matched by Product Code — a known code updates that product; a new one is created.</li>
+            <li>
+              Rows are matched by Model against products already in the catalog. A model not found yet (never
+              seen in a Sales Register or Stock &amp; Price List upload) is skipped and listed after the import —
+              add it via Stock &amp; Price List first, then re-upload this sheet.
+            </li>
             <li>
               Re-uploading replaces a product&apos;s tentative price with the new one; if a product later gets
               real stock through the Stock &amp; Price List upload, its actual price/quantity takes over
