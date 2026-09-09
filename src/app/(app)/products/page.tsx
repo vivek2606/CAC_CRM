@@ -139,13 +139,9 @@ export default async function ProductsPage({
                   return (
                     <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-800">
-                        {user.role === "HEAD" ? (
-                          <Link href={`/products/${entry.product.id}/edit`} className="hover:text-indigo-600">
-                            {entry.product.code}
-                          </Link>
-                        ) : (
-                          entry.product.code
-                        )}
+                        <Link href={`/products/${entry.product.id}`} className="hover:text-indigo-600">
+                          {entry.product.code}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-slate-500">{entry.product.category}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.product.model}</td>

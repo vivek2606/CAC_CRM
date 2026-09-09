@@ -11,12 +11,35 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const user = await requireUser();
 
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: { pricelistEntries: { orderBy: { month: "desc" } } },
-  });
+  const [product, pricelistEntries, salesAgg, soldMonths] = await Promise.all([
+    prisma.product.findUnique({ where: { id } }),
+    // Only entries from the Stock & Price List workflow (the current
+    // going-forward price) - exchangeRate is null only for those, never for
+    // the historical Sales Register / Price Master rows, so this is exactly
+    // "the dealer price from that upload onwards", with no landed
+    // price/cost or exchange rate mixed in.
+    prisma.pricelist.findMany({
+      where: { productId: id, exchangeRate: null },
+      orderBy: { month: "desc" },
+    }),
+    prisma.saleLineItem.aggregate({
+      where: { productId: id },
+      _sum: { qty: true, value: true },
+    }),
+    prisma.saleLineItem.findMany({
+      where: { productId: id },
+      distinct: ["month"],
+      select: { month: true },
+    }),
+  ]);
 
   if (!product) notFound();
+
+  const unitsSold = salesAgg._sum.qty ?? 0;
+  const revenueSold = salesAgg._sum.value ?? 0;
+  const activeMonths = soldMonths.length;
+  const avgUnitsPerMonth = activeMonths > 0 ? unitsSold / activeMonths : null;
+  const avgRate = unitsSold > 0 ? revenueSold / unitsSold : null;
 
   const deleteAction = deleteProduct.bind(null, product.id);
 
@@ -50,10 +73,36 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       />
 
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Sales performance</h2>
+            <dl className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <dt className="text-xs text-slate-500">Units sold so far</dt>
+                <dd className="text-lg font-semibold text-slate-800 mt-0.5">{formatNumber(unitsSold)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Avg. units sold / month</dt>
+                <dd className="text-lg font-semibold text-slate-800 mt-0.5">
+                  {avgUnitsPerMonth != null ? avgUnitsPerMonth.toFixed(1) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Avg. rate sold at</dt>
+                <dd className="text-lg font-semibold text-slate-800 mt-0.5">
+                  {avgRate != null ? formatCurrency(avgRate) : "—"}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-xs text-slate-400">
+              Based on {activeMonths} month{activeMonths === 1 ? "" : "s"} with a recorded sale, across historical
+              imports and deals won natively in the CRM.
+            </p>
+          </Card>
+
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-900">Price history</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Current pricing</h2>
               {user.role === "HEAD" && (
                 <Link
                   href={`/pricelist/new?productId=${product.id}`}
@@ -63,8 +112,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 </Link>
               )}
             </div>
-            {product.pricelistEntries.length === 0 ? (
-              <EmptyState title="No price entries yet" />
+            {pricelistEntries.length === 0 ? (
+              <EmptyState
+                title="No current price yet"
+                description="Set from the Stock & Price List upload, or add one directly."
+              />
             ) : (
               <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -72,29 +124,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="py-2 font-medium">Month</th>
                     <th className="py-2 font-medium">Dealer&apos;s Price</th>
-                    <th className="py-2 font-medium">Landed Price</th>
-                    {user.role === "HEAD" && <th className="py-2 font-medium">Landed Cost</th>}
-                    <th className="py-2 font-medium">Exchange Rate</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {product.pricelistEntries.map((entry) => (
+                  {pricelistEntries.map((entry) => (
                     <tr key={entry.id}>
                       <td className="py-2.5 text-slate-700">
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
                       <td className="py-2.5 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
-                      <td className="py-2.5 text-slate-700">
-                        {entry.landedPrice != null ? formatCurrency(entry.landedPrice) : "—"}
-                      </td>
-                      {user.role === "HEAD" && (
-                        <td className="py-2.5 text-slate-500">
-                          {entry.landedCost != null ? `${formatCurrency(entry.landedCost)} (excl. VAT)` : "—"}
-                        </td>
-                      )}
-                      <td className="py-2.5 text-slate-500">
-                        {entry.exchangeRate != null ? `₦${formatNumber(entry.exchangeRate)} / $1` : "—"}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
