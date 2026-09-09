@@ -15,10 +15,14 @@ export type ProductLookupOption = {
 export function ProductLookup({ products }: { products: ProductLookupOption[] }) {
   const [productId, setProductId] = useState("");
   const selected = products.find((p) => p.id === productId);
-  // Out of stock (a confirmed zero, not just untracked) - don't surface a
-  // rate for something that can't actually be sold right now.
+  // Confirmed zero on hand - out of stock, plainly.
   const outOfStock = selected != null && selected.availableQty === 0;
-  const showPrice = selected != null && !outOfStock && selected.dealerPrice != null;
+  // Never appeared in a Stock & Price List upload at all - could be a
+  // legitimately new product not yet counted, or an old/mistyped code
+  // that's fallen out of the current catalog. Either way, don't surface a
+  // rate we can't stand behind.
+  const untracked = selected != null && selected.availableQty == null;
+  const showPrice = selected != null && !outOfStock && !untracked && selected.dealerPrice != null;
 
   return (
     <div className="max-w-md">
@@ -39,7 +43,13 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
           <div>
             <dt className="text-xs text-slate-500">Dealer&apos;s Price</dt>
             <dd className="font-medium text-slate-800 mt-0.5">
-              {outOfStock ? "Out of stock" : showPrice ? formatCurrency(selected.dealerPrice!) : "—"}
+              {outOfStock
+                ? "Out of stock"
+                : untracked
+                  ? "Out of stock or model/code obsolete"
+                  : showPrice
+                    ? formatCurrency(selected.dealerPrice!)
+                    : "—"}
             </dd>
           </div>
           <div>
