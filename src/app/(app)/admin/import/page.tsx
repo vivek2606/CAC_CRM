@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Tags, Boxes } from "lucide-react";
+import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes } from "lucide-react";
 
 const IMPORTS = [
   {
@@ -21,12 +21,6 @@ const IMPORTS = [
     icon: TrendingUp,
     title: "Monthly Targets",
     description: "Set each sales rep's sales target for one or more months from a sheet.",
-  },
-  {
-    href: "/admin/import/price-master",
-    icon: Tags,
-    title: "Price Master",
-    description: "Upload the dealer price list for a given month, and set that month's exchange rate.",
   },
   {
     href: "/admin/import/pricelist",
