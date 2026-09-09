@@ -44,3 +44,11 @@ export async function getAvailableStockByProduct(): Promise<Map<string, number>>
   }
   return map;
 }
+
+// Each product's quotable price when none are in stock - a separate
+// registry (TentativePrice) from the current Pricelist, only meant to be
+// shown once getAvailableStockByProduct() confirms there's nothing on hand.
+export async function getTentativePriceByProduct(): Promise<Map<string, number>> {
+  const entries = await prisma.tentativePrice.findMany({ select: { productId: true, dealerPrice: true } });
+  return new Map(entries.map((e) => [e.productId, e.dealerPrice]));
+}

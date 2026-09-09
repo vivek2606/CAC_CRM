@@ -10,19 +10,17 @@ export type ProductLookupOption = {
   code: string;
   dealerPrice: number | null;
   availableQty: number | null;
+  tentativePrice: number | null;
 };
 
 export function ProductLookup({ products }: { products: ProductLookupOption[] }) {
   const [productId, setProductId] = useState("");
   const selected = products.find((p) => p.id === productId);
-  // Confirmed zero on hand - out of stock, plainly.
-  const outOfStock = selected != null && selected.availableQty === 0;
-  // Never appeared in a Stock & Price List upload at all - could be a
-  // legitimately new product not yet counted, or an old/mistyped code
-  // that's fallen out of the current catalog. Either way, don't surface a
-  // rate we can't stand behind.
-  const untracked = selected != null && selected.availableQty == null;
-  const showPrice = selected != null && !outOfStock && !untracked && selected.dealerPrice != null;
+  // Confirmed zero on hand, or never appeared in a Stock & Price List
+  // upload at all - either way, nothing to sell from stock right now.
+  const noStock = selected != null && (selected.availableQty === 0 || selected.availableQty == null);
+  const showPrice = selected != null && !noStock && selected.dealerPrice != null;
+  const showTentative = selected != null && noStock && selected.tentativePrice != null;
 
   return (
     <div className="max-w-md">
@@ -43,13 +41,13 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
           <div>
             <dt className="text-xs text-slate-500">Dealer&apos;s Price</dt>
             <dd className="font-medium text-slate-800 mt-0.5">
-              {outOfStock
-                ? "Out of stock"
-                : untracked
-                  ? "Out of stock or model/code obsolete"
-                  : showPrice
-                    ? formatCurrency(selected.dealerPrice!)
-                    : "—"}
+              {showTentative
+                ? `${formatCurrency(selected.tentativePrice!)} (tentative)`
+                : showPrice
+                  ? formatCurrency(selected.dealerPrice!)
+                  : selected.availableQty === 0
+                    ? "Out of stock"
+                    : "Out of stock or model/code obsolete"}
             </dd>
           </div>
           <div>
@@ -63,6 +61,12 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
       {showPrice && (
         <p className="mt-1.5 text-xs text-amber-600">
           Price excludes 7.5% VAT. Quantity is approximate — net of Won deals since the stock was last counted.
+        </p>
+      )}
+      {showTentative && (
+        <p className="mt-1.5 text-xs text-amber-600">
+          None currently in stock — this is a tentative price (excl. 7.5% VAT), subject to confirmation before
+          quoting.
         </p>
       )}
     </div>

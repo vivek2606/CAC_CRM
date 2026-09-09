@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getTentativePriceByProduct } from "@/lib/pricing";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { formatCurrency } from "@/lib/format";
@@ -25,7 +25,7 @@ export default async function ProductsPage({
     ...(params.category ? { product: { category: params.category } } : {}),
   };
 
-  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct] =
+  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct, tentativePriceByProduct] =
     await Promise.all([
       prisma.pricelist.findMany({
         where,
@@ -43,6 +43,7 @@ export default async function ProductsPage({
       }),
       getLatestPriceByProduct(),
       getAvailableStockByProduct(),
+      getTentativePriceByProduct(),
     ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const lookupOptions = allProducts.map((p) => ({
@@ -51,6 +52,7 @@ export default async function ProductsPage({
     code: p.code,
     dealerPrice: latestPriceByProduct.get(p.id) ?? null,
     availableQty: availableStockByProduct.get(p.id) ?? null,
+    tentativePrice: tentativePriceByProduct.get(p.id) ?? null,
   }));
 
   return (

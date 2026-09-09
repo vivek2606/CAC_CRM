@@ -434,6 +434,7 @@ model Product {
   saleLineItems    SaleLineItem[]
   dealLineItems    DealLineItem[]
   stock            ProductStock?
+  tentativePrice   TentativePrice?
 }
 
 model Pricelist {
@@ -468,6 +469,22 @@ model ProductStock {
   id          String   @id @default(cuid())
   quantity    Int
   asOfDate    DateTime
+  updatedAt   DateTime @updatedAt
+
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+// A quotable price for a product that isn't currently held in stock at all
+// (no ProductStock row, or a confirmed zero) - a separate registry from
+// Pricelist, which is specifically the price of what's on hand right now.
+// One row per product, always just "the current tentative price" - no
+// month history, since this exists for items that come in on request
+// rather than something priced and restocked every month.
+model TentativePrice {
+  id          String   @id @default(cuid())
+  dealerPrice Float
+  createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   productId   String   @unique

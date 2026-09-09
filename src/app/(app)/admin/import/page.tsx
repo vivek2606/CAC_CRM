@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes } from "lucide-react";
+import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag } from "lucide-react";
 
 const IMPORTS = [
   {
@@ -27,6 +27,12 @@ const IMPORTS = [
     icon: Boxes,
     title: "Stock & Price List",
     description: "Upload current available stock with quantity and dealer price.",
+  },
+  {
+    href: "/admin/import/tentative-pricelist",
+    icon: Tag,
+    title: "Tentative Price List",
+    description: "Quotable prices for items not currently held in stock.",
   },
 ];
 
