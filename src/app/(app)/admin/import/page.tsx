@@ -26,7 +26,7 @@ const IMPORTS = [
     href: "/admin/import/pricelist",
     icon: Boxes,
     title: "Stock & Price List",
-    description: "Upload current available stock with quantity, landed cost, and dealer price.",
+    description: "Upload current available stock with quantity and dealer price.",
   },
 ];
 
