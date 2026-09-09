@@ -65,9 +65,9 @@ export async function getQuotableProducts(): Promise<{ id: string; code: string;
 // no relation to Product/Pricelist at all - it's keyed purely on the model
 // name text typed into the upload sheet, for models that may not exist in
 // the product catalog. Callers match by model name themselves.
-export async function getAllTentativePrices(): Promise<{ model: string; dealerPrice: number }[]> {
+export async function getAllTentativePrices(): Promise<{ model: string; category: string; dealerPrice: number }[]> {
   return prisma.tentativePrice.findMany({
-    select: { model: true, dealerPrice: true },
+    select: { model: true, category: true, dealerPrice: true },
     orderBy: { model: "asc" },
   });
 }

@@ -30,8 +30,8 @@ export default async function TentativePricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: just <strong>MODEL</strong> and <strong>Dealer&apos;s Price</strong> — nothing
-              else.
+              Columns required: <strong>MODEL</strong>, <strong>CATEGORY</strong>, and{" "}
+              <strong>Dealer&apos;s Price</strong> — nothing else.
             </li>
             <li>
               This is a standalone list, entirely separate from Products/Stock &amp; Price List and the Sales
@@ -55,6 +55,7 @@ export default async function TentativePricelistPage() {
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-4 py-3 font-medium">Model</th>
+                    <th className="px-4 py-3 font-medium">Category</th>
                     <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
@@ -65,6 +66,7 @@ export default async function TentativePricelistPage() {
                     return (
                       <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-800">{entry.model}</td>
+                        <td className="px-4 py-3 text-slate-500">{entry.category}</td>
                         <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
                         <td className="px-4 py-3 text-right">
                           <form action={deleteAction}>

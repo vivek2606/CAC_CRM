@@ -4,11 +4,11 @@ import { useState } from "react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { formatCurrency } from "@/lib/format";
 
-export type TentativePriceOption = { id: string; label: string; dealerPrice: number };
+export type TentativePriceOption = { id: string; label: string; category: string; dealerPrice: number };
 
 // Standalone - has no relation to Product/Pricelist/stock at all. Just a
-// model name typed on an upload sheet mapped to a tentative price, for
-// models that may not exist anywhere else in the system.
+// model name typed on an upload sheet mapped to a category and tentative
+// price, for models that may not exist anywhere else in the system.
 export function TentativePriceLookup({ entries }: { entries: TentativePriceOption[] }) {
   const [selectedId, setSelectedId] = useState("");
   const selected = entries.find((e) => e.id === selectedId);
@@ -24,9 +24,15 @@ export function TentativePriceLookup({ entries }: { entries: TentativePriceOptio
         emptyLabel="none"
       />
       {selected && (
-        <dl className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-          <dt className="text-xs text-slate-500">Tentative Dealer&apos;s Price</dt>
-          <dd className="font-medium text-slate-800 mt-0.5">{formatCurrency(selected.dealerPrice)}</dd>
+        <dl className="mt-3 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+          <div>
+            <dt className="text-xs text-slate-500">Category</dt>
+            <dd className="font-medium text-slate-800 mt-0.5">{selected.category}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Tentative Dealer&apos;s Price</dt>
+            <dd className="font-medium text-slate-800 mt-0.5">{formatCurrency(selected.dealerPrice)}</dd>
+          </div>
         </dl>
       )}
       {selected && (

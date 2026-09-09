@@ -48,13 +48,14 @@ export async function importTentativePricelist(
   for (const entry of result.priceEntries) {
     await prisma.tentativePrice.upsert({
       where: { model: entry.model },
-      create: { model: entry.model, dealerPrice: entry.dealerPrice },
-      update: { dealerPrice: entry.dealerPrice },
+      create: { model: entry.model, category: entry.category, dealerPrice: entry.dealerPrice },
+      update: { category: entry.category, dealerPrice: entry.dealerPrice },
     });
     priceEntriesSet++;
   }
 
   revalidatePath("/products");
+  revalidatePath("/products/tentative");
   revalidatePath("/admin/import/tentative-pricelist");
 
   return {
@@ -70,5 +71,6 @@ export async function deleteTentativePrice(id: string) {
   await requireHead();
   await prisma.tentativePrice.delete({ where: { id } });
   revalidatePath("/products");
+  revalidatePath("/products/tentative");
   revalidatePath("/admin/import/tentative-pricelist");
 }

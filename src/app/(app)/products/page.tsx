@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getAllTentativePrices, getQuotableProducts } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { formatCurrency } from "@/lib/format";
 import { deletePricelistEntry } from "../pricelist/actions";
 import { RecomputeCapacityButton } from "./recompute-capacity-button";
 import { ProductLookup } from "./product-lookup";
-import { TentativePriceLookup } from "./tentative-price-lookup";
-import { Trash2, Pencil } from "lucide-react";
+import { Trash2, Pencil, Tag } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
@@ -26,7 +25,7 @@ export default async function ProductsPage({
     ...(params.category ? { product: { category: params.category } } : {}),
   };
 
-  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct, tentativePrices] =
+  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct] =
     await Promise.all([
       prisma.pricelist.findMany({
         where,
@@ -44,7 +43,6 @@ export default async function ProductsPage({
       }),
       getLatestPriceByProduct(),
       getAvailableStockByProduct(),
-      getAllTentativePrices(),
     ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const lookupOptions = allProducts.map((p) => ({
@@ -54,11 +52,6 @@ export default async function ProductsPage({
     dealerPrice: latestPriceByProduct.get(p.id) ?? null,
     availableQty: availableStockByProduct.get(p.id) ?? null,
   }));
-  const tentativeOptions = tentativePrices.map((t) => ({
-    id: t.model,
-    label: t.model,
-    dealerPrice: t.dealerPrice,
-  }));
 
   return (
     <div>
@@ -66,26 +59,32 @@ export default async function ProductsPage({
         title="Products"
         description={`${totalCount} price entr${totalCount === 1 ? "y" : "ies"}`}
         action={
-          user.role === "HEAD" ? (
-            <div className="flex items-center gap-3">
-              <RecomputeCapacityButton />
-              <Link
-                href="/products/new"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
-              >
-                New Product
-              </Link>
-              <NewButton href="/pricelist/new" label="New Price Entry" />
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            <Link
+              href="/products/tentative"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
+            >
+              <Tag className="h-4 w-4" />
+              Tentative Prices for Unavailable Items
+            </Link>
+            {user.role === "HEAD" && (
+              <>
+                <RecomputeCapacityButton />
+                <Link
+                  href="/products/new"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
+                >
+                  New Product
+                </Link>
+                <NewButton href="/pricelist/new" label="New Price Entry" />
+              </>
+            )}
+          </div>
         }
       />
       <div className="p-6 space-y-4">
         <Card className="p-5">
           <ProductLookup products={lookupOptions} />
-        </Card>
-        <Card className="p-5">
-          <TentativePriceLookup entries={tentativeOptions} />
         </Card>
 
         <form className="flex flex-wrap gap-3 items-center" action="/products">

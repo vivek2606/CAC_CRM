@@ -1,11 +1,13 @@
 import ExcelJS from "exceljs";
+import { normalizeCategory } from "./category";
 
 export type RawTentativePriceRow = {
   model: string;
+  category: string;
   dealerPrice: number;
 };
 
-const REQUIRED_COLUMNS = ["MODEL", "Dealer's Price"];
+const REQUIRED_COLUMNS = ["MODEL", "CATEGORY", "Dealer's Price"];
 
 export async function parseTentativePricelistBuffer(
   buffer: ArrayBuffer
@@ -53,14 +55,16 @@ export async function parseTentativePricelistBuffer(
     };
 
     const model = getStr("MODEL");
+    const rawCategory = getStr("CATEGORY");
+    const category = rawCategory ? normalizeCategory(rawCategory) : null;
     const dealerPrice = getNum("Dealer's Price");
 
-    if (!model || dealerPrice == null) {
+    if (!model || !category || dealerPrice == null) {
       skippedRows++;
       return;
     }
 
-    rows.push({ model, dealerPrice });
+    rows.push({ model, category, dealerPrice });
   });
 
   return { rows, skippedRows };

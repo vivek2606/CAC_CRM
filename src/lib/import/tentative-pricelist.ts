@@ -1,16 +1,16 @@
 import type { RawTentativePriceRow } from "./parse-tentative-pricelist";
 
-export type TransformedTentativePrice = { model: string; dealerPrice: number };
+export type TransformedTentativePrice = { model: string; category: string; dealerPrice: number };
 
 export type TentativePricelistTransformResult = {
   priceEntries: TransformedTentativePrice[];
   summary: { totalRowsIn: number; keptRows: number };
 };
 
-// This sheet carries nothing but a model name and a tentative dealer price -
-// no product code, no category, and no relation to sales-register history.
-// Matching that model name against the existing product catalog happens in
-// the server action, not here.
+// This sheet carries nothing but a model name, category, and tentative
+// dealer price - no product code, and no relation to sales-register
+// history. Matching that model name against the existing product catalog,
+// if any, happens nowhere - this is a standalone registry.
 export function transformTentativePricelist(rows: RawTentativePriceRow[]): TentativePricelistTransformResult {
   const totalRowsIn = rows.length;
 
@@ -18,7 +18,7 @@ export function transformTentativePricelist(rows: RawTentativePriceRow[]): Tenta
   const priceMap = new Map<string, TransformedTentativePrice>();
   for (const row of rows) {
     const model = row.model.trim();
-    priceMap.set(model.toLowerCase(), { model, dealerPrice: row.dealerPrice });
+    priceMap.set(model.toLowerCase(), { model, category: row.category, dealerPrice: row.dealerPrice });
   }
 
   return {
