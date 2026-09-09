@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getTentativePriceByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getAllTentativePrices } from "@/lib/pricing";
 import { PageHeader, NewButton, Card, EmptyState } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { formatCurrency } from "@/lib/format";
 import { deletePricelistEntry } from "../pricelist/actions";
 import { RecomputeCapacityButton } from "./recompute-capacity-button";
 import { ProductLookup } from "./product-lookup";
+import { TentativePriceLookup } from "./tentative-price-lookup";
 import { Trash2, Pencil } from "lucide-react";
 
 const PAGE_SIZE = 50;
@@ -25,7 +26,7 @@ export default async function ProductsPage({
     ...(params.category ? { product: { category: params.category } } : {}),
   };
 
-  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct, tentativePriceByProduct] =
+  const [entries, totalCount, allProducts, categories, latestPriceByProduct, availableStockByProduct, tentativePrices] =
     await Promise.all([
       prisma.pricelist.findMany({
         where,
@@ -43,7 +44,7 @@ export default async function ProductsPage({
       }),
       getLatestPriceByProduct(),
       getAvailableStockByProduct(),
-      getTentativePriceByProduct(),
+      getAllTentativePrices(),
     ]);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const lookupOptions = allProducts.map((p) => ({
@@ -52,7 +53,11 @@ export default async function ProductsPage({
     code: p.code,
     dealerPrice: latestPriceByProduct.get(p.id) ?? null,
     availableQty: availableStockByProduct.get(p.id) ?? null,
-    tentativePrice: tentativePriceByProduct.get(p.id) ?? null,
+  }));
+  const tentativeOptions = tentativePrices.map((t) => ({
+    id: t.model,
+    label: t.model,
+    dealerPrice: t.dealerPrice,
   }));
 
   return (
@@ -78,6 +83,9 @@ export default async function ProductsPage({
       <div className="p-6 space-y-4">
         <Card className="p-5">
           <ProductLookup products={lookupOptions} />
+        </Card>
+        <Card className="p-5">
+          <TentativePriceLookup entries={tentativeOptions} />
         </Card>
 
         <form className="flex flex-wrap gap-3 items-center" action="/products">

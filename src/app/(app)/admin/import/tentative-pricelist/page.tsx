@@ -12,16 +12,13 @@ export const maxDuration = 60;
 export default async function TentativePricelistPage() {
   await requireHead();
 
-  const entries = await prisma.tentativePrice.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: { product: { select: { code: true, model: true, category: true } } },
-  });
+  const entries = await prisma.tentativePrice.findMany({ orderBy: { model: "asc" } });
 
   return (
     <div>
       <PageHeader
         title="Tentative Price List"
-        description="Quotable prices for items not currently held in stock"
+        description="Quotable prices for models not currently held in stock"
         action={
           <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
             ← All imports
@@ -34,23 +31,15 @@ export default async function TentativePricelistPage() {
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
               Columns required: just <strong>MODEL</strong> and <strong>Dealer&apos;s Price</strong> — nothing
-              else, and nothing to do with the Sales Register or its historical prices.
+              else.
             </li>
             <li>
-              This is a separate list from Stock &amp; Price List, for items that can still be quoted to a
-              customer even though none are on hand right now - a rep looking up the model sees this price
-              labeled as tentative instead of &quot;Out of stock.&quot;
+              This is a standalone list, entirely separate from Products/Stock &amp; Price List and the Sales
+              Register - there&apos;s no product code and no matching against the product catalog. It&apos;s
+              purely a model name mapped to a tentative price, so a rep can look up a model that isn&apos;t (or
+              isn&apos;t yet) in the system.
             </li>
-            <li>
-              Rows are matched by Model against products already in the catalog. A model not found yet (never
-              seen in a Sales Register or Stock &amp; Price List upload) is skipped and listed after the import —
-              add it via Stock &amp; Price List first, then re-upload this sheet.
-            </li>
-            <li>
-              Re-uploading replaces a product&apos;s tentative price with the new one; if a product later gets
-              real stock through the Stock &amp; Price List upload, its actual price/quantity takes over
-              automatically and this entry stops being shown.
-            </li>
+            <li>Re-uploading a model replaces its price with the new one.</li>
           </ul>
         </Card>
         <Card className="p-6">
@@ -65,8 +54,6 @@ export default async function TentativePricelistPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-4 py-3 font-medium">Product Code</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
                     <th className="px-4 py-3 font-medium">Model</th>
                     <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
                     <th className="px-4 py-3 font-medium" />
@@ -77,9 +64,7 @@ export default async function TentativePricelistPage() {
                     const deleteAction = deleteTentativePrice.bind(null, entry.id);
                     return (
                       <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-slate-800">{entry.product.code}</td>
-                        <td className="px-4 py-3 text-slate-500">{entry.product.category}</td>
-                        <td className="px-4 py-3 text-slate-600">{entry.product.model}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{entry.model}</td>
                         <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
                         <td className="px-4 py-3 text-right">
                           <form action={deleteAction}>

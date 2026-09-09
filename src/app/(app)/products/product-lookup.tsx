@@ -10,7 +10,6 @@ export type ProductLookupOption = {
   code: string;
   dealerPrice: number | null;
   availableQty: number | null;
-  tentativePrice: number | null;
 };
 
 export function ProductLookup({ products }: { products: ProductLookupOption[] }) {
@@ -20,7 +19,6 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
   // upload at all - either way, nothing to sell from stock right now.
   const noStock = selected != null && (selected.availableQty === 0 || selected.availableQty == null);
   const showPrice = selected != null && !noStock && selected.dealerPrice != null;
-  const showTentative = selected != null && noStock && selected.tentativePrice != null;
 
   return (
     <div className="max-w-md">
@@ -41,13 +39,11 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
           <div>
             <dt className="text-xs text-slate-500">Dealer&apos;s Price</dt>
             <dd className="font-medium text-slate-800 mt-0.5">
-              {showTentative
-                ? `${formatCurrency(selected.tentativePrice!)} (tentative)`
-                : showPrice
-                  ? formatCurrency(selected.dealerPrice!)
-                  : selected.availableQty === 0
-                    ? "Out of stock"
-                    : "Out of stock or model/code obsolete"}
+              {showPrice
+                ? formatCurrency(selected.dealerPrice!)
+                : selected.availableQty === 0
+                  ? "Out of stock"
+                  : "Out of stock or model/code obsolete"}
             </dd>
           </div>
           <div>
@@ -61,12 +57,6 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
       {showPrice && (
         <p className="mt-1.5 text-xs text-amber-600">
           Price excludes 7.5% VAT. Quantity is approximate — net of Won deals since the stock was last counted.
-        </p>
-      )}
-      {showTentative && (
-        <p className="mt-1.5 text-xs text-amber-600">
-          None currently in stock — this is a tentative price (excl. 7.5% VAT), subject to confirmation before
-          quoting.
         </p>
       )}
     </div>

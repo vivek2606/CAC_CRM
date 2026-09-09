@@ -1,0 +1,39 @@
+"use client";
+
+import { useState } from "react";
+import { SearchableSelect } from "@/components/searchable-select";
+import { formatCurrency } from "@/lib/format";
+
+export type TentativePriceOption = { id: string; label: string; dealerPrice: number };
+
+// Standalone - has no relation to Product/Pricelist/stock at all. Just a
+// model name typed on an upload sheet mapped to a tentative price, for
+// models that may not exist anywhere else in the system.
+export function TentativePriceLookup({ entries }: { entries: TentativePriceOption[] }) {
+  const [selectedId, setSelectedId] = useState("");
+  const selected = entries.find((e) => e.id === selectedId);
+
+  return (
+    <div className="max-w-md">
+      <label className="block text-sm font-medium text-slate-700 mb-1">Look up tentative price by model</label>
+      <SearchableSelect
+        options={entries}
+        value={selectedId}
+        onSelect={(opt) => setSelectedId(opt?.id ?? "")}
+        placeholder="Type a model to search..."
+        emptyLabel="none"
+      />
+      {selected && (
+        <dl className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+          <dt className="text-xs text-slate-500">Tentative Dealer&apos;s Price</dt>
+          <dd className="font-medium text-slate-800 mt-0.5">{formatCurrency(selected.dealerPrice)}</dd>
+        </dl>
+      )}
+      {selected && (
+        <p className="mt-1.5 text-xs text-amber-600">
+          Tentative price (excl. 7.5% VAT), independent of current stock - subject to confirmation before quoting.
+        </p>
+      )}
+    </div>
+  );
+}

@@ -434,7 +434,6 @@ model Product {
   saleLineItems    SaleLineItem[]
   dealLineItems    DealLineItem[]
   stock            ProductStock?
-  tentativePrice   TentativePrice?
 }
 
 model Pricelist {
@@ -475,18 +474,16 @@ model ProductStock {
   product     Product  @relation(fields: [productId], references: [id])
 }
 
-// A quotable price for a product that isn't currently held in stock at all
-// (no ProductStock row, or a confirmed zero) - a separate registry from
-// Pricelist, which is specifically the price of what's on hand right now.
-// One row per product, always just "the current tentative price" - no
-// month history, since this exists for items that come in on request
-// rather than something priced and restocked every month.
+// A standalone, quotable "model name -> tentative price" lookup, entirely
+// independent of Product/Pricelist - it has no product code and doesn't
+// match against or affect the product catalog in any way. It exists purely
+// so a rep can type a model that isn't (or isn't yet) in the system and see
+// a tentative dealer's price for it. One row per model, always just "the
+// current tentative price" - no month history.
 model TentativePrice {
   id          String   @id @default(cuid())
+  model       String   @unique
   dealerPrice Float
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  productId   String   @unique
-  product     Product  @relation(fields: [productId], references: [id])
 }
