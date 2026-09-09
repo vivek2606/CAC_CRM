@@ -15,6 +15,10 @@ export type ProductLookupOption = {
 export function ProductLookup({ products }: { products: ProductLookupOption[] }) {
   const [productId, setProductId] = useState("");
   const selected = products.find((p) => p.id === productId);
+  // Out of stock (a confirmed zero, not just untracked) - don't surface a
+  // rate for something that can't actually be sold right now.
+  const outOfStock = selected != null && selected.availableQty === 0;
+  const showPrice = selected != null && !outOfStock && selected.dealerPrice != null;
 
   return (
     <div className="max-w-md">
@@ -35,7 +39,7 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
           <div>
             <dt className="text-xs text-slate-500">Dealer&apos;s Price</dt>
             <dd className="font-medium text-slate-800 mt-0.5">
-              {selected.dealerPrice != null ? formatCurrency(selected.dealerPrice) : "—"}
+              {outOfStock ? "Out of stock" : showPrice ? formatCurrency(selected.dealerPrice!) : "—"}
             </dd>
           </div>
           <div>
@@ -46,7 +50,7 @@ export function ProductLookup({ products }: { products: ProductLookupOption[] })
           </div>
         </dl>
       )}
-      {selected && selected.dealerPrice != null && (
+      {showPrice && (
         <p className="mt-1.5 text-xs text-amber-600">
           Price excludes 7.5% VAT. Quantity is approximate — net of Won deals since the stock was last counted.
         </p>
