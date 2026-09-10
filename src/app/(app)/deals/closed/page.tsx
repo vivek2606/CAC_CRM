@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
-import { BackButton } from "@/components/back-button";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
 import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
 import type { DealStage } from "@prisma/client";
@@ -81,7 +80,6 @@ export default async function ClosedDealsPage({
       <PageHeader
         title="Closed Deals"
         description={`${totalCount} won or lost deal${totalCount === 1 ? "" : "s"}`}
-        action={<BackButton fallbackHref="/deals" label="Back" />}
       />
       <div className="p-6 space-y-4">
         <form className="flex flex-wrap items-end gap-3" action="/deals/closed">
