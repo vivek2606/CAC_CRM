@@ -62,7 +62,7 @@ export default async function ProductsPage({
           <div className="flex items-center gap-3">
             <Link
               href="/products/tentative"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
             >
               <Tag className="h-4 w-4" />
               Tentative Prices for Unavailable Items
