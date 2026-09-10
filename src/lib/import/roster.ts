@@ -90,6 +90,19 @@ const ROSTER_BY_NORMALIZED_NAME = new Map(
   SALES_REGISTER_ROSTER.map((entry) => [normalizeSalesmanName(entry.name), entry])
 );
 
+// Also indexed by displayName, so a Salesman column edited (by hand, or by
+// a re-export) to read the CRM-facing name instead of the raw ERP spelling
+// still resolves to the same person, instead of silently spawning a new
+// inactive placeholder user that quietly absorbs that upload's deals - the
+// way "CHRIS- CAC" retyped as "Chris Mokobia" once did.
+const ROSTER_BY_NORMALIZED_DISPLAY_NAME = new Map(
+  SALES_REGISTER_ROSTER.filter((entry) => entry.displayName).map((entry) => [
+    normalizeSalesmanName(entry.displayName!),
+    entry,
+  ])
+);
+
 export function lookupRosterEntry(salesmanName: string): RosterEntry | undefined {
-  return ROSTER_BY_NORMALIZED_NAME.get(normalizeSalesmanName(salesmanName));
+  const key = normalizeSalesmanName(salesmanName);
+  return ROSTER_BY_NORMALIZED_NAME.get(key) ?? ROSTER_BY_NORMALIZED_DISPLAY_NAME.get(key);
 }
