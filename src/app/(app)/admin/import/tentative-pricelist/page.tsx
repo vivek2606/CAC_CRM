@@ -18,7 +18,7 @@ export default async function TentativePricelistPage() {
     <div>
       <PageHeader
         title="Tentative Price List"
-        description="Quotable prices for models not currently held in stock"
+        description="Quotable prices for items not currently held in stock"
         action={
           <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
             ← All imports
@@ -30,16 +30,16 @@ export default async function TentativePricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: <strong>MODEL</strong>, <strong>CATEGORY</strong>, and{" "}
+              Columns required: <strong>Item Name</strong>, <strong>Category</strong>, and{" "}
               <strong>Dealer&apos;s Price</strong> — nothing else.
             </li>
             <li>
               This is a standalone list, entirely separate from Products/Stock &amp; Price List and the Sales
               Register - there&apos;s no product code and no matching against the product catalog. It&apos;s
-              purely a model name mapped to a tentative price, so a rep can look up a model that isn&apos;t (or
+              purely an item name mapped to a tentative price, so a rep can look up an item that isn&apos;t (or
               isn&apos;t yet) in the system.
             </li>
-            <li>Re-uploading a model replaces its price with the new one.</li>
+            <li>Re-uploading an item replaces its price with the new one.</li>
           </ul>
         </Card>
         <Card className="p-6">
@@ -54,7 +54,7 @@ export default async function TentativePricelistPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-4 py-3 font-medium">Model</th>
+                    <th className="px-4 py-3 font-medium">Item Name</th>
                     <th className="px-4 py-3 font-medium">Category</th>
                     <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
                     <th className="px-4 py-3 font-medium" />
