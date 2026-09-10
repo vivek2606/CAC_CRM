@@ -1,20 +1,13 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { getAllTentativePrices } from "@/lib/pricing";
-import { PageHeader, Card } from "@/components/ui";
-import { TentativePriceLookup } from "../tentative-price-lookup";
+import { PageHeader } from "@/components/ui";
 import { TentativePriceTable } from "./tentative-price-table";
 
 export default async function TentativePricesPage() {
   await requireUser();
 
   const entries = await getAllTentativePrices();
-  const lookupOptions = entries.map((e) => ({
-    id: e.model,
-    label: e.model,
-    category: e.category,
-    dealerPrice: e.dealerPrice,
-  }));
 
   return (
     <div>
@@ -28,10 +21,6 @@ export default async function TentativePricesPage() {
         }
       />
       <div className="p-6 space-y-4">
-        <Card className="p-5">
-          <TentativePriceLookup entries={lookupOptions} />
-        </Card>
-
         <TentativePriceTable entries={entries} />
       </div>
     </div>
