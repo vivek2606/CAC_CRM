@@ -7,7 +7,7 @@ export type RawTentativePriceRow = {
   dealerPrice: number;
 };
 
-const REQUIRED_COLUMNS = ["Item Name", "Category", "Dealer's Price"];
+const REQUIRED_COLUMNS = ["Model", "Category", "Tentative Price"];
 
 export async function parseTentativePricelistBuffer(
   buffer: ArrayBuffer
@@ -54,10 +54,10 @@ export async function parseTentativePricelistBuffer(
       return Number.isNaN(n) ? null : n;
     };
 
-    const model = getStr("Item Name");
+    const model = getStr("Model");
     const rawCategory = getStr("Category");
     const category = rawCategory ? normalizeCategory(rawCategory) : null;
-    const dealerPrice = getNum("Dealer's Price");
+    const dealerPrice = getNum("Tentative Price");
 
     if (!model || !category || dealerPrice == null) {
       skippedRows++;

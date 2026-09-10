@@ -6,21 +6,21 @@ import { formatCurrency } from "@/lib/format";
 
 export type TentativePriceOption = { id: string; label: string; category: string; dealerPrice: number };
 
-// Standalone - has no relation to Product/Pricelist/stock at all. Just an
-// item name typed on an upload sheet mapped to a category and tentative
-// price, for items that may not exist anywhere else in the system.
+// Standalone - has no relation to Product/Pricelist/stock at all. Just a
+// model typed on an upload sheet mapped to a category and tentative price,
+// for models that may not exist anywhere else in the system.
 export function TentativePriceLookup({ entries }: { entries: TentativePriceOption[] }) {
   const [selectedId, setSelectedId] = useState("");
   const selected = entries.find((e) => e.id === selectedId);
 
   return (
     <div className="max-w-md">
-      <label className="block text-sm font-medium text-slate-700 mb-1">Look up tentative price by item name</label>
+      <label className="block text-sm font-medium text-slate-700 mb-1">Look up tentative price by model</label>
       <SearchableSelect
         options={entries}
         value={selectedId}
         onSelect={(opt) => setSelectedId(opt?.id ?? "")}
-        placeholder="Type an item name to search..."
+        placeholder="Type a model to search..."
         emptyLabel="none"
       />
       {selected && (
@@ -30,14 +30,15 @@ export function TentativePriceLookup({ entries }: { entries: TentativePriceOptio
             <dd className="font-medium text-slate-800 mt-0.5">{selected.category}</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Tentative Dealer&apos;s Price</dt>
+            <dt className="text-xs text-slate-500">Tentative Price</dt>
             <dd className="font-medium text-slate-800 mt-0.5">{formatCurrency(selected.dealerPrice)}</dd>
           </div>
         </dl>
       )}
       {selected && (
         <p className="mt-1.5 text-xs text-amber-600">
-          Tentative price (excl. 7.5% VAT), independent of current stock - subject to confirmation before quoting.
+          Tentative price (inclusive of taxes), independent of current stock - subject to confirmation before
+          quoting.
         </p>
       )}
     </div>

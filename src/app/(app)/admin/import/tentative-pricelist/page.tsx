@@ -30,16 +30,17 @@ export default async function TentativePricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: <strong>Item Name</strong>, <strong>Category</strong>, and{" "}
-              <strong>Dealer&apos;s Price</strong> — nothing else.
+              Columns required: <strong>Model</strong>, <strong>Category</strong>, and{" "}
+              <strong>Tentative Price</strong> — nothing else.
             </li>
             <li>
               This is a standalone list, entirely separate from Products/Stock &amp; Price List and the Sales
               Register - there&apos;s no product code and no matching against the product catalog. It&apos;s
-              purely an item name mapped to a tentative price, so a rep can look up an item that isn&apos;t (or
+              purely a model mapped to a tentative price, so a rep can look up a model that isn&apos;t (or
               isn&apos;t yet) in the system.
             </li>
-            <li>Re-uploading an item replaces its price with the new one.</li>
+            <li>The tentative price is inclusive of taxes.</li>
+            <li>Re-uploading a model replaces its price with the new one.</li>
           </ul>
         </Card>
         <Card className="p-6">
@@ -54,9 +55,9 @@ export default async function TentativePricelistPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-4 py-3 font-medium">Item Name</th>
+                    <th className="px-4 py-3 font-medium">Model</th>
                     <th className="px-4 py-3 font-medium">Category</th>
-                    <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
+                    <th className="px-4 py-3 font-medium">Tentative Price</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
                 </thead>
