@@ -1,33 +1,23 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
-import { PageHeader, NewButton, Card } from "@/components/ui";
+import { getAvailableStockByProduct } from "@/lib/pricing";
+import { PageHeader, NewButton } from "@/components/ui";
 import { deletePricelistEntry } from "../pricelist/actions";
 import { RecomputeCapacityButton } from "./recompute-capacity-button";
-import { ProductLookup } from "./product-lookup";
 import { ProductsTable } from "./products-table";
 import { Tag } from "lucide-react";
 
 export default async function ProductsPage() {
   const user = await requireUser();
 
-  const [entries, allProducts, latestPriceByProduct, availableStockByProduct] = await Promise.all([
+  const [entries, availableStockByProduct] = await Promise.all([
     prisma.pricelist.findMany({
       orderBy: [{ month: "desc" }, { createdAt: "desc" }],
       include: { product: { select: { id: true, code: true, model: true, category: true, capacityKw: true } } },
     }),
-    getQuotableProducts(),
-    getLatestPriceByProduct(),
     getAvailableStockByProduct(),
   ]);
-  const lookupOptions = allProducts.map((p) => ({
-    id: p.id,
-    label: `${p.model} (${p.code})`,
-    code: p.code,
-    dealerPrice: latestPriceByProduct.get(p.id) ?? null,
-    availableQty: availableStockByProduct.get(p.id) ?? null,
-  }));
   const tableEntries = entries.map((entry) => ({
     id: entry.id,
     productId: entry.product.id,
@@ -37,6 +27,7 @@ export default async function ProductsPage() {
     capacityKw: entry.product.capacityKw,
     month: entry.month,
     dealerPrice: entry.dealerPrice,
+    availableQty: availableStockByProduct.get(entry.product.id) ?? null,
   }));
 
   return (
@@ -69,10 +60,6 @@ export default async function ProductsPage() {
         }
       />
       <div className="p-6 space-y-4">
-        <Card className="p-5">
-          <ProductLookup products={lookupOptions} />
-        </Card>
-
         <ProductsTable entries={tableEntries} isHead={user.role === "HEAD"} deleteAction={deletePricelistEntry} />
       </div>
     </div>

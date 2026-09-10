@@ -15,6 +15,7 @@ export type ProductTableEntry = {
   capacityKw: number | null;
   month: Date;
   dealerPrice: number;
+  availableQty: number | null;
 };
 
 const PAGE_SIZE = 50;
@@ -74,7 +75,7 @@ export function ProductsTable({
           type="text"
           value={query}
           onChange={(e) => updateQuery(e.target.value)}
-          placeholder="Type a product code or model to filter..."
+          placeholder="Type a model to filter..."
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <select
@@ -107,12 +108,12 @@ export function ProductsTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-medium">Product Code</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Model</th>
+                  <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Capacity (kW)</th>
                   <th className="px-4 py-3 font-medium">Month</th>
                   <th className="px-4 py-3 font-medium">Dealer&apos;s Price</th>
+                  <th className="px-4 py-3 font-medium">Quantity</th>
                   {isHead && <th className="px-4 py-3 font-medium" />}
                 </tr>
               </thead>
@@ -123,16 +124,16 @@ export function ProductsTable({
                     <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-800">
                         <Link href={`/products/${entry.productId}`} className="hover:text-indigo-600">
-                          {entry.productCode}
+                          {entry.model}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-slate-500">{entry.category}</td>
-                      <td className="px-4 py-3 text-slate-600">{entry.model}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.capacityKw ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
+                      <td className="px-4 py-3 text-slate-600">{entry.availableQty != null ? entry.availableQty : "—"}</td>
                       {isHead && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-end">
