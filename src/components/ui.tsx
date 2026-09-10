@@ -36,7 +36,7 @@ export function NewButton({ href, label }: { href: string; label: string }) {
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-200/50 ${className}`}>
       {children}
     </div>
   );
@@ -67,12 +67,35 @@ export function EmptyState({ title, description }: { title: string; description?
   );
 }
 
+export type StatAccent = "indigo" | "emerald" | "violet" | "sky" | "amber" | "rose" | "slate";
+
+const STAT_ACCENT_CHIP: Record<StatAccent, string> = {
+  indigo: "bg-indigo-50",
+  emerald: "bg-emerald-50",
+  violet: "bg-violet-50",
+  sky: "bg-sky-50",
+  amber: "bg-amber-50",
+  rose: "bg-rose-50",
+  slate: "bg-slate-100",
+};
+
+const STAT_ACCENT_BAR: Record<StatAccent, string> = {
+  indigo: "bg-indigo-500",
+  emerald: "bg-emerald-500",
+  violet: "bg-violet-500",
+  sky: "bg-sky-500",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
+  slate: "bg-slate-300",
+};
+
 export function StatCard({
   label,
   value,
   sub,
   icon,
   chart,
+  accent = "slate",
 }: {
   label: string;
   value: string;
@@ -81,14 +104,23 @@ export function StatCard({
   // Optional sparkline/mini-chart rendered below the sub-caption, for a
   // stat that also has a trend worth showing at a glance.
   chart?: ReactNode;
+  // Ties the icon chip's color to what the stat means (growth = emerald,
+  // pipeline = indigo, etc.) rather than decorating cards with arbitrary
+  // hues - color still follows the entity, not a cycled palette.
+  accent?: StatAccent;
 }) {
   return (
-    <Card className="p-4">
+    <Card className="relative overflow-hidden p-4">
+      <span className={`absolute inset-x-0 top-0 h-0.5 ${STAT_ACCENT_BAR[accent]}`} aria-hidden />
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">{label}</p>
-        {icon}
+        {icon && (
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${STAT_ACCENT_CHIP[accent]}`}>
+            {icon}
+          </span>
+        )}
       </div>
-      <p className="text-2xl font-semibold text-slate-900 mt-1">{value}</p>
+      <p className="text-2xl font-semibold text-slate-900 mt-1 tabular-nums">{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
       {chart && <div className="-mx-1 -mb-1 mt-2">{chart}</div>}
     </Card>

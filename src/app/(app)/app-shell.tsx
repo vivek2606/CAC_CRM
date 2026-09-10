@@ -23,7 +23,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="h-14 flex items-center gap-3 px-4 border-b border-slate-200 bg-white sticky top-0 z-20">
+        <div className="h-14 flex items-center gap-3 px-4 border-b border-slate-200 bg-gradient-to-r from-indigo-50/70 via-white to-white sticky top-0 z-20">
           <button
             onClick={() => setOpen(true)}
             className="lg:hidden text-slate-600 hover:text-slate-900 p-1 -ml-1"

@@ -10,11 +10,15 @@ import {
   ACTIVITY_TYPE_LABELS,
   CLOSED_LEAD_STATUSES,
   STALE_DEAL_DAYS,
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_CHART_COLORS,
 } from "@/lib/constants";
+import type { LeadStatus } from "@prisma/client";
 import { PipelineChart } from "./pipeline-chart";
 import { ActivityTypeIcon } from "./activity-type-icon";
 import { Sparkline } from "./sparkline";
 import { GaugeChart } from "@/components/gauge-chart";
+import { ShareStackedBar, type ShareBarRow } from "@/components/share-stacked-bar";
 import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
 import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange } from "lucide-react";
 
@@ -78,13 +82,16 @@ export default async function DashboardPage() {
   const targetMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const sparklineStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SPARKLINE_MONTHS - 1), 1));
+  const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
 
   const [
     openDeals,
     wonThisMonth,
+    wonLastMonth,
     wonYTD,
     closedDeals,
     activeLeads,
+    leadStatusGroups,
     upcomingActivities,
     overdueCount,
     staleDeals,
@@ -106,6 +113,13 @@ export default async function DashboardPage() {
       _sum: { value: true },
       _count: true,
     }),
+    // Prior month's Won total, for the "vs last month" trend badge next to
+    // the Won This Month stat - a fixed calendar-month comparison, not a
+    // rolling 30 days.
+    prisma.deal.aggregate({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: prevMonthStart, lt: startOfMonth } },
+      _sum: { value: true },
+    }),
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfYear } },
       _sum: { value: true },
@@ -121,6 +135,14 @@ export default async function DashboardPage() {
     }),
     prisma.lead.count({
       where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
+    }),
+    // Snapshot mix of every visible lead by current status, for the "Lead
+    // pipeline mix" bar - a point-in-time breakdown, not a cohort funnel
+    // (Lead only stores its current status, not a status history).
+    prisma.lead.groupBy({
+      by: ["status"],
+      where: { ownerId: { in: ownerIds } },
+      _count: true,
     }),
     prisma.activity.findMany({
       where: { ownerId: { in: ownerIds }, status: "PENDING" },
@@ -263,6 +285,29 @@ export default async function DashboardPage() {
   const wonCount = closedDeals.filter((d) => d.stage === "WON").length;
   const winRate = closedDeals.length > 0 ? Math.round((wonCount / closedDeals.length) * 100) : 0;
 
+  const wonThisMonthValue = wonThisMonth._sum.value ?? 0;
+  const wonLastMonthValue = wonLastMonth._sum.value ?? 0;
+  const momDelta =
+    wonLastMonthValue > 0
+      ? Math.round(((wonThisMonthValue - wonLastMonthValue) / wonLastMonthValue) * 100)
+      : wonThisMonthValue > 0
+        ? 100
+        : null;
+  const momTrendLabel = momDelta === null ? null : `${momDelta >= 0 ? "+" : ""}${momDelta}% vs last month`;
+  const momTrendColor = momDelta === null ? "" : momDelta >= 0 ? "text-emerald-600" : "text-rose-600";
+
+  const leadCountByStatus = new Map(leadStatusGroups.map((g) => [g.status, g._count]));
+  const leadMixOrder: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "UNQUALIFIED"];
+  const leadMixData: ShareBarRow[] = leadMixOrder
+    .map((status) => ({
+      label: LEAD_STATUS_LABELS[status],
+      count: leadCountByStatus.get(status) ?? 0,
+      value: 0,
+      fill: LEAD_STATUS_CHART_COLORS[status],
+    }))
+    .filter((row) => row.count > 0);
+  const totalLeadsForMix = leadMixData.reduce((s, r) => s + r.count, 0);
+
   const stageData = OPEN_DEAL_STAGES.map((stage) => {
     const deals = openDeals.filter((d) => d.stage === stage);
     return {
@@ -306,13 +351,15 @@ export default async function DashboardPage() {
             value={String(openDeals.length)}
             sub={`${formatCompactCurrency(openPipelineValue)} pipeline value`}
             icon={<Wallet className="h-4 w-4 text-indigo-500" />}
+            accent="indigo"
           />
           <StatCard
             label="Won This Month"
             value={formatCompactCurrency(wonThisMonth._sum.value ?? 0)}
             sub={
               <>
-                {wonThisMonth._count} deal{wonThisMonth._count === 1 ? "" : "s"} closed ·{" "}
+                {wonThisMonth._count} deal{wonThisMonth._count === 1 ? "" : "s"} closed
+                {momTrendLabel && <span className={momTrendColor}> · {momTrendLabel}</span>} ·{" "}
                 <Link
                   href={`/deals/closed?stage=WON&month=${monthValue(targetMonth)}`}
                   className="text-indigo-600 hover:text-indigo-700"
@@ -322,6 +369,7 @@ export default async function DashboardPage() {
               </>
             }
             icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+            accent="emerald"
           />
           <StatCard
             label="Year to Date"
@@ -336,18 +384,21 @@ export default async function DashboardPage() {
             }
             icon={<CalendarRange className="h-4 w-4 text-violet-500" />}
             chart={<Sparkline data={sparklineData} />}
+            accent="violet"
           />
           <StatCard
             label="Active Leads"
             value={String(activeLeads)}
             sub="Not yet converted"
             icon={<Target className="h-4 w-4 text-sky-500" />}
+            accent="sky"
           />
           <StatCard
             label="Win Rate"
             value={`${winRate}%`}
             sub={closedDeals.length > 0 ? `${wonCount} of ${closedDeals.length} closed` : "No pipeline deals closed yet"}
             icon={<Percent className="h-4 w-4 text-amber-500" />}
+            accent="amber"
           />
         </div>
 
@@ -396,11 +447,26 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Pipeline movement, this month</h2>
-          <p className="text-xs text-slate-400 mb-3">How the open pipeline got from where it started to where it stands now.</p>
-          <PipelineWaterfallChart steps={waterfallSteps} />
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Pipeline movement, this month</h2>
+            <p className="text-xs text-slate-400 mb-3">How the open pipeline got from where it started to where it stands now.</p>
+            <PipelineWaterfallChart steps={waterfallSteps} />
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead pipeline mix</h2>
+            <p className="text-xs text-slate-400 mb-3">Where your leads currently stand.</p>
+            {leadMixData.length === 0 ? (
+              <EmptyState title="No leads yet" />
+            ) : (
+              <ShareStackedBar data={leadMixData} unitLabel="lead" showValue={false} />
+            )}
+            {totalLeadsForMix > 0 && (
+              <p className="mt-3 text-xs text-slate-400">{totalLeadsForMix} lead{totalLeadsForMix === 1 ? "" : "s"} total</p>
+            )}
+          </Card>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 p-5">

@@ -13,8 +13,18 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 1200px 600px at 100% -10%, rgba(99, 102, 241, 0.06), transparent),
+    radial-gradient(ellipse 900px 500px at -10% 20%, rgba(16, 185, 129, 0.05), transparent),
+    var(--background);
   color: var(--foreground);
+}
+
+/* Currency, percentages and other figures line up cleanly in tables and
+   stat tiles when digits share a fixed width. */
+.tabular-nums,
+table {
+  font-variant-numeric: tabular-nums;
 }
 
 ::-webkit-scrollbar {

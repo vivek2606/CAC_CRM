@@ -125,6 +125,16 @@ export const LEAD_STATUS_COLORS: Record<LeadStatus, { bg: string; text: string }
   CONVERTED: { bg: "bg-indigo-100", text: "text-indigo-700" },
 };
 
+// Same identity per status as LEAD_STATUS_COLORS above, as hex for chart
+// fills (SVG/recharts can't consume Tailwind classes).
+export const LEAD_STATUS_CHART_COLORS: Record<LeadStatus, string> = {
+  NEW: "#3b82f6",
+  CONTACTED: "#0ea5e9",
+  QUALIFIED: "#10b981",
+  UNQUALIFIED: "#94a3b8",
+  CONVERTED: "#6366f1",
+};
+
 // Winning probability, as a percentage in steps of 10.
 export const WIN_PROBABILITY_OPTIONS: number[] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 

@@ -19,12 +19,13 @@ import {
   END_USE_SEGMENT_COLORS,
 } from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
+import { RepMonthHeatmap, type HeatmapRow } from "./rep-month-heatmap";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
 import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
 import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
-import { ShareStackedBar } from "./segment-share-bar";
+import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
 
@@ -119,6 +120,26 @@ export default async function ReportsPage() {
   const chartData = tableRows
     .map((r) => ({ name: r.name.split(" ")[0], open: r.openValue, won: r.wonQuarterValue }))
     .sort((a, b) => b.won - a.won);
+
+  // Rep x month heatmap: each active rep's Won value for the last 6
+  // calendar months, so a stretch of hot or cold months per rep is
+  // visible at a glance - the quarter comparison chart above can't show
+  // that shape since it only has one "won" number per rep.
+  const HEATMAP_MONTHS = 6;
+  const heatmapNow = new Date();
+  const heatmapMonthKeys = Array.from({ length: HEATMAP_MONTHS }, (_, i) => {
+    const d = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() - (HEATMAP_MONTHS - 1 - i), 1));
+    return { key: `${d.getUTCFullYear()}-${d.getUTCMonth()}`, label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) };
+  });
+  const heatmapData: HeatmapRow[] = salesReps.map((rep) => {
+    const byMonth = new Map<string, number>();
+    for (const deal of rep.deals) {
+      if (deal.stage !== "WON" || !deal.closedAt) continue;
+      const key = `${deal.closedAt.getUTCFullYear()}-${deal.closedAt.getUTCMonth()}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + deal.value);
+    }
+    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
+  });
 
   // The 4 analytics sections below are scoped to the 6 active CAC reps only,
   // same as the headline stats above - mixing in "Others" would swamp them
@@ -251,28 +272,42 @@ export default async function ReportsPage() {
             label="Team Open Pipeline"
             value={formatCompactCurrency(teamOpenValue)}
             icon={<Wallet className="h-4 w-4 text-indigo-500" />}
+            accent="indigo"
           />
           <StatCard
             label="Won This Quarter"
             value={formatCompactCurrency(teamWonQuarter)}
             icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+            accent="emerald"
           />
           <StatCard
             label="Avg. Win Rate"
             value={`${teamAvgWinRate}%`}
             icon={<Percent className="h-4 w-4 text-amber-500" />}
+            accent="amber"
           />
           <StatCard
             label="Team Size"
             value={String(salesReps.length)}
             sub="CAC sales managers"
             icon={<Users className="h-4 w-4 text-sky-500" />}
+            accent="sky"
           />
         </div>
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Open pipeline vs. won this quarter</h2>
           <RepComparisonChart data={chartData} />
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Monthly won-value heatmap</h2>
+          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s Won deal value over the last 6 months - spot hot and cold streaks at a glance.</p>
+          {heatmapData.every((r) => r.values.every((v) => v === 0)) ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No won deals in the last 6 months yet.</p>
+          ) : (
+            <RepMonthHeatmap months={heatmapMonthKeys.map((m) => m.label)} data={heatmapData} />
+          )}
         </Card>
 
         <Card className="p-5">

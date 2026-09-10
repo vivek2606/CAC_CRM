@@ -9,7 +9,18 @@ export type ShareBarRow = { label: string; count: number; value: number; fill: s
 // the "part-to-whole" job a 6-slice pie chart handles poorly (hard to
 // compare slice angles past 2-3). stackOffset="expand" normalizes each
 // segment to its share of the row's total.
-export function ShareStackedBar({ data, unitLabel = "deal" }: { data: ShareBarRow[]; unitLabel?: string }) {
+export function ShareStackedBar({
+  data,
+  unitLabel = "deal",
+  showValue = true,
+}: {
+  data: ShareBarRow[];
+  unitLabel?: string;
+  // Some callers (e.g. a lead-count mix, which carries no currency value)
+  // have nothing meaningful to show in `value` - hide that half of the
+  // legend rather than printing a currency figure that's always zero.
+  showValue?: boolean;
+}) {
   const total = data.reduce((s, d) => s + d.count, 0);
   const row: Record<string, number | string> = { name: "" };
   for (const d of data) row[d.label] = d.count;
@@ -40,7 +51,7 @@ export function ShareStackedBar({ data, unitLabel = "deal" }: { data: ShareBarRo
               <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.fill }} />
               <span className="font-medium text-slate-700">{d.label}</span>
               <span className="text-slate-400">
-                {pct}% · {formatCompactCurrency(d.value)}
+                {d.count} · {pct}%{showValue && ` · ${formatCompactCurrency(d.value)}`}
               </span>
             </div>
           );
