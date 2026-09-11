@@ -5,6 +5,7 @@ import { PageHeader, NewButton } from "@/components/ui";
 import { OPEN_DEAL_STAGES } from "@/lib/constants";
 import { KanbanBoard } from "./kanban-board";
 import { OwnerFilter } from "./owner-filter";
+import { BarChart3 } from "lucide-react";
 
 export default async function DealsPage({
   searchParams,
@@ -45,8 +46,12 @@ export default async function DealsPage({
         description="Drag deals between stages to update their status"
         action={
           <div className="flex items-center gap-3">
-            <Link href="/deals/closed" className="text-sm text-indigo-600 hover:text-indigo-700">
-              {closedCount} closed deal{closedCount === 1 ? "" : "s"} →
+            <Link
+              href="/deals/closed"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
+            >
+              <BarChart3 className="h-4 w-4" />
+              {closedCount} Closed Deal{closedCount === 1 ? "" : "s"} & Insights
             </Link>
             <NewButton href="/deals/new" label="New Deal" />
           </div>

@@ -63,7 +63,13 @@ export default async function ReportsPage() {
         },
       },
       leads: {
-        select: { status: true, source: true, winProbability: true, value: true, convertedDeal: { select: { stage: true } } },
+        select: {
+          status: true,
+          source: true,
+          winProbability: true,
+          value: true,
+          convertedDeal: { select: { stage: true, createdAt: true } },
+        },
       },
       activities: { select: { status: true } },
     },
@@ -190,6 +196,26 @@ export default async function ReportsPage() {
     values: heatmapMonthKeys.map((_, i) => newAccountsHeatmapData.reduce((s, r) => s + r.values[i], 0)),
   };
   const newAccountsThisQuarter = newAccounts.filter((a) => a.createdAt >= qStart).length;
+
+  // Leads converted to a deal, per rep per month - per business priority
+  // (deals over leads), the one lead-centric metric that still earns a
+  // place here, since it tracks flow INTO the deal pipeline rather than
+  // lead volume for its own sake. Bucketed by the resulting deal's
+  // createdAt (when the conversion actually happened), same 6-month
+  // window as the heatmaps above.
+  const leadConversionHeatmapData: HeatmapRow[] = salesReps.map((rep) => {
+    const byMonth = new Map<string, number>();
+    for (const lead of rep.leads) {
+      if (!lead.convertedDeal) continue;
+      const key = `${lead.convertedDeal.createdAt.getUTCFullYear()}-${lead.convertedDeal.createdAt.getUTCMonth()}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
+    }
+    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
+  });
+  const leadConversionTotalRow: HeatmapRow = {
+    repName: "Total",
+    values: heatmapMonthKeys.map((_, i) => leadConversionHeatmapData.reduce((s, r) => s + r.values[i], 0)),
+  };
 
   // The 4 analytics sections below are scoped to the 6 active CAC reps only,
   // same as the headline stats above - mixing in "Others" would swamp them
@@ -406,6 +432,22 @@ export default async function ReportsPage() {
               formatValue={(v) => String(v)}
               legendLabel="More new accounts"
               totalRow={newAccountsTotalRow}
+            />
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Leads converted to deals, last 6 months</h2>
+          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s lead-to-deal conversions per month.</p>
+          {leadConversionHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No leads converted in the last 6 months yet.</p>
+          ) : (
+            <RepMonthHeatmap
+              months={heatmapMonthKeys.map((m) => m.label)}
+              data={leadConversionHeatmapData}
+              formatValue={(v) => String(v)}
+              legendLabel="More conversions"
+              totalRow={leadConversionTotalRow}
             />
           )}
         </Card>
