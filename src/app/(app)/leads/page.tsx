@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, NewButton, Card } from "@/components/ui";
-import { BulkConvertButton } from "./bulk-convert-button";
 import { LeadsTable } from "./leads-table";
 
 export const maxDuration = 60;
@@ -26,12 +25,7 @@ export default async function LeadsPage() {
       <PageHeader
         title="Leads"
         description={`${leads.length} lead${leads.length === 1 ? "" : "s"}`}
-        action={
-          <div className="flex items-center gap-2">
-            {user.role === "HEAD" && <BulkConvertButton />}
-            <NewButton href="/leads/new" label="New Lead" />
-          </div>
-        }
+        action={<NewButton href="/leads/new" label="New Lead" />}
       />
 
       <div className="p-6 space-y-4">
