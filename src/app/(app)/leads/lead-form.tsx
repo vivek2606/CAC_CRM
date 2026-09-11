@@ -32,7 +32,7 @@ export function LeadForm({
   isHead: boolean;
   owners: Option[];
   accounts: Option[];
-  contacts: (Option & { accountId: string | null })[];
+  contacts: (Option & { accountId: string | null; phone: string | null; email: string | null })[];
   defaultValues?: {
     title?: string;
     customerName?: string | null;
@@ -57,8 +57,43 @@ export function LeadForm({
   submitLabel: string;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
+  const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
+  const [customerName, setCustomerName] = useState(defaultValues?.customerName ?? "");
+  const [company, setCompany] = useState(defaultValues?.company ?? "");
+  const [email, setEmail] = useState(defaultValues?.email ?? "");
+  const [phone, setPhone] = useState(defaultValues?.phone ?? "");
   const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
   const today = new Date().toISOString().slice(0, 10);
+
+  // Picking a contact - directly, or automatically because it's the
+  // account's contact - carries its name/phone/email into the matching
+  // fields so the rep doesn't retype what's already on file. All of these
+  // stay plain editable inputs, so this is just a starting point.
+  function applyContact(contact: (typeof contacts)[number] | null) {
+    setContactId(contact?.id ?? "");
+    if (contact) {
+      setCustomerName(contact.label);
+      if (contact.phone) setPhone(contact.phone);
+      if (contact.email) setEmail(contact.email);
+    }
+  }
+
+  function handleContactSelect(opt: Option | null) {
+    applyContact(opt ? (contacts.find((c) => c.id === opt.id) ?? null) : null);
+  }
+
+  // Picking an account carries its name into Company, and auto-selects its
+  // contact (the first one, if it has several) - the rep can still swap
+  // either via the fields right below.
+  function handleAccountChange(opt: Option | null) {
+    const newAccountId = opt?.id ?? "";
+    setAccountId(newAccountId);
+    if (opt) {
+      setCompany(opt.label);
+      const match = contacts.find((c) => c.accountId === newAccountId);
+      if (match) applyContact(match);
+    }
+  }
 
   return (
     <form action={action} className="space-y-5 max-w-2xl">
@@ -91,7 +126,8 @@ export function LeadForm({
           <input
             name="customerName"
             required
-            defaultValue={defaultValues?.customerName ?? ""}
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
@@ -101,7 +137,8 @@ export function LeadForm({
           <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
           <input
             name="company"
-            defaultValue={defaultValues?.company ?? ""}
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -239,7 +276,8 @@ export function LeadForm({
           <input
             name="email"
             type="email"
-            defaultValue={defaultValues?.email ?? ""}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -249,7 +287,8 @@ export function LeadForm({
           <input
             name="phone"
             required
-            defaultValue={defaultValues?.phone ?? ""}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -260,7 +299,7 @@ export function LeadForm({
             name="accountId"
             options={accounts}
             defaultValue={accountId}
-            onSelect={(opt) => setAccountId(opt?.id ?? "")}
+            onSelect={handleAccountChange}
             placeholder="Type to search accounts..."
           />
         </div>
@@ -270,7 +309,8 @@ export function LeadForm({
           <SearchableSelect
             name="contactId"
             options={visibleContacts}
-            defaultValue={defaultValues?.contactId ?? ""}
+            value={contactId}
+            onSelect={handleContactSelect}
             placeholder="Type to search contacts..."
           />
         </div>
