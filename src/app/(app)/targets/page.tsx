@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
-import { TargetChart } from "./target-chart";
+import { TargetChart } from "@/components/target-chart";
 import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
 import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";

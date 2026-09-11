@@ -19,7 +19,9 @@ import {
   END_USE_SEGMENT_COLORS,
 } from "@/lib/constants";
 import { RepComparisonChart } from "./rep-chart";
-import { RepMonthHeatmap, type HeatmapRow } from "./rep-month-heatmap";
+import { RepMonthHeatmap, type HeatmapRow } from "@/components/rep-month-heatmap";
+import { TargetChart, type TargetChartRow } from "@/components/target-chart";
+import { GaugeChart } from "@/components/gauge-chart";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
 import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
@@ -27,7 +29,7 @@ import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
 import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { Wallet, TrendingUp, Percent, Users } from "lucide-react";
+import { Wallet, TrendingUp, Percent, Users, Target, Building2 } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
   const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
@@ -140,6 +142,54 @@ export default async function ReportsPage() {
     }
     return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
   });
+  const heatmapTotalRow: HeatmapRow = {
+    repName: "Total",
+    values: heatmapMonthKeys.map((_, i) => heatmapData.reduce((s, r) => s + r.values[i], 0)),
+  };
+
+  // Target vs Achievement, this calendar month - Target.month is an exact
+  // UTC first-of-month DateTime (see /targets), computed separately from
+  // qStart above since that one isn't guaranteed UTC-aligned and an exact
+  // match is required to look targets up.
+  const targetMonth = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth(), 1));
+  const targetMonthEnd = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() + 1, 1));
+
+  const [targets, newAccounts] = await Promise.all([
+    prisma.target.findMany({ where: { userId: { in: salesReps.map((r) => r.id) }, month: targetMonth } }),
+    // No date filter - filtered in JS below for both the quarter stat and
+    // the 6-month heatmap, so one query covers both instead of fetching
+    // twice with slightly different windows.
+    prisma.account.findMany({
+      where: { ownerId: { in: salesReps.map((r) => r.id) } },
+      select: { ownerId: true, createdAt: true },
+    }),
+  ]);
+  const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
+  const targetRows: TargetChartRow[] = salesReps.map((rep) => {
+    const wonThisMonth = rep.deals
+      .filter((d) => d.stage === "WON" && d.closedAt && d.closedAt >= targetMonth && d.closedAt < targetMonthEnd)
+      .reduce((s, d) => s + d.value, 0);
+    return { name: rep.name.split(" ")[0], target: targetByUserId.get(rep.id) ?? 0, actual: wonThisMonth };
+  });
+  const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
+  const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
+
+  // New accounts opened, per rep per month - same 6-month window as the
+  // Won-value heatmap above, so the two read as companion views.
+  const newAccountsHeatmapData: HeatmapRow[] = salesReps.map((rep) => {
+    const byMonth = new Map<string, number>();
+    for (const a of newAccounts) {
+      if (a.ownerId !== rep.id) continue;
+      const key = `${a.createdAt.getUTCFullYear()}-${a.createdAt.getUTCMonth()}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
+    }
+    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
+  });
+  const newAccountsTotalRow: HeatmapRow = {
+    repName: "Total",
+    values: heatmapMonthKeys.map((_, i) => newAccountsHeatmapData.reduce((s, r) => s + r.values[i], 0)),
+  };
+  const newAccountsThisQuarter = newAccounts.filter((a) => a.createdAt >= qStart).length;
 
   // The 4 analytics sections below are scoped to the 6 active CAC reps only,
   // same as the headline stats above - mixing in "Others" would swamp them
@@ -293,11 +343,71 @@ export default async function ReportsPage() {
             icon={<Users className="h-4 w-4 text-sky-500" />}
             accent="sky"
           />
+          <StatCard
+            label="Dept. Target Achievement"
+            value={totalTarget > 0 ? `${Math.round((totalActualForTarget / totalTarget) * 100)}%` : "—"}
+            sub={`${formatCompactCurrency(totalActualForTarget)} of ${formatCompactCurrency(totalTarget)}, this month`}
+            icon={<Target className="h-4 w-4 text-violet-500" />}
+            accent="violet"
+          />
+          <StatCard
+            label="New Accounts (Qtr)"
+            value={String(newAccountsThisQuarter)}
+            sub="Opened across the team"
+            icon={<Building2 className="h-4 w-4 text-rose-500" />}
+            accent="rose"
+          />
         </div>
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Open pipeline vs. won this quarter</h2>
           <RepComparisonChart data={chartData} />
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-slate-900">Target vs. Actual, per sales rep</h2>
+              <Link href="/targets" className="text-xs text-indigo-600 hover:text-indigo-700">
+                Full Targets page →
+              </Link>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">This calendar month.</p>
+            <TargetChart data={targetRows} />
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Department target this month</h2>
+            <p className="text-xs text-slate-400 mb-3">Whole team, combined.</p>
+            {totalTarget === 0 && totalActualForTarget === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No targets set for this month.</p>
+            ) : (
+              <div className="flex items-center justify-center">
+                <GaugeChart
+                  value={totalActualForTarget}
+                  target={totalTarget}
+                  valueLabel={formatCompactCurrency(totalActualForTarget)}
+                  targetLabel={formatCompactCurrency(totalTarget)}
+                />
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">New accounts opened, last 6 months</h2>
+          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s new accounts per month - spot who&apos;s prospecting and when.</p>
+          {newAccountsHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No new accounts in the last 6 months yet.</p>
+          ) : (
+            <RepMonthHeatmap
+              months={heatmapMonthKeys.map((m) => m.label)}
+              data={newAccountsHeatmapData}
+              formatValue={(v) => String(v)}
+              legendLabel="More new accounts"
+              totalRow={newAccountsTotalRow}
+            />
+          )}
         </Card>
 
         <Card className="p-5">
@@ -306,7 +416,7 @@ export default async function ReportsPage() {
           {heatmapData.every((r) => r.values.every((v) => v === 0)) ? (
             <p className="text-sm text-slate-400 py-6 text-center">No won deals in the last 6 months yet.</p>
           ) : (
-            <RepMonthHeatmap months={heatmapMonthKeys.map((m) => m.label)} data={heatmapData} />
+            <RepMonthHeatmap months={heatmapMonthKeys.map((m) => m.label)} data={heatmapData} totalRow={heatmapTotalRow} />
           )}
         </Card>
 

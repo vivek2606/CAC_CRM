@@ -22,10 +22,27 @@ function stepFor(value: number, max: number): { bg: string; text: string } {
   return step;
 }
 
-// A rep x month matrix of Won value - a heatmap answers "who's been hot
-// and when" at a glance, a job a bar chart with 6+ reps x 6+ months can't
-// do without becoming unreadable.
-export function RepMonthHeatmap({ months, data }: { months: string[]; data: HeatmapRow[] }) {
+// A rep x month matrix - a heatmap answers "who's been hot and when" at a
+// glance, a job a bar chart with 6+ reps x 6+ months can't do without
+// becoming unreadable. Used for both Won value (currency) and counts (e.g.
+// new accounts opened) via formatValue/legendLabel.
+export function RepMonthHeatmap({
+  months,
+  data,
+  formatValue = formatCompactCurrency,
+  legendLabel = "More won value",
+  totalRow,
+}: {
+  months: string[];
+  data: HeatmapRow[];
+  formatValue?: (value: number) => string;
+  legendLabel?: string;
+  // An optional department-total row, shown pinned below the reps with a
+  // fixed neutral style rather than the sequential ramp - a monthly total
+  // is always the largest number in the matrix, so folding it into `data`
+  // would recalibrate `max` and wash out every rep's own color.
+  totalRow?: HeatmapRow;
+}) {
   const max = Math.max(0, ...data.flatMap((r) => r.values));
 
   return (
@@ -52,16 +69,33 @@ export function RepMonthHeatmap({ months, data }: { months: string[]; data: Heat
                 return (
                   <td key={i} className="p-0">
                     <div
-                      title={`${row.repName} · ${months[i]}: ${formatCompactCurrency(value)}`}
+                      title={`${row.repName} · ${months[i]}: ${formatValue(value)}`}
                       className={`h-9 rounded-md flex items-center justify-center font-medium tabular-nums ${step.bg} ${step.text}`}
                     >
-                      {value > 0 ? formatCompactCurrency(value) : ""}
+                      {value > 0 ? formatValue(value) : ""}
                     </div>
                   </td>
                 );
               })}
             </tr>
           ))}
+          {totalRow && (
+            <tr className="border-t border-slate-200">
+              <td className="pr-3 py-1 pt-2 font-semibold text-slate-800 whitespace-nowrap sticky left-0 bg-white">
+                {totalRow.repName}
+              </td>
+              {totalRow.values.map((value, i) => (
+                <td key={i} className="p-0 pt-2">
+                  <div
+                    title={`${totalRow.repName} · ${months[i]}: ${formatValue(value)}`}
+                    className="h-9 rounded-md flex items-center justify-center font-semibold tabular-nums bg-slate-100 text-slate-800"
+                  >
+                    {value > 0 ? formatValue(value) : ""}
+                  </div>
+                </td>
+              ))}
+            </tr>
+          )}
         </tbody>
       </table>
       <div className="flex items-center gap-1.5 mt-3 text-xs text-slate-400">
@@ -69,7 +103,7 @@ export function RepMonthHeatmap({ months, data }: { months: string[]; data: Heat
         {STEPS.map((s) => (
           <span key={s.bg} className={`h-3 w-5 rounded-sm ${s.bg}`} />
         ))}
-        <span>More won value</span>
+        <span>{legendLabel}</span>
       </div>
     </div>
   );
