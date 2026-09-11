@@ -2,9 +2,27 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
+import { revalidatePath } from "next/cache";
 import { parseLeadsRegisterBuffer } from "@/lib/import/parse-leads-register";
 import { transformLeadsRegister } from "@/lib/import/leads-register";
 import type { LeadStatus } from "@prisma/client";
+
+// Shared by a fresh import (replacing its own previous run) and by
+// clearLeadsWithoutNewFile (removing a previous run's data with no fresh
+// file to replace it) - same rule either way: a lead already converted to
+// a Deal is left alone (deleting it would orphan that Deal), and a contact
+// is only removed if it was never actually linked to a Deal (Deal.contactId
+// is ON DELETE SET NULL, so a contact still on a Deal only got there via a
+// real conversion, not just the import).
+async function clearPreviousLeadsImport(): Promise<{ leadsRemoved: number; contactsRemoved: number }> {
+  const { count: leadsRemoved } = await prisma.lead.deleteMany({
+    where: { importKey: { startsWith: "leadsheet:" }, status: { not: "CONVERTED" } },
+  });
+  const { count: contactsRemoved } = await prisma.contact.deleteMany({
+    where: { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } },
+  });
+  return { leadsRemoved, contactsRemoved };
+}
 
 export type ImportSummary = {
   accountsCreated: number;
@@ -47,22 +65,8 @@ export async function importLeadsRegister(
 
   const result = transformLeadsRegister(rows);
 
-  // Re-running this import replaces its own previously-imported rows that
-  // are still pending (rather than duplicating them) - but a lead that's
-  // already been converted to a Deal is left alone. Deleting it here would
-  // orphan that Deal, and the row below would recreate the same enquiry as
-  // a fresh, unconverted lead - letting it be converted a second time and
-  // silently double-counting its value in Open Pipeline.
-  const { count: leadsReplaced } = await prisma.lead.deleteMany({
-    where: { importKey: { startsWith: "leadsheet:" }, status: { not: "CONVERTED" } },
-  });
-  // Same reasoning for contacts: this import never creates a Deal, so a
-  // contact linked to one only got there via a real conversion - deleting
-  // and recreating it here would silently null out that Deal's contact
-  // link (Deal.contactId is ON DELETE SET NULL).
-  await prisma.contact.deleteMany({
-    where: { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } },
-  });
+  // Re-running this import replaces its own previously-imported rows.
+  const { leadsRemoved: leadsReplaced } = await clearPreviousLeadsImport();
 
   // Resolve each ownerKey (the "Assigned to" column, normalized) against the
   // real reps already in the CRM by their display name - not the ERP roster,
@@ -185,4 +189,17 @@ export async function importLeadsRegister(
       skippedFileRows,
     },
   };
+}
+
+export type ClearLeadsState = { error?: string; summary?: { leadsRemoved: number; contactsRemoved: number } };
+
+// For when a previously-uploaded leads file has been withdrawn and no fresh
+// one has replaced it yet - runs the same cleanup a fresh import's own
+// "replace my previous run" step would do, without waiting for a new file.
+export async function clearLeadsWithoutNewFile(): Promise<ClearLeadsState> {
+  await requireHead();
+  const summary = await clearPreviousLeadsImport();
+  revalidatePath("/leads");
+  revalidatePath("/contacts");
+  return { summary };
 }

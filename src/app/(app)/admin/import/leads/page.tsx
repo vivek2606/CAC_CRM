@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ImportForm } from "./import-form";
+import { ClearLeadsButton } from "./clear-leads-button";
 
 export const maxDuration = 60;
 
@@ -44,6 +45,16 @@ export default async function ImportLeadsPage() {
         </Card>
         <Card className="p-6">
           <ImportForm />
+        </Card>
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Removed the uploaded file without a replacement?</h2>
+          <p className="text-sm text-slate-600 mb-3">
+            Uploading a fresh file automatically replaces the leads from a previous run of this import. If you&apos;ve
+            withdrawn a previously-uploaded file and don&apos;t have a fresh one to upload yet, use this instead to
+            clear that stale data now rather than waiting. Leads already converted to a deal (and any contact still
+            linked to one) are never removed.
+          </p>
+          <ClearLeadsButton />
         </Card>
       </div>
     </div>
