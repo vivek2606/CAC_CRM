@@ -47,13 +47,7 @@ export default async function ProductsPage() {
             {user.role === "HEAD" && (
               <>
                 <RecomputeCapacityButton />
-                <Link
-                  href="/products/new"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
-                >
-                  New Product
-                </Link>
-                <NewButton href="/pricelist/new" label="New Price Entry" />
+                <NewButton href="/pricelist/new" label="New Product / Price" />
               </>
             )}
           </div>
