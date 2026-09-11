@@ -18,6 +18,12 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
       ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : [];
   const accounts = await prisma.account.findMany({ select: { id: true, name: true, code: true } });
+  // Every contact, so a rep can link one that's already in the CRM to this
+  // account (or create a fresh one inline instead) - same as New Account.
+  const contacts = await prisma.contact.findMany({
+    orderBy: { firstName: "asc" },
+    select: { id: true, firstName: true, lastName: true, jobTitle: true },
+  });
 
   const action = updateAccount.bind(null, account.id);
 
@@ -31,6 +37,10 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
             isHead={user.role === "HEAD"}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts}
+            contacts={contacts.map((c) => ({
+              id: c.id,
+              label: c.jobTitle ? `${c.firstName} ${c.lastName} (${c.jobTitle})` : `${c.firstName} ${c.lastName}`,
+            }))}
             excludeId={account.id}
             defaultValues={{
               name: account.name,

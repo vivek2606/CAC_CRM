@@ -9,7 +9,7 @@ import type { AccountType } from "@prisma/client";
 type Option = { id: string; label: string };
 
 const CONTACT_MODES = [
-  { value: "none", label: "No contact yet" },
+  { value: "none", label: "Don't add a contact" },
   { value: "existing", label: "Link existing contact" },
   { value: "new", label: "Create new contact" },
 ] as const;
@@ -29,9 +29,9 @@ export function AccountForm({
   isHead: boolean;
   owners: Option[];
   accounts: AccountNameOption[];
-  // Only passed from the New Account page - when present, renders the
-  // primary-contact section below; omitted on the Edit form, since an
-  // existing account already manages its contacts from its detail page.
+  // When present, renders the "Add a contact" section below - passed from
+  // both the New and Edit Account pages, since an account can always use
+  // another contact linked, not just at creation.
   contacts?: Option[];
   excludeId?: string;
   defaultValues?: {
@@ -174,7 +174,7 @@ export function AccountForm({
 
       {contacts && (
         <div className="border-t border-slate-200 pt-5">
-          <label className="block text-sm font-medium text-slate-700 mb-2">Primary contact</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Add a contact</label>
           <div className="flex flex-wrap gap-2 mb-3">
             {CONTACT_MODES.map((m) => (
               <button
