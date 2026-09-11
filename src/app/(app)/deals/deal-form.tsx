@@ -34,7 +34,7 @@ export function DealForm({
   isHead: boolean;
   owners: Option[];
   accounts: Option[];
-  contacts: (Option & { accountId: string | null })[];
+  contacts: (Option & { accountId: string | null; phone: string | null })[];
   // Only passed for the New Deal form - lets a rep itemize what's being
   // quoted (model, qty, rate) right at creation instead of a separate step
   // on the deal's own page afterward.
@@ -60,8 +60,39 @@ export function DealForm({
   submitLabel: string;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
+  const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
+  const [customerName, setCustomerName] = useState(defaultValues?.customerName ?? "");
+  const [customerPhone, setCustomerPhone] = useState(defaultValues?.customerPhone ?? "");
   const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
   const today = new Date().toISOString().slice(0, 10);
+
+  // Picking a contact - directly, or automatically because it's the
+  // account's contact - carries its name/phone into the customer fields so
+  // the rep doesn't retype what's already on file. Both stay plain editable
+  // inputs, so this is just a starting point, not a locked value.
+  function applyContact(contact: (typeof contacts)[number] | null) {
+    setContactId(contact?.id ?? "");
+    if (contact) {
+      setCustomerName(contact.label);
+      if (contact.phone) setCustomerPhone(contact.phone);
+    }
+  }
+
+  function handleContactSelect(opt: Option | null) {
+    applyContact(opt ? (contacts.find((c) => c.id === opt.id) ?? null) : null);
+  }
+
+  // Picking an account that already has a contact on file auto-selects
+  // that contact too (the first one, if it has several) - the rep can
+  // still swap it via the Contact field right below.
+  function handleAccountChange(opt: Option | null) {
+    const newAccountId = opt?.id ?? "";
+    setAccountId(newAccountId);
+    if (newAccountId) {
+      const match = contacts.find((c) => c.accountId === newAccountId);
+      if (match) applyContact(match);
+    }
+  }
 
   const [items, setItems] = useState<LineItemRow[]>([]);
   const [value, setValue] = useState(defaultValues?.value != null ? String(defaultValues.value) : "");
@@ -119,7 +150,8 @@ export function DealForm({
           <input
             name="customerName"
             required
-            defaultValue={defaultValues?.customerName ?? ""}
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
@@ -130,7 +162,8 @@ export function DealForm({
           <input
             name="customerPhone"
             required
-            defaultValue={defaultValues?.customerPhone ?? ""}
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -363,7 +396,7 @@ export function DealForm({
             name="accountId"
             options={accounts}
             defaultValue={accountId}
-            onSelect={(opt) => setAccountId(opt?.id ?? "")}
+            onSelect={handleAccountChange}
             placeholder="Type to search accounts..."
           />
         </div>
@@ -373,7 +406,8 @@ export function DealForm({
           <SearchableSelect
             name="contactId"
             options={visibleContacts}
-            defaultValue={defaultValues?.contactId ?? ""}
+            value={contactId}
+            onSelect={handleContactSelect}
             placeholder="Type to search contacts..."
           />
         </div>

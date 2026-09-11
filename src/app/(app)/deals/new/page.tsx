@@ -16,7 +16,7 @@ export default async function NewDealPage() {
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
     prisma.contact.findMany({
       where: { ownerId: { in: ownerIds } },
-      select: { id: true, firstName: true, lastName: true, accountId: true },
+      select: { id: true, firstName: true, lastName: true, accountId: true, phone: true },
     }),
     getQuotableProducts(),
     getLatestPriceByProduct(),
@@ -43,6 +43,7 @@ export default async function NewDealPage() {
               id: c.id,
               label: `${c.firstName} ${c.lastName}`,
               accountId: c.accountId,
+              phone: c.phone,
             }))}
             products={productOptions}
             defaultValues={{ ownerId: user.role === "HEAD" ? owners[0]?.id : user.id }}
