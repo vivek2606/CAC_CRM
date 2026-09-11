@@ -239,15 +239,25 @@ export default async function ReportsPage() {
 
   // The 4 analytics sections below are scoped to the 6 active CAC reps only,
   // same as the headline stats above - mixing in "Others" would swamp them
-  // with 1800+ historical bulk-imported deals from before this system existed.
-  const teamDeals = salesReps.flatMap((r) => r.deals);
+  // with 1800+ historical bulk-imported deals from before this system
+  // existed. That alone isn't enough, though: a current rep's OWN historical
+  // Sales Register import also carries sourceTxnNo and is excluded here too,
+  // for the same reason win rate above excludes it - it's years of
+  // already-completed billing records with no real stage history, so
+  // counting it into a stage-shaped chart (or a funnel that's cumulative
+  // through every earlier stage) balloons every bucket with lifetime
+  // revenue that was never actually run through this pipeline.
+  const teamDeals = salesReps.flatMap((r) => r.deals).filter((d) => d.sourceTxnNo == null);
   const teamLeads = salesReps.flatMap((r) => r.leads);
 
   // 1. Deal value by stage, per rep (stacked bar).
   const stageValueData: StageValueRow[] = salesReps.map((rep) => {
     const row = { name: rep.name.split(" ")[0] } as StageValueRow;
     for (const stage of DEAL_STAGES) row[stage] = 0;
-    for (const deal of rep.deals) row[deal.stage] += deal.value;
+    for (const deal of rep.deals) {
+      if (deal.sourceTxnNo != null) continue;
+      row[deal.stage] += deal.value;
+    }
     return row;
   });
 
