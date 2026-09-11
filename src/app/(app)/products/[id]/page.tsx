@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { VAT_RATE } from "@/lib/constants";
 import { deleteProduct } from "../actions";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -124,7 +125,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 </Link>
               )}
             </div>
-            <p className="text-xs text-amber-600 mb-3">Dealer&apos;s Price excludes VAT @ 7.5%.</p>
+            <p className="text-xs text-slate-400 mb-3">Dealer&apos;s Price shown is inclusive of VAT @ 7.5%.</p>
             {pricelistEntries.length === 0 ? (
               <EmptyState
                 title="No current price yet"
@@ -145,7 +146,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                       <td className="py-2.5 text-slate-700">
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
-                      <td className="py-2.5 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
+                      <td className="py-2.5 text-slate-700">{formatCurrency(entry.dealerPrice * (1 + VAT_RATE))}</td>
                     </tr>
                   ))}
                 </tbody>

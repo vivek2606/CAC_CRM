@@ -68,7 +68,36 @@ export async function createAccount(formData: FormData) {
     })
     .catch(rethrowFriendly);
 
+  // Optional primary contact, picked via a mode toggle on the form -
+  // "existing" links an already-created contact to this new account,
+  // "new" creates one inline so a rep never has to leave the account
+  // creation flow just to get a first contact on file.
+  const contactMode = String(formData.get("contactMode") ?? "none");
+  if (contactMode === "existing") {
+    const contactId = String(formData.get("contactId") ?? "").trim();
+    if (contactId) {
+      await prisma.contact.update({ where: { id: contactId }, data: { accountId: account.id } });
+    }
+  } else if (contactMode === "new") {
+    const firstName = String(formData.get("contactFirstName") ?? "").trim();
+    const lastName = String(formData.get("contactLastName") ?? "").trim();
+    if (firstName && lastName) {
+      await prisma.contact.create({
+        data: {
+          firstName,
+          lastName,
+          jobTitle: toNullable(String(formData.get("contactJobTitle") ?? "")),
+          email: toNullable(String(formData.get("contactEmail") ?? "")),
+          phone: toNullable(String(formData.get("contactPhone") ?? "")),
+          accountId: account.id,
+          ownerId,
+        },
+      });
+    }
+  }
+
   revalidatePath("/accounts");
+  revalidatePath("/contacts");
   redirect(`/accounts/${account.id}`);
 }
 

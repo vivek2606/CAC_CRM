@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
+import { VAT_RATE } from "@/lib/constants";
 import { Trash2, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 
 export type ProductTableEntry = {
@@ -70,6 +71,7 @@ export function ProductsTable({
 
   return (
     <>
+      <p className="text-xs text-slate-400">Dealer&apos;s Price shown is inclusive of VAT @ 7.5%.</p>
       <div className="flex flex-wrap gap-3 items-center">
         <input
           type="text"
@@ -132,7 +134,7 @@ export function ProductsTable({
                       <td className="px-4 py-3 text-slate-600">
                         {new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric" }).format(entry.month)}
                       </td>
-                      <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice)}</td>
+                      <td className="px-4 py-3 text-slate-700">{formatCurrency(entry.dealerPrice * (1 + VAT_RATE))}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.availableQty != null ? entry.availableQty : "—"}</td>
                       {isHead && (
                         <td className="px-4 py-3">

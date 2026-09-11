@@ -14,6 +14,12 @@ export default async function NewAccountPage() {
   // already be registered under someone else's ownership, so the "already
   // exists" check needs to see the whole company, not just this rep's own.
   const accounts = await prisma.account.findMany({ select: { id: true, name: true, code: true } });
+  // Every contact, so a rep can link one that's already in the CRM as this
+  // new account's primary contact (or create a fresh one inline instead).
+  const contacts = await prisma.contact.findMany({
+    orderBy: { firstName: "asc" },
+    select: { id: true, firstName: true, lastName: true, jobTitle: true },
+  });
 
   return (
     <div>
@@ -25,6 +31,10 @@ export default async function NewAccountPage() {
             isHead={user.role === "HEAD"}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts}
+            contacts={contacts.map((c) => ({
+              id: c.id,
+              label: c.jobTitle ? `${c.firstName} ${c.lastName} (${c.jobTitle})` : `${c.firstName} ${c.lastName}`,
+            }))}
             defaultValues={{ ownerId: user.role === "HEAD" ? owners[0]?.id : user.id }}
             submitLabel="Create Account"
           />

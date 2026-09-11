@@ -1,16 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { CompanyNameField, type AccountNameOption } from "./company-name-field";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { AccountType } from "@prisma/client";
 
 type Option = { id: string; label: string };
+
+const CONTACT_MODES = [
+  { value: "none", label: "No contact yet" },
+  { value: "existing", label: "Link existing contact" },
+  { value: "new", label: "Create new contact" },
+] as const;
+type ContactMode = (typeof CONTACT_MODES)[number]["value"];
 
 export function AccountForm({
   action,
   isHead,
   owners,
   accounts,
+  contacts,
   excludeId,
   defaultValues,
   submitLabel,
@@ -19,6 +29,10 @@ export function AccountForm({
   isHead: boolean;
   owners: Option[];
   accounts: AccountNameOption[];
+  // Only passed from the New Account page - when present, renders the
+  // primary-contact section below; omitted on the Edit form, since an
+  // existing account already manages its contacts from its detail page.
+  contacts?: Option[];
   excludeId?: string;
   defaultValues?: {
     name?: string;
@@ -36,6 +50,8 @@ export function AccountForm({
   };
   submitLabel: string;
 }) {
+  const [contactMode, setContactMode] = useState<ContactMode>("none");
+
   return (
     <form action={action} className="space-y-5 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -155,6 +171,76 @@ export function AccountForm({
         )}
         {!isHead && <input type="hidden" name="ownerId" value={defaultValues?.ownerId ?? ""} />}
       </div>
+
+      {contacts && (
+        <div className="border-t border-slate-200 pt-5">
+          <label className="block text-sm font-medium text-slate-700 mb-2">Primary contact</label>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {CONTACT_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setContactMode(m.value)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  contactMode === m.value
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <input type="hidden" name="contactMode" value={contactMode} />
+
+          {contactMode === "existing" && (
+            <SearchableSelect name="contactId" options={contacts} placeholder="Type to search contacts..." />
+          )}
+
+          {contactMode === "new" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">First name *</label>
+                <input
+                  name="contactFirstName"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Last name *</label>
+                <input
+                  name="contactLastName"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Job title</label>
+                <input
+                  name="contactJobTitle"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                <input
+                  name="contactEmail"
+                  type="email"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                <input
+                  name="contactPhone"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <button

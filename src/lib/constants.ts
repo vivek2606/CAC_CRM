@@ -75,6 +75,13 @@ export const DEAL_STAGE_COLORS: Record<DealStage, { bg: string; text: string; do
 // "time in current stage" - last edit is the best available proxy.
 export const STALE_DEAL_DAYS = 14;
 
+// Pricelist.dealerPrice is stored excluding VAT (the Stock & Price List
+// upload's own convention - see admin/import/pricelist). This rate is used
+// only to compute a VAT-inclusive figure for display, never to change what
+// gets fed into deal line items or quotes, which still work off the raw
+// ex-VAT price.
+export const VAT_RATE = 0.075;
+
 export const LOST_REASONS: LostReason[] = [
   "PRICE_TOO_HIGH",
   "COMPETITOR",
