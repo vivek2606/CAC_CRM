@@ -160,14 +160,17 @@ export default async function ReportsPage() {
   const targetMonth = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth(), 1));
   const targetMonthEnd = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() + 1, 1));
 
-  const [targets, newAccounts] = await Promise.all([
+  const [targets, newAccountsRaw] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: salesReps.map((r) => r.id) }, month: targetMonth } }),
     // No date filter - filtered in JS below for both the quarter stat and
     // the 6-month heatmap, so one query covers both instead of fetching
     // twice with slightly different windows.
     prisma.account.findMany({
       where: { ownerId: { in: salesReps.map((r) => r.id) } },
-      select: { ownerId: true, createdAt: true },
+      select: {
+        ownerId: true,
+        deals: { select: { stage: true, closedAt: true } },
+      },
     }),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
@@ -180,13 +183,30 @@ export default async function ReportsPage() {
   const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
   const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
 
-  // New accounts opened, per rep per month - same 6-month window as the
-  // Won-value heatmap above, so the two read as companion views.
+  // New accounts opened, per rep per month = the customer code first used to
+  // close a deal in that month, i.e. each account counts exactly once, in
+  // whichever month its first Won deal closed. Account.createdAt is NOT
+  // used for this: an account first brought in by the historical Sales
+  // Register import gets createdAt = whenever that import batch happened to
+  // run, not the real-world date it became a customer - which is what
+  // produced nonsense spikes (dozens of "new" accounts landing in whatever
+  // month an import was run). An account with no Won deal yet has never
+  // "opened" and isn't counted in any month.
+  function firstWonDate(account: (typeof newAccountsRaw)[number]): Date | null {
+    const wonClosedDates = account.deals.filter((d) => d.stage === "WON" && d.closedAt).map((d) => d.closedAt!.getTime());
+    return wonClosedDates.length > 0 ? new Date(Math.min(...wonClosedDates)) : null;
+  }
+  const newAccounts = newAccountsRaw
+    .map((a) => ({ ownerId: a.ownerId, openedAt: firstWonDate(a) }))
+    .filter((a): a is { ownerId: string; openedAt: Date } => a.openedAt != null);
+
+  // Same 6-month window as the Won-value heatmap above, so the two read as
+  // companion views.
   const newAccountsHeatmapData: HeatmapRow[] = salesReps.map((rep) => {
     const byMonth = new Map<string, number>();
     for (const a of newAccounts) {
       if (a.ownerId !== rep.id) continue;
-      const key = `${a.createdAt.getUTCFullYear()}-${a.createdAt.getUTCMonth()}`;
+      const key = `${a.openedAt.getUTCFullYear()}-${a.openedAt.getUTCMonth()}`;
       byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
     }
     return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
@@ -195,7 +215,7 @@ export default async function ReportsPage() {
     repName: "Total",
     values: heatmapMonthKeys.map((_, i) => newAccountsHeatmapData.reduce((s, r) => s + r.values[i], 0)),
   };
-  const newAccountsThisQuarter = newAccounts.filter((a) => a.createdAt >= qStart).length;
+  const newAccountsThisQuarter = newAccounts.filter((a) => a.openedAt >= qStart).length;
 
   // Leads converted to a deal, per rep per month - per business priority
   // (deals over leads), the one lead-centric metric that still earns a
