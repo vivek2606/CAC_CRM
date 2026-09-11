@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
+import { getProductCategoryOptions } from "@/lib/product-options";
 import { PageHeader, Card } from "@/components/ui";
 import { ProductForm } from "../../product-form";
 import { updateProduct } from "../../actions";
@@ -9,7 +10,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const { id } = await params;
   await requireHead();
 
-  const product = await prisma.product.findUnique({ where: { id } });
+  const [product, { categories, subCategories }] = await Promise.all([
+    prisma.product.findUnique({ where: { id } }),
+    getProductCategoryOptions(),
+  ]);
   if (!product) notFound();
 
   const action = updateProduct.bind(null, product.id);
@@ -19,7 +23,13 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       <PageHeader title={`Edit: ${product.code}`} />
       <div className="p-6">
         <Card className="p-6">
-          <ProductForm action={action} defaultValues={product} submitLabel="Save Changes" />
+          <ProductForm
+            action={action}
+            categories={categories}
+            subCategories={subCategories}
+            defaultValues={product}
+            submitLabel="Save Changes"
+          />
         </Card>
       </div>
     </div>

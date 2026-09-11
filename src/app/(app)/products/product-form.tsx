@@ -1,11 +1,17 @@
 "use client";
 
+import { CreatableTextSelect } from "@/components/creatable-text-select";
+
 export function ProductForm({
   action,
+  categories,
+  subCategories,
   defaultValues,
   submitLabel,
 }: {
   action: (formData: FormData) => void;
+  categories: string[];
+  subCategories: string[];
   defaultValues?: {
     code?: string;
     brand?: string;
@@ -40,20 +46,22 @@ export function ProductForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Product Category *</label>
-          <input
+          <CreatableTextSelect
             name="category"
             required
+            options={categories}
             defaultValue={defaultValues?.category}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Type to search or add new category..."
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Product Sub-Category *</label>
-          <input
+          <CreatableTextSelect
             name="subCategory"
             required
+            options={subCategories}
             defaultValue={defaultValues?.subCategory}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Type to search or add new sub-category..."
           />
         </div>
         <div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SearchableSelect } from "@/components/searchable-select";
+import { CreatableTextSelect } from "@/components/creatable-text-select";
 
 type ProductOption = { id: string; code: string; model: string; brand: string };
 
@@ -14,11 +15,15 @@ type ProductMode = (typeof PRODUCT_MODES)[number]["value"];
 export function ProductPriceForm({
   action,
   products,
+  categories,
+  subCategories,
   defaultValues,
   submitLabel,
 }: {
   action: (formData: FormData) => void;
   products: ProductOption[];
+  categories: string[];
+  subCategories: string[];
   defaultValues?: {
     productId?: string;
     month?: string; // "YYYY-MM"
@@ -90,18 +95,20 @@ export function ProductPriceForm({
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Product Category *</label>
-              <input
+              <CreatableTextSelect
                 name="category"
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                options={categories}
+                placeholder="Type to search or add new category..."
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Product Sub-Category *</label>
-              <input
+              <CreatableTextSelect
                 name="subCategory"
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                options={subCategories}
+                placeholder="Type to search or add new sub-category..."
               />
             </div>
             <div>
