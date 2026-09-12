@@ -14,14 +14,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const [product, pricelistEntries, salesAgg, soldMonths, lastSale] = await Promise.all([
     prisma.product.findUnique({ where: { id } }),
-    // Only entries from the Stock & Price List workflow (the current
-    // going-forward price) - landedCost is set only for those, never for
-    // the historical Sales Register / Price Master rows, so this is exactly
-    // "the dealer price from that upload onwards", with no landed price or
-    // exchange rate mixed in (there's no exchange rate concept in pricing
-    // at all anymore - it's purely a Naira-sales-to-USD reporting input).
+    // Every price entry for this product, regardless of source (Stock &
+    // Price List upload, Price Master upload, or added directly here) -
+    // Pricelist has at most one row per (product, month), so this is simply
+    // that product's full pricing history, newest first.
     prisma.pricelist.findMany({
-      where: { productId: id, landedCost: { not: null } },
+      where: { productId: id },
       orderBy: { month: "desc" },
     }),
     prisma.saleLineItem.aggregate({

@@ -23,18 +23,20 @@ export async function createPricelistEntry(formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
   const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
+  const month = parseMonth(parsed.month);
 
-  const entry = await prisma.pricelist.create({
-    data: {
-      productId: parsed.productId,
-      month: parseMonth(parsed.month),
-      dealerPrice: parsed.dealerPrice,
-      landedPrice: parsed.landedPrice,
-    },
+  // Pricelist has at most one row per (product, month) - a product priced
+  // earlier this month (by this form, or by a Stock & Price List / Price
+  // Master upload) already has a row for it, so this must update that row
+  // rather than blind-create and hit the unique constraint.
+  await prisma.pricelist.upsert({
+    where: { productId_month: { productId: parsed.productId, month } },
+    create: { productId: parsed.productId, month, dealerPrice: parsed.dealerPrice, landedPrice: parsed.landedPrice },
+    update: { dealerPrice: parsed.dealerPrice, landedPrice: parsed.landedPrice },
   });
 
   revalidatePath("/products");
-  redirect(`/products?productId=${entry.productId}`);
+  redirect(`/products?productId=${parsed.productId}`);
 }
 
 export async function updatePricelistEntry(entryId: string, formData: FormData) {
@@ -85,15 +87,17 @@ export async function createProductAndPricelistEntry(formData: FormData) {
     if (!productId) throw new Error("Product is required");
   }
 
-  const entry = await prisma.pricelist.create({
-    data: {
-      productId,
-      month: parseMonth(entryParsed.month),
-      dealerPrice: entryParsed.dealerPrice,
-      landedPrice: entryParsed.landedPrice,
-    },
+  const month = parseMonth(entryParsed.month);
+
+  // Same reasoning as createPricelistEntry: upsert so re-pricing a product
+  // for a month it already has a row for updates that row instead of
+  // hitting the (productId, month) unique constraint.
+  await prisma.pricelist.upsert({
+    where: { productId_month: { productId, month } },
+    create: { productId, month, dealerPrice: entryParsed.dealerPrice, landedPrice: entryParsed.landedPrice },
+    update: { dealerPrice: entryParsed.dealerPrice, landedPrice: entryParsed.landedPrice },
   });
 
   revalidatePath("/products");
-  redirect(`/products?productId=${entry.productId}`);
+  redirect(`/products?productId=${productId}`);
 }
