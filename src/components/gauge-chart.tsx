@@ -16,8 +16,16 @@ function pointAt(t: number, radius: number): { x: number; y: number } {
 function arcPath(t0: number, t1: number, radius: number): string {
   const start = pointAt(t0, radius);
   const end = pointAt(t1, radius);
-  const largeArc = t1 - t0 > 0.5 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+  // t spans the upper semicircle only (t=0..1 is 0deg..180deg), so the arc
+  // between any two points in range is always <=180deg - the SVG "large
+  // arc" flag (which selects the >180deg alternative) must always be 0
+  // here. It was previously set from `t1 - t0 > 0.5`, as if t ranged over
+  // the full circle (where >0.5 would mean >180deg) - for a value between
+  // 50-100% of target that flipped it to 1, making the filled arc sweep
+  // the wrong way around (through the lower half of the circle, clipped
+  // outside the gauge's semicircle viewBox) instead of the intended short
+  // way across the top.
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y}`;
 }
 
 function zoneColor(pct: number): string {
