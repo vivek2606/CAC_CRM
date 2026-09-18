@@ -13,7 +13,6 @@ import type { DealStage } from "@prisma/client";
 
 const PAGE_SIZE = 50;
 const TREND_MONTHS = 12;
-const TOP_PRODUCTS = 10;
 
 function monthLabel(monthStr: string): string {
   const m = monthStr.match(/^(\d{4})-(\d{1,2})$/);
@@ -125,7 +124,7 @@ export default async function ClosedDealsPage({
     }),
     prisma.dealLineItem.findMany({
       where: { deal: { ownerId: ownerFilter, stage: "WON", closedAt: { gte: trendStart, lt: trendEnd } } },
-      select: { qty: true, unitPrice: true, product: { select: { code: true, brand: true, model: true } } },
+      select: { qty: true, unitPrice: true, product: { select: { category: true } } },
     }),
   ]);
 
@@ -170,21 +169,22 @@ export default async function ClosedDealsPage({
     .map((o) => ({ name: o.name.split(" ")[0], won: wonByRep.get(o.id) ?? 0, lost: lostByRep.get(o.id) ?? 0 }))
     .sort((a, b) => b.won - a.won);
 
-  // Product-wise: top products by Won value, last 12 months - only deals
-  // with itemized line items are represented (see DealLineItem), so a deal
-  // won without a product breakup won't appear here.
-  const productTotals = new Map<string, { qty: number; value: number }>();
+  // Product category-wise: Won value by category, last 12 months - grouped
+  // by category rather than individual product/model, which read as a long,
+  // messy list of near-identical SKU strings. Only deals with itemized line
+  // items are represented (see DealLineItem), so a deal won without a
+  // product breakup won't appear here.
+  const categoryTotals = new Map<string, { qty: number; value: number }>();
   for (const li of wonLineItems) {
-    const key = `${li.product.code} — ${li.product.brand} ${li.product.model}`;
-    const g = productTotals.get(key) ?? { qty: 0, value: 0 };
+    const key = li.product.category;
+    const g = categoryTotals.get(key) ?? { qty: 0, value: 0 };
     g.qty += li.qty;
     g.value += li.qty * li.unitPrice;
-    productTotals.set(key, g);
+    categoryTotals.set(key, g);
   }
-  const productRows = Array.from(productTotals.entries())
+  const productRows = Array.from(categoryTotals.entries())
     .map(([category, v]) => ({ category, value: v.value, qty: v.qty }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, TOP_PRODUCTS);
+    .sort((a, b) => b.value - a.value);
 
   // Why we lose, last 12 months - same categorization as Team Reports.
   const lostReasonGroups = new Map<string, { count: number; value: number }>();
@@ -283,7 +283,7 @@ export default async function ClosedDealsPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-1">Top products, by Won value</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Won value by product category</h3>
               <p className="text-xs text-slate-400 mb-3">Won deals with itemized products only.</p>
               {productRows.length === 0 ? (
                 <p className="text-sm text-slate-400 py-6 text-center">No itemized won deals in the last {TREND_MONTHS} months.</p>
@@ -294,7 +294,7 @@ export default async function ClosedDealsPage({
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 text-left uppercase tracking-wide text-slate-400">
-                          <th className="px-2 py-1.5 font-medium">Product</th>
+                          <th className="px-2 py-1.5 font-medium">Category</th>
                           <th className="px-2 py-1.5 font-medium">Qty</th>
                           <th className="px-2 py-1.5 font-medium">Value</th>
                         </tr>

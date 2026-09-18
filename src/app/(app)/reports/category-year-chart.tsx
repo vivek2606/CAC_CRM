@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
 import { formatCompactCurrency } from "@/lib/format";
 
 // One hue, light -> dark, since years are an ordered progression rather than
@@ -19,7 +19,7 @@ export function CategoryYearCompareChart({ data, years }: { data: CategoryYearRo
   const height = Math.max(240, data.length * 48);
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 0 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 8, right: 40, left: 8, bottom: 0 }}>
         <XAxis
           type="number"
           tick={{ fontSize: 12, fill: "#64748b" }}
@@ -48,7 +48,14 @@ export function CategoryYearCompareChart({ data, years }: { data: CategoryYearRo
             fill={shadeFor(i, years.length)}
             radius={[0, 4, 4, 0]}
             maxBarSize={16}
-          />
+          >
+            <LabelList
+              dataKey={String(year)}
+              position="right"
+              style={{ fontSize: 9, fill: "#64748b" }}
+              formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")}
+            />
+          </Bar>
         ))}
       </BarChart>
     </ResponsiveContainer>

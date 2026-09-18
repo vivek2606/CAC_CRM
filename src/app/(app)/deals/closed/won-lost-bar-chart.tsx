@@ -1,9 +1,11 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
 import { formatCompactCurrency } from "@/lib/format";
 
 export type WonLostRow = { name: string; won: number; lost: number };
+
+const labelStyle = { fontSize: 10, fill: "#64748b" };
 
 // Used for both the month-wise trend and the sales-person-wise breakdown on
 // the Closed Deals insights section - same shape (named row, Won vs Lost
@@ -11,7 +13,7 @@ export type WonLostRow = { name: string; won: number; lost: number };
 export function WonLostBarChart({ data }: { data: WonLostRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
         <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis
           tick={{ fontSize: 12, fill: "#64748b" }}
@@ -25,8 +27,12 @@ export function WonLostBarChart({ data }: { data: WonLostRow[] }) {
           contentStyle={{ borderRadius: 8, borderColor: "#e2e8f0", fontSize: 13 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="won" name="Won" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="lost" name="Lost" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="won" name="Won" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28}>
+          <LabelList dataKey="won" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+        </Bar>
+        <Bar dataKey="lost" name="Lost" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28}>
+          <LabelList dataKey="lost" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer, Cell } from "recharts";
 import { formatCompactCurrency } from "@/lib/format";
 
 const STAGE_BAR_COLORS: Record<string, string> = {
@@ -13,7 +13,7 @@ const STAGE_BAR_COLORS: Record<string, string> = {
 export function PipelineChart({ data }: { data: { stage: string; value: number; count: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
         <XAxis dataKey="stage" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis
           tick={{ fontSize: 12, fill: "#64748b" }}
@@ -36,6 +36,12 @@ export function PipelineChart({ data }: { data: { stage: string; value: number; 
           {data.map((entry) => (
             <Cell key={entry.stage} fill={STAGE_BAR_COLORS[entry.stage] ?? "#94a3b8"} />
           ))}
+          <LabelList
+            dataKey="value"
+            position="top"
+            style={{ fontSize: 11, fill: "#64748b" }}
+            formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
