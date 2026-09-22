@@ -5,8 +5,7 @@ import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LEAD_STATUS_LABELS, LEAD_STATUS_COLORS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
-import { NotesSection } from "../../notes-section";
-import { ActivitiesSection } from "../../activities-section";
+import { RecordTimeline } from "../../record-timeline";
 import { deleteContact } from "../actions";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -102,17 +101,13 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           )}
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Activities</h2>
-            <ActivitiesSection
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Timeline</h2>
+            <RecordTimeline
+              notes={contact.notes}
               activities={contact.activities}
               target={{ contactId: contact.id, ownerId: contact.ownerId }}
               path={`/contacts/${contact.id}`}
             />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Notes</h2>
-            <NotesSection notes={contact.notes} target={{ contactId: contact.id }} />
           </Card>
         </div>
 
