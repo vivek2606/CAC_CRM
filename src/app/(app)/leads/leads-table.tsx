@@ -6,10 +6,14 @@ import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 import { Badge, Avatar, EmptyState } from "@/components/ui";
 import { TagChips } from "@/components/tag-chips";
+import { SortableTh } from "@/components/sortable-th";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, LEAD_STATUSES } from "@/lib/constants";
 import { bulkConvertSelectedLeads } from "./actions";
 import type { LeadStatus, LeadSource } from "@prisma/client";
+
+type SortKey = "title" | "status" | "value" | "owner" | "createdAt";
+type SortDir = "asc" | "desc";
 
 type LeadRow = {
   id: string;
@@ -36,10 +40,12 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return leads.filter(
+    const rows = leads.filter(
       (l) =>
         (status === "" || l.status === status) &&
         (ownerId === "" || l.owner.id === ownerId) &&
@@ -48,7 +54,32 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
           (l.company ?? "").toLowerCase().includes(q) ||
           l.tags.some((t) => t.toLowerCase().includes(q)))
     );
-  }, [leads, query, status, ownerId]);
+    if (!sortKey) return rows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      switch (sortKey) {
+        case "title":
+          return a.title.localeCompare(b.title) * dir;
+        case "status":
+          return a.status.localeCompare(b.status) * dir;
+        case "value":
+          return ((a.value ?? 0) - (b.value ?? 0)) * dir;
+        case "owner":
+          return a.owner.name.localeCompare(b.owner.name) * dir;
+        case "createdAt":
+          return (a.createdAt.getTime() - b.createdAt.getTime()) * dir;
+      }
+    });
+  }, [leads, query, status, ownerId, sortKey, sortDir]);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   function clear() {
     setQuery("");
@@ -178,12 +209,18 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
                   className="rounded border-slate-300"
                 />
               </th>
-              <th className="px-4 py-3 font-medium">Lead</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <SortableTh label="Lead" sortKey="title" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+              <SortableTh label="Status" sortKey="status" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
               <th className="px-4 py-3 font-medium">Source</th>
-              <th className="px-4 py-3 font-medium">Value</th>
-              <th className="px-4 py-3 font-medium">Owner</th>
-              <th className="px-4 py-3 font-medium">Created</th>
+              <SortableTh label="Value" sortKey="value" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+              <SortableTh label="Owner" sortKey="owner" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+              <SortableTh
+                label="Created"
+                sortKey="createdAt"
+                activeKey={sortKey}
+                direction={sortDir}
+                onSort={handleSort}
+              />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

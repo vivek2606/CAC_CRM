@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState, Avatar } from "@/components/ui";
 import { TagChips } from "@/components/tag-chips";
+import { SortableTh } from "@/components/sortable-th";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+
+type SortKey = "name" | "industry" | "city" | "contactCount" | "dealCount" | "owner";
+type SortDir = "asc" | "desc";
 
 export type AccountRow = {
   id: string;
@@ -27,13 +31,44 @@ const PAGE_SIZE = 50;
 export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q === ""
-      ? accounts
-      : accounts.filter((a) => a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q)));
-  }, [accounts, query]);
+    const rows =
+      q === ""
+        ? accounts
+        : accounts.filter((a) => a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q)));
+    if (!sortKey) return rows;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return a.name.localeCompare(b.name) * dir;
+        case "industry":
+          return (a.industry ?? "").localeCompare(b.industry ?? "") * dir;
+        case "city":
+          return (a.city ?? "").localeCompare(b.city ?? "") * dir;
+        case "contactCount":
+          return (a.contactCount - b.contactCount) * dir;
+        case "dealCount":
+          return (a.dealCount - b.dealCount) * dir;
+        case "owner":
+          return a.owner.name.localeCompare(b.owner.name) * dir;
+      }
+    });
+  }, [accounts, query, sortKey, sortDir]);
+
+  function handleSort(key: SortKey) {
+    setPage(1);
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -71,12 +106,30 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-medium">Account</th>
-                  <th className="px-4 py-3 font-medium">Industry</th>
-                  <th className="px-4 py-3 font-medium">City</th>
-                  <th className="px-4 py-3 font-medium">Contacts</th>
-                  <th className="px-4 py-3 font-medium">Deals</th>
-                  <th className="px-4 py-3 font-medium">Owner</th>
+                  <SortableTh label="Account" sortKey="name" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh
+                    label="Industry"
+                    sortKey="industry"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableTh label="City" sortKey="city" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh
+                    label="Contacts"
+                    sortKey="contactCount"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableTh
+                    label="Deals"
+                    sortKey="dealCount"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableTh label="Owner" sortKey="owner" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

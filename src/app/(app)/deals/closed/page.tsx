@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar, StatCard } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
+import { SortableLinkTh } from "@/components/sortable-link-th";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
 import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LOST_REASONS, LOST_REASON_LABELS, LOST_REASON_COLORS } from "@/lib/constants";
 import { WonLostBarChart, type WonLostRow } from "./won-lost-bar-chart";
@@ -32,12 +33,23 @@ function shortMonthLabel(date: Date): string {
 export default async function ClosedDealsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; stage?: string; q?: string; month?: string; owner?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    stage?: string;
+    q?: string;
+    month?: string;
+    owner?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
   const params = await searchParams;
   const page = parsePage(params.page);
+  const sortKey = params.sort === "value" || params.sort === "title" ? params.sort : "closedAt";
+  const sortDir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
+  const orderBy = sortKey === "value" ? { value: sortDir } : sortKey === "title" ? { title: sortDir } : { closedAt: sortDir };
 
   const stageFilter =
     params.stage === "WON" || params.stage === "LOST" ? (params.stage as DealStage) : undefined;
@@ -65,7 +77,7 @@ export default async function ClosedDealsPage({
   const [deals, totalCount, totalValueAgg, owners] = await Promise.all([
     prisma.deal.findMany({
       where,
-      orderBy: { closedAt: "desc" },
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -410,12 +422,33 @@ export default async function ClosedDealsPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-medium">Deal</th>
+                  <SortableLinkTh
+                    label="Deal"
+                    sortKey="title"
+                    currentSort={sortKey}
+                    currentDir={sortDir}
+                    basePath="/deals/closed"
+                    searchParams={params}
+                  />
                   <th className="px-4 py-3 font-medium">Account</th>
-                  <th className="px-4 py-3 font-medium">Value</th>
+                  <SortableLinkTh
+                    label="Value"
+                    sortKey="value"
+                    currentSort={sortKey}
+                    currentDir={sortDir}
+                    basePath="/deals/closed"
+                    searchParams={params}
+                  />
                   <th className="px-4 py-3 font-medium">Stage</th>
                   <th className="px-4 py-3 font-medium">Owner</th>
-                  <th className="px-4 py-3 font-medium">Closed</th>
+                  <SortableLinkTh
+                    label="Closed"
+                    sortKey="closedAt"
+                    currentSort={sortKey}
+                    currentDir={sortDir}
+                    basePath="/deals/closed"
+                    searchParams={params}
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -455,7 +488,14 @@ export default async function ClosedDealsPage({
             totalCount={totalCount}
             pageSize={PAGE_SIZE}
             basePath="/deals/closed"
-            searchParams={{ stage: params.stage, q: params.q, month: params.month, owner: params.owner }}
+            searchParams={{
+              stage: params.stage,
+              q: params.q,
+              month: params.month,
+              owner: params.owner,
+              sort: params.sort,
+              dir: params.dir,
+            }}
           />
         </Card>
       </div>
