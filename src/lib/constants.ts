@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, LostReason, EndUseSegment, AccountType, PurchaseTimeframe, PaymentTerms } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, CallOutcome, LostReason, EndUseSegment, AccountType, PurchaseTimeframe, PaymentTerms } from "@prisma/client";
 
 // A deal's itemized total discounted more than this far below catalog price
 // needs Head approval before it can be marked Won.
@@ -272,6 +272,22 @@ export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
   PENDING: "Pending",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
+};
+
+export const CALL_OUTCOMES: CallOutcome[] = ["CONNECTED", "NO_ANSWER", "VOICEMAIL", "FOLLOW_UP_NEEDED"];
+
+export const CALL_OUTCOME_LABELS: Record<CallOutcome, string> = {
+  CONNECTED: "Connected",
+  NO_ANSWER: "No answer",
+  VOICEMAIL: "Left voicemail",
+  FOLLOW_UP_NEEDED: "Follow-up needed",
+};
+
+export const CALL_OUTCOME_COLORS: Record<CallOutcome, { bg: string; text: string }> = {
+  CONNECTED: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  NO_ANSWER: { bg: "bg-slate-200", text: "text-slate-600" },
+  VOICEMAIL: { bg: "bg-sky-100", text: "text-sky-700" },
+  FOLLOW_UP_NEEDED: { bg: "bg-amber-100", text: "text-amber-700" },
 };
 
 export const STAGE_DEFAULT_PROBABILITY: Record<DealStage, number> = {

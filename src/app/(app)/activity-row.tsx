@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge, Avatar } from "@/components/ui";
 import { formatDateTime, relativeDueLabel, formatTime, hasTimeComponent } from "@/lib/format";
-import { ACTIVITY_TYPE_LABELS } from "@/lib/constants";
+import { ACTIVITY_TYPE_LABELS, CALL_OUTCOME_LABELS, CALL_OUTCOME_COLORS } from "@/lib/constants";
 import { ActivityTypeIcon } from "./activity-type-icon";
 import { EditActivityDialog } from "./edit-activity-dialog";
 import { toggleActivityStatus, updateActivity, deleteActivity } from "./shared-actions";
-import type { ActivityStatus, ActivityType } from "@prisma/client";
+import type { ActivityStatus, ActivityType, CallOutcome } from "@prisma/client";
 
 export type ActivityRowData = {
   id: string;
@@ -19,6 +19,7 @@ export type ActivityRowData = {
   dueAt: Date | null;
   status: ActivityStatus;
   completedAt: Date | null;
+  callOutcome: CallOutcome | null;
 };
 
 export function ActivityRow({
@@ -65,6 +66,12 @@ export function ActivityRow({
           {ACTIVITY_TYPE_LABELS[activity.type]}
         </span>
       </Badge>
+
+      {activity.callOutcome && (
+        <Badge bg={CALL_OUTCOME_COLORS[activity.callOutcome].bg} text={CALL_OUTCOME_COLORS[activity.callOutcome].text}>
+          {CALL_OUTCOME_LABELS[activity.callOutcome]}
+        </Badge>
+      )}
 
       <div className="min-w-0 flex-1">
         <p className={`text-sm ${activity.status === "COMPLETED" ? "text-slate-400 line-through" : "text-slate-800"}`}>

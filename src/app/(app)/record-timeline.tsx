@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { Avatar } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import { ACTIVITY_TYPE_LABELS, ACTIVITY_TYPES } from "@/lib/constants";
+import { ACTIVITY_TYPE_LABELS, ACTIVITY_TYPES, CALL_OUTCOMES, CALL_OUTCOME_LABELS } from "@/lib/constants";
 import { addNote, addActivity } from "./shared-actions";
 import { ActivityRow, type ActivityRowData } from "./activity-row";
+import type { ActivityType } from "@prisma/client";
 
 type NoteItem = {
   id: string;
@@ -44,6 +45,7 @@ export function RecordTimeline({
   path: string;
 }) {
   const [mode, setMode] = useState<LogMode>("note");
+  const [activityType, setActivityType] = useState<ActivityType>("CALL");
   const addNoteAction = addNote.bind(null, target);
   const addActivityAction = addActivity.bind(null, target);
 
@@ -89,7 +91,8 @@ export function RecordTimeline({
         <form action={addActivityAction} className="flex flex-wrap gap-2 mb-4">
           <select
             name="type"
-            defaultValue="CALL"
+            value={activityType}
+            onChange={(e) => setActivityType(e.target.value as ActivityType)}
             className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             {ACTIVITY_TYPES.filter((t) => t !== "NOTE").map((t) => (
@@ -98,6 +101,20 @@ export function RecordTimeline({
               </option>
             ))}
           </select>
+          {activityType === "CALL" && (
+            <select
+              name="callOutcome"
+              defaultValue=""
+              className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Outcome (optional)</option>
+              {CALL_OUTCOMES.map((o) => (
+                <option key={o} value={o}>
+                  {CALL_OUTCOME_LABELS[o]}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             name="subject"
             placeholder="What needs to happen?"

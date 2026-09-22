@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS } from "@/lib/constants";
-import type { ActivityType } from "@prisma/client";
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, CALL_OUTCOMES, CALL_OUTCOME_LABELS } from "@/lib/constants";
+import type { ActivityType, CallOutcome } from "@prisma/client";
 
 // Formats a Date for a <input type="datetime-local"> value (local time,
 // no timezone suffix) - toISOString() would shift to UTC and desync the
@@ -18,14 +18,27 @@ export function EditActivityDialog({
   onConfirm,
   onCancel,
 }: {
-  activity: { type: ActivityType; subject: string; description: string | null; dueAt: Date | null };
-  onConfirm: (data: { type: ActivityType; subject: string; description: string; dueAt: string }) => void;
+  activity: {
+    type: ActivityType;
+    subject: string;
+    description: string | null;
+    dueAt: Date | null;
+    callOutcome: CallOutcome | null;
+  };
+  onConfirm: (data: {
+    type: ActivityType;
+    subject: string;
+    description: string;
+    dueAt: string;
+    callOutcome: CallOutcome | null;
+  }) => void;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<ActivityType>(activity.type);
   const [subject, setSubject] = useState(activity.subject);
   const [description, setDescription] = useState(activity.description ?? "");
   const [dueAt, setDueAt] = useState(toDateTimeLocal(activity.dueAt));
+  const [callOutcome, setCallOutcome] = useState<CallOutcome | "">(activity.callOutcome ?? "");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
@@ -52,6 +65,24 @@ export function EditActivityDialog({
           autoFocus
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
+
+        {type === "CALL" && (
+          <>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Call outcome</label>
+            <select
+              value={callOutcome}
+              onChange={(e) => setCallOutcome(e.target.value as CallOutcome | "")}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Unspecified</option>
+              {CALL_OUTCOMES.map((o) => (
+                <option key={o} value={o}>
+                  {CALL_OUTCOME_LABELS[o]}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         <label className="block text-xs font-medium text-slate-500 mb-1">Due date &amp; time</label>
         <input
@@ -80,7 +111,9 @@ export function EditActivityDialog({
           <button
             type="button"
             disabled={!subject.trim()}
-            onClick={() => onConfirm({ type, subject: subject.trim(), description: description.trim(), dueAt })}
+            onClick={() =>
+              onConfirm({ type, subject: subject.trim(), description: description.trim(), dueAt, callOutcome: callOutcome || null })
+            }
             className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white text-sm font-medium px-3.5 py-2 transition-colors"
           >
             Save

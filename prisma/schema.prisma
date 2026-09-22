@@ -83,6 +83,15 @@ enum ActivityStatus {
   CANCELLED
 }
 
+// Only meaningful on a CALL activity - HubSpot's call outcome/disposition.
+// Feeds the Call Connect Rate stat on Team Reports.
+enum CallOutcome {
+  CONNECTED
+  NO_ANSWER
+  VOICEMAIL
+  FOLLOW_UP_NEEDED
+}
+
 enum AccountType {
   CONTRACTOR
   CONSULTANT
@@ -396,6 +405,8 @@ model Activity {
   dueAt       DateTime?
   completedAt DateTime?
   status      ActivityStatus  @default(PENDING)
+  // Only set on CALL activities - see CallOutcome.
+  callOutcome CallOutcome?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 

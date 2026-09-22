@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
-import type { ActivityType } from "@prisma/client";
+import type { ActivityType, CallOutcome } from "@prisma/client";
+
+function toCallOutcome(type: string, value: FormDataEntryValue | null): CallOutcome | null {
+  if (type !== "CALL" || typeof value !== "string" || value.trim() === "") return null;
+  return value as CallOutcome;
+}
 
 export async function addNote(params: { leadId?: string; dealId?: string; contactId?: string }, formData: FormData) {
   const user = await requireUser();
@@ -43,6 +48,7 @@ export async function addActivity(
       description: description || null,
       dueAt: dueAtRaw ? new Date(String(dueAtRaw)) : null,
       status: "PENDING",
+      callOutcome: toCallOutcome(type, formData.get("callOutcome")),
       ownerId: params.ownerId ?? user.id,
       leadId: params.leadId ?? null,
       dealId: params.dealId ?? null,
@@ -73,7 +79,7 @@ export async function toggleActivityStatus(activityId: string, path: string) {
 export async function updateActivity(
   activityId: string,
   path: string,
-  data: { type: ActivityType; subject: string; description: string; dueAt: string }
+  data: { type: ActivityType; subject: string; description: string; dueAt: string; callOutcome?: CallOutcome | null }
 ) {
   const user = await requireUser();
   const activity = await prisma.activity.findUniqueOrThrow({ where: { id: activityId } });
@@ -87,6 +93,7 @@ export async function updateActivity(
       subject: data.subject.trim(),
       description: data.description.trim() || null,
       dueAt: data.dueAt ? new Date(data.dueAt) : null,
+      callOutcome: data.type === "CALL" ? (data.callOutcome ?? null) : null,
     },
   });
   revalidatePath(path);
