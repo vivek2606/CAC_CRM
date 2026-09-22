@@ -5,7 +5,7 @@ import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDuration } from "@/lib/format";
 import {
   DEAL_STAGE_LABELS,
   DEAL_STAGE_COLORS,
@@ -45,6 +45,15 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
 
   const colors = DEAL_STAGE_COLORS[deal.stage];
+  // "First contacted" (see Lead detail page for the same idea) - for a
+  // capital-goods business where enquiries mostly land directly as a Deal,
+  // this is the number that reflects how fast the enquiry actually got a
+  // response, not just when the deal record was created.
+  const contactActivities = deal.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+  const firstContactAt =
+    contactActivities.length > 0
+      ? contactActivities.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contactActivities[0].createdAt)
+      : null;
   const deleteAction = deleteDeal.bind(null, deal.id);
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
@@ -283,6 +292,16 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                 <dt className="text-slate-500">Created</dt>
                 <dd className="text-slate-700">{formatDate(deal.createdAt)}</dd>
               </div>
+              {deal.stage !== "WON" && deal.stage !== "LOST" && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">First contacted</dt>
+                  <dd className={firstContactAt ? "text-slate-700" : "text-amber-600 font-medium"}>
+                    {firstContactAt
+                      ? `${formatDuration(firstContactAt.getTime() - deal.createdAt.getTime())} after created`
+                      : "Not yet contacted"}
+                  </dd>
+                </div>
+              )}
             </dl>
           </Card>
 

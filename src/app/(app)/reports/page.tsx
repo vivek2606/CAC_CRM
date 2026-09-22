@@ -30,7 +30,7 @@ import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
 import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Phone } from "lucide-react";
+import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Phone, Swords, Zap } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
   const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
@@ -61,6 +61,8 @@ export default async function ReportsPage() {
           lostReasonCategory: true,
           sourceTxnNo: true,
           endUseSegment: true,
+          competitorBrand: true,
+          activities: { select: { type: true, createdAt: true } },
         },
       },
       leads: {
@@ -124,6 +126,28 @@ export default async function ReportsPage() {
         !l.activities.some((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING")
     ).length;
 
+    // Deal response time - the same time-to-first-contact idea, but sourced
+    // from the Deal itself rather than a Lead: for a capital-goods business
+    // where enquiries mostly land directly as a Deal (leads are rare), THIS
+    // is the number that actually reflects "how fast did we respond to the
+    // enquiry," not the Lead-based figure above.
+    const dealResponseTimesMs: number[] = [];
+    for (const deal of deals) {
+      const contacted = deal.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+      if (contacted.length === 0) continue;
+      const firstAt = contacted.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contacted[0].createdAt);
+      dealResponseTimesMs.push(firstAt.getTime() - deal.createdAt.getTime());
+    }
+    const avgDealResponseHours =
+      dealResponseTimesMs.length > 0
+        ? dealResponseTimesMs.reduce((s, ms) => s + ms, 0) / dealResponseTimesMs.length / (1000 * 60 * 60)
+        : null;
+    const uncontactedDeals = deals.filter(
+      (d) =>
+        OPEN_DEAL_STAGES.includes(d.stage) &&
+        !d.activities.some((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING")
+    ).length;
+
     // Activity leaderboard + call connect rate, this quarter only - all-time
     // volume would be swamped by whatever historical activity happens to
     // exist and wouldn't reflect current performance.
@@ -160,6 +184,10 @@ export default async function ReportsPage() {
       respondedLeadsCount: responseTimesMs.length,
       totalResponseHours: responseTimesMs.reduce((s, ms) => s + ms, 0) / (1000 * 60 * 60),
       uncontactedLeads,
+      avgDealResponseHours,
+      respondedDealsCount: dealResponseTimesMs.length,
+      totalDealResponseHours: dealResponseTimesMs.reduce((s, ms) => s + ms, 0) / (1000 * 60 * 60),
+      uncontactedDeals,
       connectRate,
       activityTypeCounts,
     };
@@ -184,6 +212,12 @@ export default async function ReportsPage() {
       ? repStats.reduce((s, r) => s + r.totalResponseHours, 0) / teamRespondedLeadsCount
       : null;
   const teamUncontactedLeads = repStats.reduce((s, r) => s + r.uncontactedLeads, 0);
+  const teamRespondedDealsCount = repStats.reduce((s, r) => s + r.respondedDealsCount, 0);
+  const teamAvgDealResponseHours =
+    teamRespondedDealsCount > 0
+      ? repStats.reduce((s, r) => s + r.totalDealResponseHours, 0) / teamRespondedDealsCount
+      : null;
+  const teamUncontactedDeals = repStats.reduce((s, r) => s + r.uncontactedDeals, 0);
 
   const tableRows = othersStats ? [...repStats, othersStats] : repStats;
   const chartData = tableRows
@@ -333,6 +367,27 @@ export default async function ReportsPage() {
   }
   const openTeamDeals = teamDeals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
   const openTeamLeads = teamLeads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
+
+  // Sales velocity: (open deal count x avg deal value x win rate) / avg
+  // sales cycle days - one number in Naira/day that answers "is the
+  // pipeline actually moving," distinct from its size (raw open value,
+  // above) or its quality (weighted forecast) alone.
+  const wonTeamDealsAllTime = teamDeals.filter((d) => d.stage === "WON");
+  const avgDealValue =
+    wonTeamDealsAllTime.length > 0
+      ? wonTeamDealsAllTime.reduce((s, d) => s + d.value, 0) / wonTeamDealsAllTime.length
+      : 0;
+  const avgSalesCycleDays =
+    wonTeamDealsAllTime.length > 0
+      ? wonTeamDealsAllTime.reduce(
+          (s, d) => s + (d.closedAt ? (d.closedAt.getTime() - d.createdAt.getTime()) / 86400000 : 0),
+          0
+        ) / wonTeamDealsAllTime.length
+      : null;
+  const salesVelocity =
+    avgSalesCycleDays && avgSalesCycleDays > 0
+      ? (openTeamDeals.length * avgDealValue * (teamAvgWinRate / 100)) / avgSalesCycleDays
+      : null;
   const probabilityExposureData = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((bucket) => ({
     bucket: `${bucket}%`,
     pipeline: openTeamDeals.filter((d) => roundToBucket(d.probability) === bucket).reduce((s, d) => s + d.value, 0),
@@ -418,6 +473,25 @@ export default async function ReportsPage() {
   }))
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count);
+
+  // 5b. Win rate against each named competitor - competitorBrand is
+  // freeform text (not an enum, since reps type whatever's actually being
+  // quoted against), so group by a normalized (trimmed, lowercased) key and
+  // display using the first-seen casing, rather than fragmenting "Daikin" /
+  // "daikin" into separate rows.
+  const competitorGroups = new Map<string, { label: string; won: number; lost: number }>();
+  for (const deal of teamDeals) {
+    if (!deal.competitorBrand || (deal.stage !== "WON" && deal.stage !== "LOST")) continue;
+    const key = deal.competitorBrand.trim().toLowerCase();
+    if (!key) continue;
+    const g = competitorGroups.get(key) ?? { label: deal.competitorBrand.trim(), won: 0, lost: 0 };
+    if (deal.stage === "WON") g.won += 1;
+    else g.lost += 1;
+    competitorGroups.set(key, g);
+  }
+  const competitorData = Array.from(competitorGroups.values())
+    .map((g) => ({ ...g, total: g.won + g.lost, winRate: Math.round((g.won / (g.won + g.lost)) * 100) }))
+    .sort((a, b) => b.total - a.total);
 
   // 6. End-use segment distribution - fed by the deal-form field, so only
   // deals entered (or edited) since this feature shipped will have a value here.
@@ -510,6 +584,24 @@ export default async function ReportsPage() {
             }
             icon={<Clock className="h-4 w-4 text-sky-500" />}
             accent="sky"
+          />
+          <StatCard
+            label="Sales Velocity"
+            value={salesVelocity == null ? "—" : `${formatCompactCurrency(salesVelocity)}/day`}
+            sub="Open pipeline × win rate ÷ cycle length"
+            icon={<Zap className="h-4 w-4 text-amber-500" />}
+            accent="amber"
+          />
+          <StatCard
+            label="Deal Response Time"
+            value={teamAvgDealResponseHours == null ? "—" : formatDuration(teamAvgDealResponseHours * 60 * 60 * 1000)}
+            sub={
+              teamUncontactedDeals > 0
+                ? `${teamUncontactedDeals} open deal${teamUncontactedDeals === 1 ? "" : "s"} never contacted`
+                : "Enquiry created → first contact"
+            }
+            icon={<Clock className="h-4 w-4 text-indigo-500" />}
+            accent="indigo"
           />
         </div>
 
@@ -688,6 +780,35 @@ export default async function ReportsPage() {
         </div>
 
         <Card className="p-5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Swords className="h-3.5 w-3.5 text-slate-400" />
+            <h2 className="text-sm font-semibold text-slate-900">Win rate vs. competitors</h2>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">
+            Closed deals where a competing brand was also being quoted (Deal form&apos;s Competing brand field).
+          </p>
+          {competitorData.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No closed deals with a competing brand recorded yet.</p>
+          ) : (
+            <ul className="space-y-2.5">
+              {competitorData.map((c) => (
+                <li key={c.label} className="flex items-center gap-3">
+                  <span className="text-sm text-slate-700 w-32 shrink-0 truncate" title={c.label}>
+                    {c.label}
+                  </span>
+                  <div className="flex-1 h-2 rounded-full bg-rose-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${c.winRate}%` }} />
+                  </div>
+                  <span className="text-xs font-medium text-slate-500 w-40 text-right shrink-0">
+                    {c.winRate}% won ({c.won}-{c.lost})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">Deals by end-use segment</h2>
           <p className="text-xs text-slate-400 mb-3">Which verticals the pipeline is coming from.</p>
           {segmentData.length === 0 ? (
@@ -711,7 +832,8 @@ export default async function ReportsPage() {
                 "Active Leads",
                 "Tasks Pending",
                 "Tasks Done",
-                "Avg. Response Time (hrs)",
+                "Avg. Lead Response Time (hrs)",
+                "Avg. Deal Response Time (hrs)",
                 "Call Connect Rate %",
               ]}
               rows={tableRows.map((r) => [
@@ -725,6 +847,7 @@ export default async function ReportsPage() {
                 r.pendingActivities,
                 r.completedActivities,
                 r.avgResponseHours == null ? "" : Math.round(r.avgResponseHours * 10) / 10,
+                r.avgDealResponseHours == null ? "" : Math.round(r.avgDealResponseHours * 10) / 10,
                 r.connectRate ?? "",
               ])}
             />
@@ -740,7 +863,7 @@ export default async function ReportsPage() {
                 <th className="px-4 py-3 font-medium">Active Leads</th>
                 <th className="px-4 py-3 font-medium">Tasks Pending</th>
                 <th className="px-4 py-3 font-medium">Tasks Done</th>
-                <th className="px-4 py-3 font-medium">Avg. Response</th>
+                <th className="px-4 py-3 font-medium">Deal Response</th>
                 <th className="px-4 py-3 font-medium">Connect Rate</th>
               </tr>
             </thead>
@@ -769,7 +892,7 @@ export default async function ReportsPage() {
                   <td className="px-4 py-3 text-slate-700">{r.pendingActivities}</td>
                   <td className="px-4 py-3 text-slate-700">{r.completedActivities}</td>
                   <td className="px-4 py-3 text-slate-700">
-                    {r.avgResponseHours == null ? "—" : formatDuration(r.avgResponseHours * 60 * 60 * 1000)}
+                    {r.avgDealResponseHours == null ? "—" : formatDuration(r.avgDealResponseHours * 60 * 60 * 1000)}
                   </td>
                   <td className="px-4 py-3 text-slate-700">{r.connectRate == null ? "—" : `${r.connectRate}%`}</td>
                 </tr>
