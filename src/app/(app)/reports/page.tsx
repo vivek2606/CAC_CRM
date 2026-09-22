@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
-import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { formatCompactCurrency, formatCurrency, formatDuration } from "@/lib/format";
 import {
   OPEN_DEAL_STAGES,
   CLOSED_LEAD_STATUSES,
@@ -25,11 +25,12 @@ import { GaugeChart } from "@/components/gauge-chart";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
 import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ConversionFunnel } from "./conversion-funnel";
+import { ActivityLeaderboardChart, type ActivityLeaderboardRow } from "./activity-leaderboard-chart";
 import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
 import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge } from "lucide-react";
+import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Phone } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
   const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
@@ -68,10 +69,12 @@ export default async function ReportsPage() {
           source: true,
           winProbability: true,
           value: true,
+          createdAt: true,
           convertedDeal: { select: { stage: true, createdAt: true } },
+          activities: { select: { type: true, createdAt: true } },
         },
       },
-      activities: { select: { status: true } },
+      activities: { select: { status: true, type: true, callOutcome: true, createdAt: true } },
     },
   });
 
@@ -98,6 +101,44 @@ export default async function ReportsPage() {
     const pendingActivities = activities.filter((a) => a.status === "PENDING").length;
     const completedActivities = activities.filter((a) => a.status === "COMPLETED").length;
 
+    // Lead response time (HubSpot's time-to-first-contact): average time
+    // from a lead's creation to the earliest CALL/EMAIL/MEETING activity
+    // logged on it - only over leads that HAVE been contacted, so leads
+    // still sitting untouched don't drag this toward a misleadingly low
+    // "average". uncontactedLeads (still-open, never-contacted) is the
+    // companion figure that surfaces those separately.
+    const responseTimesMs: number[] = [];
+    for (const lead of leads) {
+      const contacted = lead.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+      if (contacted.length === 0) continue;
+      const firstAt = contacted.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contacted[0].createdAt);
+      responseTimesMs.push(firstAt.getTime() - lead.createdAt.getTime());
+    }
+    const avgResponseHours =
+      responseTimesMs.length > 0
+        ? responseTimesMs.reduce((s, ms) => s + ms, 0) / responseTimesMs.length / (1000 * 60 * 60)
+        : null;
+    const uncontactedLeads = leads.filter(
+      (l) =>
+        !CLOSED_LEAD_STATUSES.includes(l.status) &&
+        !l.activities.some((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING")
+    ).length;
+
+    // Activity leaderboard + call connect rate, this quarter only - all-time
+    // volume would be swamped by whatever historical activity happens to
+    // exist and wouldn't reflect current performance.
+    const activitiesThisQuarter = activities.filter((a) => a.createdAt >= qStart);
+    const callsThisQuarter = activitiesThisQuarter.filter((a) => a.type === "CALL");
+    const callsWithOutcome = callsThisQuarter.filter((a) => a.callOutcome != null);
+    const connectedCalls = callsWithOutcome.filter((a) => a.callOutcome === "CONNECTED").length;
+    const connectRate = callsWithOutcome.length > 0 ? Math.round((connectedCalls / callsWithOutcome.length) * 100) : null;
+    const activityTypeCounts = {
+      CALL: callsThisQuarter.length,
+      EMAIL: activitiesThisQuarter.filter((a) => a.type === "EMAIL").length,
+      MEETING: activitiesThisQuarter.filter((a) => a.type === "MEETING").length,
+      TASK: activitiesThisQuarter.filter((a) => a.type === "TASK").length,
+    };
+
     return {
       id,
       name,
@@ -115,6 +156,12 @@ export default async function ReportsPage() {
       activeLeads,
       pendingActivities,
       completedActivities,
+      avgResponseHours,
+      respondedLeadsCount: responseTimesMs.length,
+      totalResponseHours: responseTimesMs.reduce((s, ms) => s + ms, 0) / (1000 * 60 * 60),
+      uncontactedLeads,
+      connectRate,
+      activityTypeCounts,
     };
   }
 
@@ -129,6 +176,14 @@ export default async function ReportsPage() {
   const teamWonQuarter = repStats.reduce((s, r) => s + r.wonQuarterValue, 0);
   const teamAvgWinRate =
     repStats.length > 0 ? Math.round(repStats.reduce((s, r) => s + r.winRate, 0) / repStats.length) : 0;
+  // Weighted (not average-of-averages) so a rep with one 2-day-old response
+  // doesn't skew the team figure as much as a rep with fifty logged responses.
+  const teamRespondedLeadsCount = repStats.reduce((s, r) => s + r.respondedLeadsCount, 0);
+  const teamAvgResponseHours =
+    teamRespondedLeadsCount > 0
+      ? repStats.reduce((s, r) => s + r.totalResponseHours, 0) / teamRespondedLeadsCount
+      : null;
+  const teamUncontactedLeads = repStats.reduce((s, r) => s + r.uncontactedLeads, 0);
 
   const tableRows = othersStats ? [...repStats, othersStats] : repStats;
   const chartData = tableRows
@@ -188,6 +243,10 @@ export default async function ReportsPage() {
   });
   const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
   const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
+  // Pipeline coverage ratio - see the same computation on the Dashboard for
+  // the reasoning behind using raw open pipeline, not the weighted forecast.
+  const remainingDeptTarget = Math.max(totalTarget - totalActualForTarget, 0);
+  const deptCoverage = remainingDeptTarget > 0 ? teamOpenValue / remainingDeptTarget : null;
 
   // New accounts opened, per rep per month = the customer code first used to
   // close a deal in that month, i.e. each account counts exactly once, in
@@ -281,6 +340,19 @@ export default async function ReportsPage() {
       .filter((l) => l.winProbability != null && l.winProbability === bucket)
       .reduce((s, l) => s + (l.value ?? 0), 0),
   }));
+
+  // 2b. Activity leaderboard + call connect rate, this quarter - calls,
+  // emails, and meetings each rep has actually logged, plus how often a
+  // logged call reaches Connected. Distinct from the pending/completed task
+  // counts in the summary table below, which don't break down by type or
+  // outcome.
+  const activityLeaderboardData: ActivityLeaderboardRow[] = repStats.map((r) => ({
+    name: r.name.split(" ")[0],
+    ...r.activityTypeCounts,
+  }));
+  const connectRateRows = repStats
+    .map((r) => ({ id: r.id, name: r.name.split(" ")[0], avatarColor: r.avatarColor, connectRate: r.connectRate, calls: r.activityTypeCounts.CALL }))
+    .sort((a, b) => (b.connectRate ?? -1) - (a.connectRate ?? -1));
 
   // 3. Conversion funnel: every lead -> qualified -> converted to a deal -> won.
   const totalLeadsCount = teamLeads.length;
@@ -428,6 +500,17 @@ export default async function ReportsPage() {
             icon={<Building2 className="h-4 w-4 text-rose-500" />}
             accent="rose"
           />
+          <StatCard
+            label="Avg. Response Time"
+            value={teamAvgResponseHours == null ? "—" : formatDuration(teamAvgResponseHours * 60 * 60 * 1000)}
+            sub={
+              teamUncontactedLeads > 0
+                ? `${teamUncontactedLeads} lead${teamUncontactedLeads === 1 ? "" : "s"} never contacted`
+                : "Lead created → first contact"
+            }
+            icon={<Clock className="h-4 w-4 text-sky-500" />}
+            accent="sky"
+          />
         </div>
 
         <Card className="p-5">
@@ -453,13 +536,18 @@ export default async function ReportsPage() {
             {totalTarget === 0 && totalActualForTarget === 0 ? (
               <p className="text-sm text-slate-400 py-6 text-center">No targets set for this month.</p>
             ) : (
-              <div className="flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center">
                 <GaugeChart
                   value={totalActualForTarget}
                   target={totalTarget}
                   valueLabel={formatCompactCurrency(totalActualForTarget)}
                   targetLabel={formatCompactCurrency(totalTarget)}
                 />
+                <p className="mt-2 text-xs text-slate-500 text-center">
+                  {deptCoverage != null
+                    ? `${deptCoverage.toFixed(1)}x pipeline coverage vs. remaining target`
+                    : "Target met for this month"}
+                </p>
               </div>
             )}
           </Card>
@@ -521,6 +609,50 @@ export default async function ReportsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Activity leaderboard</h2>
+            <p className="text-xs text-slate-400 mb-3">Calls, emails, and meetings each rep has logged this quarter.</p>
+            {activityLeaderboardData.every((r) => r.CALL + r.EMAIL + r.MEETING + r.TASK === 0) ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No activity logged this quarter yet.</p>
+            ) : (
+              <ActivityLeaderboardChart data={activityLeaderboardData} />
+            )}
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Phone className="h-3.5 w-3.5 text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-900">Call connect rate</h2>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">Share of logged calls that reached Connected, this quarter.</p>
+            {connectRateRows.every((r) => r.calls === 0) ? (
+              <p className="text-sm text-slate-400 py-6 text-center">No calls logged this quarter yet.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {connectRateRows.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3">
+                    <Avatar name={r.name} color={r.avatarColor} size={6} />
+                    <span className="text-sm text-slate-700 w-16 shrink-0 truncate">{r.name}</span>
+                    <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                      {r.connectRate != null && (
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${r.connectRate}%` }} />
+                      )}
+                    </div>
+                    <span className="text-xs font-medium text-slate-500 w-24 text-right shrink-0">
+                      {r.connectRate != null
+                        ? `${r.connectRate}% (${r.calls} calls)`
+                        : r.calls === 0
+                          ? "No calls logged"
+                          : "No outcomes recorded"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead conversion funnel</h2>
             <p className="text-xs text-slate-400 mb-3">Every lead&apos;s journey from first contact to a won deal.</p>
             <ConversionFunnel stages={leadFunnelStages} />
@@ -579,6 +711,8 @@ export default async function ReportsPage() {
                 "Active Leads",
                 "Tasks Pending",
                 "Tasks Done",
+                "Avg. Response Time (hrs)",
+                "Call Connect Rate %",
               ]}
               rows={tableRows.map((r) => [
                 r.name,
@@ -590,6 +724,8 @@ export default async function ReportsPage() {
                 r.activeLeads,
                 r.pendingActivities,
                 r.completedActivities,
+                r.avgResponseHours == null ? "" : Math.round(r.avgResponseHours * 10) / 10,
+                r.connectRate ?? "",
               ])}
             />
           </div>
@@ -604,6 +740,8 @@ export default async function ReportsPage() {
                 <th className="px-4 py-3 font-medium">Active Leads</th>
                 <th className="px-4 py-3 font-medium">Tasks Pending</th>
                 <th className="px-4 py-3 font-medium">Tasks Done</th>
+                <th className="px-4 py-3 font-medium">Avg. Response</th>
+                <th className="px-4 py-3 font-medium">Connect Rate</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -630,6 +768,10 @@ export default async function ReportsPage() {
                   <td className="px-4 py-3 text-slate-700">{r.activeLeads}</td>
                   <td className="px-4 py-3 text-slate-700">{r.pendingActivities}</td>
                   <td className="px-4 py-3 text-slate-700">{r.completedActivities}</td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {r.avgResponseHours == null ? "—" : formatDuration(r.avgResponseHours * 60 * 60 * 1000)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{r.connectRate == null ? "—" : `${r.connectRate}%`}</td>
                 </tr>
               ))}
             </tbody>

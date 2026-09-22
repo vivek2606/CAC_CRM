@@ -266,6 +266,15 @@ export default async function DashboardPage() {
   const myActualForTarget = actualByUserIdForTarget.get(user.id) ?? 0;
 
   const openPipelineValue = openDeals.reduce((sum, d) => sum + d.value, 0);
+  // Pipeline coverage ratio (Salesforce staple): raw open pipeline value
+  // against what's still needed to hit target this month - not the weighted
+  // forecast, since coverage is meant to answer "is there enough raw
+  // opportunity in play to backstop the usual attrition", a different
+  // question than the probability-adjusted forecast above answers.
+  const remainingTeamTarget = Math.max(totalTarget - totalActualForTarget, 0);
+  const teamCoverage = remainingTeamTarget > 0 ? openPipelineValue / remainingTeamTarget : null;
+  const remainingMyTarget = Math.max(myTarget - myActualForTarget, 0);
+  const myCoverage = remainingMyTarget > 0 ? openPipelineValue / remainingMyTarget : null;
   const openDealsNoAccount = openDeals.filter((d) => !d.accountId).length;
   // Weighted forecast (HubSpot's "Deal Forecast"): each open deal's value
   // discounted by its own win probability, so a room full of Qualification-
@@ -434,13 +443,18 @@ export default async function DashboardPage() {
               <EmptyState title="No targets set for this month" description="Set targets from the Targets page." />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center justify-center sm:border-r sm:border-slate-100 sm:pr-4">
+                <div className="flex flex-col items-center justify-center sm:border-r sm:border-slate-100 sm:pr-4">
                   <GaugeChart
                     value={totalActualForTarget}
                     target={totalTarget}
                     valueLabel={formatCompactCurrency(totalActualForTarget)}
                     targetLabel={formatCompactCurrency(totalTarget)}
                   />
+                  <p className="mt-2 text-xs text-slate-500 text-center">
+                    {teamCoverage != null
+                      ? `${teamCoverage.toFixed(1)}x pipeline coverage vs. remaining target`
+                      : "Target met for this month"}
+                  </p>
                 </div>
                 <div className="sm:col-span-2 space-y-3">
                   {targetRows.map((r) => (
@@ -452,13 +466,18 @@ export default async function DashboardPage() {
           ) : myTarget === 0 && myActualForTarget === 0 ? (
             <EmptyState title="No target set for this month" description="Ask your Head of Sales to set one." />
           ) : (
-            <div className="flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center">
               <GaugeChart
                 value={myActualForTarget}
                 target={myTarget}
                 valueLabel={formatCompactCurrency(myActualForTarget)}
                 targetLabel={formatCompactCurrency(myTarget)}
               />
+              <p className="mt-2 text-xs text-slate-500 text-center">
+                {myCoverage != null
+                  ? `${myCoverage.toFixed(1)}x pipeline coverage vs. remaining target`
+                  : "Target met for this month"}
+              </p>
             </div>
           )}
         </Card>

@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDuration } from "@/lib/format";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_COLORS,
@@ -38,6 +38,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (!canAccessOwner(user, lead.ownerId)) redirect("/leads");
 
   const colors = LEAD_STATUS_COLORS[lead.status];
+  // "First contacted" (HubSpot's time-to-first-contact): the earliest
+  // logged CALL/EMAIL/MEETING activity on this lead, distinct from any
+  // TASK/NOTE which aren't actual outreach to the customer.
+  const contactActivities = lead.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+  const firstContactAt =
+    contactActivities.length > 0
+      ? contactActivities.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contactActivities[0].createdAt)
+      : null;
   const convertAction = convertLeadToDeal.bind(null, lead.id);
   const deleteAction = deleteLead.bind(null, lead.id);
 
@@ -199,6 +207,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 <dt className="text-slate-500">Created</dt>
                 <dd className="text-slate-700">{formatDate(lead.createdAt)}</dd>
               </div>
+              {lead.status !== "CONVERTED" && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">First contacted</dt>
+                  <dd className={firstContactAt ? "text-slate-700" : "text-amber-600 font-medium"}>
+                    {firstContactAt ? `${formatDuration(firstContactAt.getTime() - lead.createdAt.getTime())} after created` : "Not yet contacted"}
+                  </dd>
+                </div>
+              )}
             </dl>
           </Card>
 

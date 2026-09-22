@@ -73,6 +73,16 @@ export function initials(name: string): string {
     .toUpperCase();
 }
 
+// A duration in milliseconds as a compact "2.5 hrs" / "3 days" label - used
+// for response-time metrics (lead created -> first contact logged).
+export function formatDuration(ms: number): string {
+  const hours = ms / (1000 * 60 * 60);
+  if (hours < 1) return `${Math.max(1, Math.round(ms / (1000 * 60)))} min`;
+  if (hours < 48) return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} hr${hours >= 2 ? "s" : ""}`;
+  const days = hours / 24;
+  return `${days < 10 ? days.toFixed(1) : Math.round(days)} days`;
+}
+
 export function relativeDueLabel(date: Date | string | null | undefined): string {
   if (!date) return "No due date";
   const d = new Date(date);
