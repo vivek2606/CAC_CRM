@@ -11,7 +11,7 @@ export default async function ActivitiesPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const [activities, owners, accounts, contacts] = await Promise.all([
+  const [activities, owners, accounts, contacts, leads, deals] = await Promise.all([
     prisma.activity.findMany({
       where: { ownerId: { in: ownerIds } },
       orderBy: [{ status: "asc" }, { dueAt: "asc" }],
@@ -31,6 +31,8 @@ export default async function ActivitiesPage() {
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true, accountId: true },
     }),
+    prisma.lead.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, title: true } }),
+    prisma.deal.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, title: true } }),
   ]);
 
   // No fixed owner/contact/account here (unlike Record Timeline's binding on
@@ -62,6 +64,8 @@ export default async function ActivitiesPage() {
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({ id: c.id, label: `${c.firstName} ${c.lastName}`, accountId: c.accountId }))}
+            leads={leads.map((l) => ({ id: l.id, label: l.title }))}
+            deals={deals.map((d) => ({ id: d.id, label: d.title }))}
           />
         </Card>
 

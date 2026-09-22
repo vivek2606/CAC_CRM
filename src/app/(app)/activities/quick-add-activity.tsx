@@ -12,19 +12,23 @@ type Option = { id: string; label: string };
 // use Record Timeline instead, which fixes owner/contact from the record
 // itself). So this is also the only place a Head needs to pick who a call or
 // meeting is actually for (e.g. one they sat in on with a sales manager) and
-// tag which account/contact it concerned.
+// tag which lead/deal/account/contact it concerned.
 export function QuickAddActivity({
   action,
   isHead,
   owners,
   accounts,
   contacts,
+  leads,
+  deals,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
   owners: Option[];
   accounts: Option[];
   contacts: (Option & { accountId: string | null })[];
+  leads: Option[];
+  deals: Option[];
 }) {
   const [type, setType] = useState<ActivityType>("TASK");
   const [accountId, setAccountId] = useState("");
@@ -93,6 +97,12 @@ export function QuickAddActivity({
       </div>
       <div className="w-44">
         <SearchableSelect name="contactId" options={visibleContacts} placeholder="Contact (optional)" />
+      </div>
+      <div className="w-44">
+        <SearchableSelect name="leadId" options={leads} placeholder="Lead (optional)" />
+      </div>
+      <div className="w-44">
+        <SearchableSelect name="dealId" options={deals} placeholder="Deal (optional)" />
       </div>
       <button
         type="submit"

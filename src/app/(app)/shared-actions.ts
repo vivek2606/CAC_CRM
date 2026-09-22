@@ -55,6 +55,8 @@ export async function addActivity(
   if (!canAccessOwner(user, ownerId)) {
     throw new Error("You do not have access to log activities for this sales person.");
   }
+  const leadId = params.leadId ?? fromForm(formData.get("leadId"));
+  const dealId = params.dealId ?? fromForm(formData.get("dealId"));
   const contactId = params.contactId ?? fromForm(formData.get("contactId"));
   const accountId = params.accountId ?? fromForm(formData.get("accountId"));
 
@@ -67,15 +69,15 @@ export async function addActivity(
       status: "PENDING",
       callOutcome: toCallOutcome(type, formData.get("callOutcome")),
       ownerId,
-      leadId: params.leadId ?? null,
-      dealId: params.dealId ?? null,
+      leadId,
+      dealId,
       contactId,
       accountId,
     },
   });
 
-  if (params.leadId) revalidatePath(`/leads/${params.leadId}`);
-  if (params.dealId) revalidatePath(`/deals/${params.dealId}`);
+  if (leadId) revalidatePath(`/leads/${leadId}`);
+  if (dealId) revalidatePath(`/deals/${dealId}`);
   if (contactId) revalidatePath(`/contacts/${contactId}`);
   if (accountId) revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/activities");
