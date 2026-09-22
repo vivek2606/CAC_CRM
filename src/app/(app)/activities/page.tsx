@@ -3,15 +3,15 @@ import { ListChecks } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { ACTIVITY_TYPE_LABELS, ACTIVITY_TYPES } from "@/lib/constants";
 import { addActivity } from "../shared-actions";
 import { ActivitiesList } from "./activities-list";
+import { QuickAddActivity } from "./quick-add-activity";
 
 export default async function ActivitiesPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const [activities, owners] = await Promise.all([
+  const [activities, owners, accounts, contacts] = await Promise.all([
     prisma.activity.findMany({
       where: { ownerId: { in: ownerIds } },
       orderBy: [{ status: "asc" }, { dueAt: "asc" }],
@@ -20,14 +20,23 @@ export default async function ActivitiesPage() {
         lead: { select: { id: true, title: true } },
         deal: { select: { id: true, title: true } },
         contact: { select: { id: true, firstName: true, lastName: true } },
+        account: { select: { id: true, name: true } },
       },
     }),
     user.role === "HEAD"
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
+    prisma.contact.findMany({
+      where: { ownerId: { in: ownerIds } },
+      select: { id: true, firstName: true, lastName: true, accountId: true },
+    }),
   ]);
 
-  const addStandaloneActivity = addActivity.bind(null, { ownerId: user.id });
+  // No fixed owner/contact/account here (unlike Record Timeline's binding on
+  // a specific record) - the quick-add form below submits whichever ones
+  // were picked, or none.
+  const addStandaloneActivity = addActivity.bind(null, {});
 
   return (
     <div>
@@ -47,36 +56,13 @@ export default async function ActivitiesPage() {
 
       <div className="p-6 space-y-4">
         <Card className="p-4">
-          <form action={addStandaloneActivity} className="flex flex-wrap gap-2">
-            <select
-              name="type"
-              defaultValue="TASK"
-              className="rounded-lg border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {ACTIVITY_TYPES.filter((t) => t !== "NOTE").map((t) => (
-                <option key={t} value={t}>
-                  {ACTIVITY_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-            <input
-              name="subject"
-              placeholder="Quick add a task for yourself..."
-              required
-              className="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <input
-              name="dueAt"
-              type="datetime-local"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 transition-colors"
-            >
-              Add
-            </button>
-          </form>
+          <QuickAddActivity
+            action={addStandaloneActivity}
+            isHead={user.role === "HEAD"}
+            owners={owners.map((o) => ({ id: o.id, label: o.name }))}
+            accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
+            contacts={contacts.map((c) => ({ id: c.id, label: `${c.firstName} ${c.lastName}`, accountId: c.accountId }))}
+          />
         </Card>
 
         <ActivitiesList activities={activities} owners={owners} isHead={user.role === "HEAD"} />

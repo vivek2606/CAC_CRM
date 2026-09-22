@@ -17,6 +17,7 @@ export default async function TaskQueuePage() {
       lead: { select: { id: true, title: true } },
       deal: { select: { id: true, title: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
+      account: { select: { id: true, name: true } },
     },
   });
 

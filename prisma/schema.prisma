@@ -199,6 +199,7 @@ model Account {
   contacts    Contact[]
   leads       Lead[]
   deals       Deal[]
+  activities  Activity[]
 }
 
 model Contact {
@@ -421,6 +422,13 @@ model Activity {
 
   contactId   String?
   contact     Contact?        @relation(fields: [contactId], references: [id])
+
+  // Lets a standalone activity (logged from the Activities tab, not tied to
+  // a specific Lead/Deal/Contact page) still be tagged with the account it's
+  // actually about - e.g. a call attended alongside a sales manager for one
+  // of their accounts.
+  accountId   String?
+  account     Account?        @relation(fields: [accountId], references: [id])
 }
 
 model Note {

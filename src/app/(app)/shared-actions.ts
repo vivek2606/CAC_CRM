@@ -30,8 +30,12 @@ export async function addNote(params: { leadId?: string; dealId?: string; contac
   if (params.contactId) revalidatePath(`/contacts/${params.contactId}`);
 }
 
+function fromForm(value: FormDataEntryValue | null): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
 export async function addActivity(
-  params: { leadId?: string; dealId?: string; contactId?: string; ownerId?: string },
+  params: { leadId?: string; dealId?: string; contactId?: string; accountId?: string; ownerId?: string },
   formData: FormData
 ) {
   const user = await requireUser();
@@ -41,6 +45,19 @@ export async function addActivity(
   const dueAtRaw = formData.get("dueAt");
   if (!subject || typeof type !== "string") return;
 
+  // Record-detail contexts (Record Timeline) always fix owner/contact via
+  // params, since the activity plainly belongs to that record's own owner.
+  // The standalone Activities tab leaves these unset instead, so a Head can
+  // log a call/meeting attributed to whichever sales manager it's actually
+  // for (and tag the account/contact it's about), while a rep just gets
+  // their own id back.
+  const ownerId = params.ownerId ?? fromForm(formData.get("ownerId")) ?? user.id;
+  if (!canAccessOwner(user, ownerId)) {
+    throw new Error("You do not have access to log activities for this sales person.");
+  }
+  const contactId = params.contactId ?? fromForm(formData.get("contactId"));
+  const accountId = params.accountId ?? fromForm(formData.get("accountId"));
+
   await prisma.activity.create({
     data: {
       type: type as "CALL" | "EMAIL" | "MEETING" | "TASK" | "NOTE",
@@ -49,16 +66,18 @@ export async function addActivity(
       dueAt: dueAtRaw ? new Date(String(dueAtRaw)) : null,
       status: "PENDING",
       callOutcome: toCallOutcome(type, formData.get("callOutcome")),
-      ownerId: params.ownerId ?? user.id,
+      ownerId,
       leadId: params.leadId ?? null,
       dealId: params.dealId ?? null,
-      contactId: params.contactId ?? null,
+      contactId,
+      accountId,
     },
   });
 
   if (params.leadId) revalidatePath(`/leads/${params.leadId}`);
   if (params.dealId) revalidatePath(`/deals/${params.dealId}`);
-  if (params.contactId) revalidatePath(`/contacts/${params.contactId}`);
+  if (contactId) revalidatePath(`/contacts/${contactId}`);
+  if (accountId) revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/activities");
 }
 

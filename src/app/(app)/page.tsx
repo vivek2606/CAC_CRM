@@ -152,6 +152,8 @@ export default async function DashboardPage() {
         owner: { select: { name: true, avatarColor: true } },
         deal: { select: { title: true } },
         lead: { select: { title: true } },
+        contact: { select: { firstName: true, lastName: true } },
+        account: { select: { name: true } },
       },
     }),
     prisma.activity.count({
@@ -560,7 +562,12 @@ export default async function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-800 truncate">{a.subject}</p>
                       <p className="text-xs text-slate-400 truncate">
-                        {a.deal?.title ?? a.lead?.title ?? "—"} ·{" "}
+                        {a.deal?.title ??
+                          a.lead?.title ??
+                          (a.contact ? `${a.contact.firstName} ${a.contact.lastName}` : null) ??
+                          a.account?.name ??
+                          "—"}{" "}
+                        ·{" "}
                         <span
                           className={
                             isOverdue ? "text-rose-600 font-medium" : isToday ? "text-amber-600 font-medium" : ""

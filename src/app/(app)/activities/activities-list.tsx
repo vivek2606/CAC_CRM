@@ -12,6 +12,7 @@ export type FullActivity = ActivityRowData & {
   lead: { id: string; title: string } | null;
   deal: { id: string; title: string } | null;
   contact: { id: string; firstName: string; lastName: string } | null;
+  account: { id: string; name: string } | null;
 };
 
 type Owner = { id: string; name: string };
@@ -20,6 +21,7 @@ function relatedFor(a: FullActivity) {
   if (a.deal) return { href: `/deals/${a.deal.id}`, label: a.deal.title };
   if (a.lead) return { href: `/leads/${a.lead.id}`, label: a.lead.title };
   if (a.contact) return { href: `/contacts/${a.contact.id}`, label: `${a.contact.firstName} ${a.contact.lastName}` };
+  if (a.account) return { href: `/accounts/${a.account.id}`, label: a.account.name };
   return null;
 }
 
