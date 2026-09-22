@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ListChecks } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
@@ -29,7 +31,19 @@ export default async function ActivitiesPage() {
 
   return (
     <div>
-      <PageHeader title="Activities" description="Calls, meetings, emails and tasks across your sales cycle" />
+      <PageHeader
+        title="Activities"
+        description="Calls, meetings, emails and tasks across your sales cycle"
+        action={
+          <Link
+            href="/activities/queue"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
+          >
+            <ListChecks className="h-4 w-4" />
+            Work my queue
+          </Link>
+        }
+      />
 
       <div className="p-6 space-y-4">
         <Card className="p-4">

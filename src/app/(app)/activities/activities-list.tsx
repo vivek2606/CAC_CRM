@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, EmptyState } from "@/components/ui";
 import { ACTIVITY_TYPE_LABELS, ACTIVITY_TYPES } from "@/lib/constants";
+import { BUCKET_ORDER, bucketFor, type Bucket } from "@/lib/activity-buckets";
 import { ActivityRow, type ActivityRowData } from "../activity-row";
 
 export type FullActivity = ActivityRowData & {
@@ -14,29 +15,6 @@ export type FullActivity = ActivityRowData & {
 };
 
 type Owner = { id: string; name: string };
-
-// Buckets for the pending view, so "what do I need to do" reads as a plan
-// rather than one long date-sorted list. Boundaries are calendar-day based
-// (not exact-time) - a specific overdue-by-hours item still gets its red
-// styling from ActivityRow within whichever bucket it lands in.
-const BUCKET_ORDER = ["Overdue", "Today", "This Week", "Later", "No Due Date"] as const;
-type Bucket = (typeof BUCKET_ORDER)[number];
-
-function bucketFor(dueAt: Date | null): Bucket {
-  if (!dueAt) return "No Due Date";
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-  const weekEnd = new Date(todayStart);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-
-  if (dueAt < todayStart) return "Overdue";
-  if (dueAt < tomorrowStart) return "Today";
-  if (dueAt < weekEnd) return "This Week";
-  return "Later";
-}
 
 function relatedFor(a: FullActivity) {
   if (a.deal) return { href: `/deals/${a.deal.id}`, label: a.deal.title };
