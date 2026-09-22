@@ -55,6 +55,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
               country: account.country,
               registrationNumber: account.registrationNumber,
               ownerId: account.ownerId,
+              tags: account.tags,
             }}
             submitLabel="Save Changes"
           />

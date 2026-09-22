@@ -14,6 +14,7 @@ import {
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
+import { TagInput } from "@/components/tag-input";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -56,6 +57,7 @@ export function DealForm({
     paymentTerms?: PaymentTerms | null;
     expectedDeliveryDate?: string | null;
     createdAt?: string;
+    tags?: string[];
   };
   submitLabel: string;
 }) {
@@ -429,6 +431,11 @@ export function DealForm({
           </div>
         )}
         {!isHead && <input type="hidden" name="ownerId" value={defaultValues?.ownerId ?? ""} />}
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <TagInput defaultValue={defaultValues?.tags ?? []} />
+        </div>
       </div>
 
       <div className="flex gap-3">

@@ -14,8 +14,8 @@ import {
   END_USE_SEGMENT_LABELS,
   PAYMENT_TERMS_LABELS,
 } from "@/lib/constants";
-import { NotesSection } from "../../notes-section";
-import { ActivitiesSection } from "../../activities-section";
+import { RecordTimeline } from "../../record-timeline";
+import { TagChips } from "@/components/tag-chips";
 import { deleteDeal, viewQuote, approveDealDiscount } from "../actions";
 import { StageActions } from "../stage-actions";
 import { DealItemsSection } from "../deal-items-section";
@@ -106,7 +106,9 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         }
       />
 
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="p-6 space-y-6">
+        {deal.tags.length > 0 && <TagChips tags={deal.tags} />}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-1">Products</h2>
@@ -160,17 +162,13 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
           )}
 
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Activities</h2>
-            <ActivitiesSection
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Timeline</h2>
+            <RecordTimeline
+              notes={deal.notes}
               activities={deal.activities}
               target={{ dealId: deal.id, ownerId: deal.ownerId }}
               path={`/deals/${deal.id}`}
             />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Notes</h2>
-            <NotesSection notes={deal.notes} target={{ dealId: deal.id }} />
           </Card>
         </div>
 
@@ -295,6 +293,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
               <span className="text-sm text-slate-700">{deal.owner.name}</span>
             </div>
           </Card>
+        </div>
         </div>
       </div>
     </div>

@@ -13,8 +13,8 @@ import {
   END_USE_SEGMENT_LABELS,
   PURCHASE_TIMEFRAME_LABELS,
 } from "@/lib/constants";
-import { NotesSection } from "../../notes-section";
-import { ActivitiesSection } from "../../activities-section";
+import { RecordTimeline } from "../../record-timeline";
+import { TagChips } from "@/components/tag-chips";
 import { convertLeadToDeal, deleteLead } from "../actions";
 import { Pencil, ArrowRightLeft, Trash2 } from "lucide-react";
 
@@ -88,20 +88,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         }
       />
 
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="p-6 space-y-6">
+        {lead.tags.length > 0 && <TagChips tags={lead.tags} />}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Activities</h2>
-            <ActivitiesSection
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Timeline</h2>
+            <RecordTimeline
+              notes={lead.noteItems}
               activities={lead.activities}
               target={{ leadId: lead.id, ownerId: lead.ownerId }}
               path={`/leads/${lead.id}`}
             />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Notes</h2>
-            <NotesSection notes={lead.noteItems} target={{ leadId: lead.id }} />
           </Card>
         </div>
 
@@ -218,6 +216,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{lead.notes}</p>
             </Card>
           )}
+        </div>
         </div>
       </div>
     </div>

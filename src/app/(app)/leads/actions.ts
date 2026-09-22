@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import { parseTagsInput } from "@/lib/tags";
 import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe } from "@prisma/client";
 
 const leadSchema = z.object({
@@ -91,6 +92,7 @@ export async function createLead(formData: FormData) {
       email: toNullable(parsed.email),
       phone: parsed.phone,
       notes: toNullable(parsed.notes),
+      tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,
@@ -131,6 +133,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       email: toNullable(parsed.email),
       phone: parsed.phone,
       notes: toNullable(parsed.notes),
+      tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
       ownerId,

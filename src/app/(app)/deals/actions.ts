@@ -8,6 +8,7 @@ import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
+import { parseTagsInput } from "@/lib/tags";
 import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -199,6 +200,7 @@ export async function createDeal(formData: FormData) {
       paymentTerms: toPaymentTerms(parsed.paymentTerms),
       expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
       items: lineItems.length > 0 ? { createMany: { data: lineItems } } : undefined,
+      tags: parseTagsInput(formData.get("tags")),
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
@@ -249,6 +251,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       competitorBrand: toNullable(parsed.competitorBrand),
       paymentTerms: toPaymentTerms(parsed.paymentTerms),
       expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
+      tags: parseTagsInput(formData.get("tags")),
       createdAt: parseDateInput(parsed.createdAt),
     },
   });

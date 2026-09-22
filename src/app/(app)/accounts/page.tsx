@@ -25,6 +25,7 @@ export default async function AccountsPage() {
     contactCount: a._count.contacts,
     dealCount: a._count.deals,
     owner: a.owner,
+    tags: a.tags,
   }));
 
   return (

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { parseTagsInput } from "@/lib/tags";
 import { Prisma, type AccountType } from "@prisma/client";
 
 const accountSchema = z.object({
@@ -93,6 +94,7 @@ export async function createAccount(formData: FormData) {
         state: toNullable(parsed.state),
         country: toNullable(parsed.country),
         registrationNumber: toNullable(parsed.registrationNumber),
+        tags: parseTagsInput(formData.get("tags")),
         ownerId,
       },
     })
@@ -129,6 +131,7 @@ export async function updateAccount(accountId: string, formData: FormData) {
         state: toNullable(parsed.state),
         country: toNullable(parsed.country),
         registrationNumber: toNullable(parsed.registrationNumber),
+        tags: parseTagsInput(formData.get("tags")),
         ownerId,
       },
     })

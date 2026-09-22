@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState, Avatar } from "@/components/ui";
+import { TagChips } from "@/components/tag-chips";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export type AccountRow = {
@@ -15,6 +16,7 @@ export type AccountRow = {
   contactCount: number;
   dealCount: number;
   owner: { name: string; avatarColor: string };
+  tags: string[];
 };
 
 const PAGE_SIZE = 50;
@@ -28,7 +30,9 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q === "" ? accounts : accounts.filter((a) => a.name.toLowerCase().includes(q));
+    return q === ""
+      ? accounts
+      : accounts.filter((a) => a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q)));
   }, [accounts, query]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -49,7 +53,7 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
           type="text"
           value={query}
           onChange={(e) => updateQuery(e.target.value)}
-          placeholder="Search company name..."
+          placeholder="Search company name or tag..."
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         {query && (
@@ -84,6 +88,7 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
                       </Link>
                       {account.code && <p className="text-xs text-slate-400">Code: {account.code}</p>}
                       {account.website && <p className="text-xs text-slate-400">{account.website}</p>}
+                      <TagChips tags={account.tags} className="mt-1" />
                     </td>
                     <td className="px-4 py-3 text-slate-500">{account.industry ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-500">{account.city ?? "—"}</td>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DEAL_STAGES, OPEN_DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
 import { formatCompactCurrency } from "@/lib/format";
 import { Avatar } from "@/components/ui";
+import { TagChips } from "@/components/tag-chips";
 import { updateDealStage } from "./actions";
 import { MarkLostDialog } from "./mark-lost-dialog";
 import { MarkWonDialog } from "./mark-won-dialog";
@@ -17,6 +18,7 @@ type DealCard = {
   stage: DealStage;
   owner: { name: string; avatarColor: string };
   account: { name: string } | null;
+  tags: string[];
 };
 
 export function KanbanBoard({ deals }: { deals: DealCard[] }) {
@@ -136,6 +138,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
                   <Link href={`/deals/${deal.id}`} className="block">
                     <p className="text-sm font-medium text-slate-800 line-clamp-2">{deal.title}</p>
                     <p className="text-xs text-slate-400 mt-0.5 truncate">{deal.account?.name ?? "No account"}</p>
+                    <TagChips tags={deal.tags} className="mt-1.5" />
                     <div className="flex items-center justify-between mt-2.5">
                       <span className="text-sm font-semibold text-slate-700">
                         {formatCompactCurrency(deal.value)}

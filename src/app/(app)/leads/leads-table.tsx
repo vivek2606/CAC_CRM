@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRightLeft } from "lucide-react";
 import { Badge, Avatar, EmptyState } from "@/components/ui";
+import { TagChips } from "@/components/tag-chips";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, LEAD_SOURCE_LABELS, LEAD_STATUSES } from "@/lib/constants";
 import { bulkConvertSelectedLeads } from "./actions";
@@ -19,6 +20,7 @@ type LeadRow = {
   value: number | null;
   createdAt: Date;
   owner: { id: string; name: string; avatarColor: string };
+  tags: string[];
 };
 
 type Owner = { id: string; name: string };
@@ -41,7 +43,10 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
       (l) =>
         (status === "" || l.status === status) &&
         (ownerId === "" || l.owner.id === ownerId) &&
-        (q === "" || l.title.toLowerCase().includes(q) || (l.company ?? "").toLowerCase().includes(q))
+        (q === "" ||
+          l.title.toLowerCase().includes(q) ||
+          (l.company ?? "").toLowerCase().includes(q) ||
+          l.tags.some((t) => t.toLowerCase().includes(q)))
     );
   }, [leads, query, status, ownerId]);
 
@@ -98,7 +103,7 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search title or company..."
+          placeholder="Search title, company, or tag..."
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <select
@@ -202,6 +207,7 @@ export function LeadsTable({ leads, owners, isHead }: { leads: LeadRow[]; owners
                       {lead.title}
                     </Link>
                     {lead.company && <p className="text-xs text-slate-400">{lead.company}</p>}
+                    <TagChips tags={lead.tags} className="mt-1" />
                   </td>
                   <td className="px-4 py-3">
                     <Badge bg={colors.bg} text={colors.text}>

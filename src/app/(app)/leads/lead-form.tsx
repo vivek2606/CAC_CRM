@@ -15,6 +15,7 @@ import {
   PURCHASE_TIMEFRAME_LABELS,
 } from "@/lib/constants";
 import { SearchableSelect } from "@/components/searchable-select";
+import { TagInput } from "@/components/tag-input";
 import type { LeadStatus, LeadSource, EquipmentType, EndUseSegment, PurchaseTimeframe } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -49,6 +50,7 @@ export function LeadForm({
     email?: string | null;
     phone?: string | null;
     notes?: string | null;
+    tags?: string[];
     accountId?: string | null;
     contactId?: string | null;
     ownerId?: string;
@@ -341,6 +343,10 @@ export function LeadForm({
             defaultValue={defaultValues?.notes ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <TagInput defaultValue={defaultValues?.tags ?? []} />
         </div>
       </div>
 

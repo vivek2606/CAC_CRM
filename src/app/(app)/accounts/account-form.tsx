@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { CompanyNameField, type AccountNameOption } from "./company-name-field";
 import { SearchableSelect } from "@/components/searchable-select";
+import { TagInput } from "@/components/tag-input";
 import type { AccountType } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -47,6 +48,7 @@ export function AccountForm({
     country?: string | null;
     registrationNumber?: string | null;
     ownerId?: string;
+    tags?: string[];
   };
   submitLabel: string;
 }) {
@@ -152,6 +154,10 @@ export function AccountForm({
             defaultValue={defaultValues?.address ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <TagInput defaultValue={defaultValues?.tags ?? []} />
         </div>
         {isHead && (
           <div>

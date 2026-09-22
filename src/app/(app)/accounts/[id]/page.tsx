@@ -12,6 +12,7 @@ import {
   ACCOUNT_TYPE_LABELS,
 } from "@/lib/constants";
 import { DeleteAccountButton } from "../delete-account-button";
+import { TagChips } from "@/components/tag-chips";
 import { Pencil, Trash2 } from "lucide-react";
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -61,7 +62,9 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="p-6 space-y-6">
+        {account.tags.length > 0 && <TagChips tags={account.tags} />}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Deals</h2>
@@ -197,6 +200,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <span className="text-sm text-slate-700">{account.owner.name}</span>
             </div>
           </Card>
+        </div>
         </div>
       </div>
     </div>

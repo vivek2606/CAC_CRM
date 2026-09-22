@@ -176,6 +176,11 @@ model Account {
   // Nigerian CAC RC number / TIN, for invoicing and KYC - free text since
   // formats vary and this isn't validated against an external registry.
   registrationNumber String?
+  // Freeform labels (e.g. "VIP", "Price Sensitive") for segmentation that
+  // doesn't fit a fixed field - same idea as HubSpot's tags. A plain string
+  // array rather than a related Tag model since the vocabulary is entirely
+  // ad hoc per rep, not a managed list.
+  tags        String[]  @default([])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -246,6 +251,9 @@ model Lead {
   // stays nullable here for the same reason as customerName above.
   phone         String?
   notes         String?
+  // Freeform labels for segmentation beyond the fixed fields above - see
+  // Account.tags for the full reasoning.
+  tags          String[]    @default([])
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -308,6 +316,9 @@ model Deal {
   discountApprovedAt   DateTime?
   discountApprovedById String?
   discountApprovedBy   User?    @relation("DiscountApprover", fields: [discountApprovedById], references: [id])
+  // Freeform labels for segmentation beyond the fixed fields above - see
+  // Account.tags for the full reasoning.
+  tags          String[]    @default([])
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
