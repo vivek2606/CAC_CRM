@@ -52,8 +52,12 @@ export function GaugeChart({
   const targetTickInner = pointAt(1, RADIUS - STROKE - 4);
 
   return (
-    <div className="flex flex-col items-center">
-      <svg width={SIZE} height={SIZE / 2 + 16} viewBox={`0 0 ${SIZE} ${SIZE / 2 + 16}`}>
+    <div className="flex flex-col items-center w-full">
+      {/* Scales to the container's width (capped at the original 200px
+          design size) instead of a fixed pixel size - a fixed SVG width
+          doesn't shrink in a tight grid (e.g. one gauge per rep), so it
+          overflowed its cell and overlapped its neighbors. */}
+      <svg viewBox={`0 0 ${SIZE} ${SIZE / 2 + 16}`} className="w-full h-auto max-w-[200px]">
         <path d={arcPath(0, 1, RADIUS)} fill="none" stroke="#e2e8f0" strokeWidth={STROKE} strokeLinecap="round" />
         {filledT > 0 && (
           <path d={arcPath(0, filledT, RADIUS)} fill="none" stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
