@@ -29,7 +29,7 @@ import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
 import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { Wallet, TrendingUp, Percent, Users, Target, Building2 } from "lucide-react";
+import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
   const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
@@ -103,6 +103,11 @@ export default async function ReportsPage() {
       name,
       avatarColor,
       openValue: openDeals.reduce((s, d) => s + d.value, 0),
+      // Weighted forecast: each open deal's value x its own win probability
+      // - HubSpot's Deal Forecast approach, so two reps with the same raw
+      // pipeline don't look identical if one's mostly Negotiation and the
+      // other's mostly fresh Qualification.
+      weightedOpenValue: openDeals.reduce((s, d) => s + d.value * (d.probability / 100), 0),
       openCount: openDeals.length,
       wonQuarterValue: wonThisQuarter.reduce((s, d) => s + d.value, 0),
       wonQuarterCount: wonThisQuarter.length,
@@ -120,6 +125,7 @@ export default async function ReportsPage() {
   // Headline team stats reflect only the current 6-person CAC sales team,
   // not the historical/other-division data folded into "Others".
   const teamOpenValue = repStats.reduce((s, r) => s + r.openValue, 0);
+  const teamWeightedOpenValue = repStats.reduce((s, r) => s + r.weightedOpenValue, 0);
   const teamWonQuarter = repStats.reduce((s, r) => s + r.wonQuarterValue, 0);
   const teamAvgWinRate =
     repStats.length > 0 ? Math.round(repStats.reduce((s, r) => s + r.winRate, 0) / repStats.length) : 0;
@@ -379,6 +385,15 @@ export default async function ReportsPage() {
             value={formatCompactCurrency(teamOpenValue)}
             icon={<Wallet className="h-4 w-4 text-indigo-500" />}
             accent="indigo"
+          />
+          <StatCard
+            label="Weighted Forecast"
+            value={formatCompactCurrency(teamWeightedOpenValue)}
+            sub={
+              teamOpenValue > 0 ? `${Math.round((teamWeightedOpenValue / teamOpenValue) * 100)}% of raw pipeline` : undefined
+            }
+            icon={<Gauge className="h-4 w-4 text-rose-500" />}
+            accent="rose"
           />
           <StatCard
             label="Won This Quarter"

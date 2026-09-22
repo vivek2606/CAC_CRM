@@ -20,7 +20,7 @@ import { Sparkline } from "./sparkline";
 import { GaugeChart } from "@/components/gauge-chart";
 import { ShareStackedBar, type ShareBarRow } from "@/components/share-stacked-bar";
 import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
-import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange } from "lucide-react";
+import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange, Gauge } from "lucide-react";
 
 const SPARKLINE_MONTHS = 6;
 
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     prisma.deal.findMany({
       where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } },
-      select: { stage: true, value: true, accountId: true },
+      select: { stage: true, value: true, accountId: true, probability: true },
     }),
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
@@ -267,6 +267,11 @@ export default async function DashboardPage() {
 
   const openPipelineValue = openDeals.reduce((sum, d) => sum + d.value, 0);
   const openDealsNoAccount = openDeals.filter((d) => !d.accountId).length;
+  // Weighted forecast (HubSpot's "Deal Forecast"): each open deal's value
+  // discounted by its own win probability, so a room full of Qualification-
+  // stage deals doesn't read the same as one full of Negotiation-stage
+  // deals just because their raw totals happen to match.
+  const weightedForecast = openDeals.reduce((sum, d) => sum + d.value * (d.probability / 100), 0);
 
   const sparklineByMonth = new Map<string, number>();
   for (const d of sparklineDeals) {
@@ -345,13 +350,24 @@ export default async function DashboardPage() {
       />
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           <StatCard
             label="Open Deals"
             value={String(openDeals.length)}
             sub={`${formatCompactCurrency(openPipelineValue)} pipeline value`}
             icon={<Wallet className="h-4 w-4 text-indigo-500" />}
             accent="indigo"
+          />
+          <StatCard
+            label="Weighted Forecast"
+            value={formatCompactCurrency(weightedForecast)}
+            sub={
+              openPipelineValue > 0
+                ? `${Math.round((weightedForecast / openPipelineValue) * 100)}% of raw pipeline`
+                : "Pipeline value × win probability"
+            }
+            icon={<Gauge className="h-4 w-4 text-rose-500" />}
+            accent="rose"
           />
           <StatCard
             label="Won This Month"
