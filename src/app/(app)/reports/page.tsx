@@ -72,7 +72,7 @@ export default async function ReportsPage() {
           winProbability: true,
           value: true,
           createdAt: true,
-          convertedDeal: { select: { stage: true, createdAt: true } },
+          convertedDeal: { select: { stage: true, createdAt: true, value: true } },
           activities: { select: { type: true, createdAt: true } },
         },
       },
@@ -437,22 +437,32 @@ export default async function ReportsPage() {
     return { label: DEAL_STAGE_LABELS[stage], value };
   });
 
-  // 4. Lead source distribution.
-  const sourceGroups = new Map<string, { count: number; value: number }>();
+  // 4. Lead source ROI - conversion rate and actual closed-won revenue by
+  // source, not just raw lead volume/potential value, so "which source
+  // brings in real business" is visible rather than just "which source
+  // brings in the most enquiries."
+  const sourceGroups = new Map<string, { count: number; converted: number; wonRevenue: number }>();
   for (const lead of teamLeads) {
-    const g = sourceGroups.get(lead.source) ?? { count: 0, value: 0 };
+    const g = sourceGroups.get(lead.source) ?? { count: 0, converted: 0, wonRevenue: 0 };
     g.count += 1;
-    g.value += lead.value ?? 0;
+    if (lead.convertedDeal) {
+      g.converted += 1;
+      if (lead.convertedDeal.stage === "WON") g.wonRevenue += lead.convertedDeal.value;
+    }
     sourceGroups.set(lead.source, g);
   }
-  const leadSourceData = LEAD_SOURCES.map((source) => ({
-    source: LEAD_SOURCE_LABELS[source],
-    count: sourceGroups.get(source)?.count ?? 0,
-    value: sourceGroups.get(source)?.value ?? 0,
-    fill: LEAD_SOURCE_COLORS[source],
-  }))
+  const leadSourceData = LEAD_SOURCES.map((source) => {
+    const g = sourceGroups.get(source) ?? { count: 0, converted: 0, wonRevenue: 0 };
+    return {
+      source: LEAD_SOURCE_LABELS[source],
+      count: g.count,
+      conversionRate: g.count > 0 ? Math.round((g.converted / g.count) * 100) : 0,
+      wonRevenue: g.wonRevenue,
+      fill: LEAD_SOURCE_COLORS[source],
+    };
+  })
     .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => b.wonRevenue - a.wonRevenue);
 
   // 5. Why we lose: only deals closed as LOST after this feature shipped
   // have a category - older LOST deals predate it and just don't appear.
@@ -646,6 +656,28 @@ export default async function ReportsPage() {
         </div>
 
         <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Quota attainment, per rep</h2>
+          <p className="text-xs text-slate-400 mb-3">Same target/actual as the chart above, one gauge per rep.</p>
+          {targetRows.every((r) => r.target === 0 && r.actual === 0) ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No targets set for this month.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {targetRows.map((r) => (
+                <div key={r.name} className="flex flex-col items-center">
+                  <GaugeChart
+                    value={r.actual}
+                    target={r.target}
+                    valueLabel={formatCompactCurrency(r.actual)}
+                    targetLabel={formatCompactCurrency(r.target)}
+                  />
+                  <p className="text-sm font-medium text-slate-700 -mt-1">{r.name}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">New accounts opened, last 6 months</h2>
           <p className="text-xs text-slate-400 mb-3">Each rep&apos;s new accounts per month - spot who&apos;s prospecting and when.</p>
           {newAccountsHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
@@ -759,8 +791,8 @@ export default async function ReportsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source distribution</h2>
-            <p className="text-xs text-slate-400 mb-3">Where the team&apos;s leads are coming from.</p>
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source ROI</h2>
+            <p className="text-xs text-slate-400 mb-3">Closed-won revenue and conversion rate by where the lead came from.</p>
             {leadSourceData.length === 0 ? (
               <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
             ) : (

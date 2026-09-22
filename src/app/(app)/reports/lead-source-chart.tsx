@@ -1,42 +1,31 @@
-"use client";
-
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { formatCompactCurrency } from "@/lib/format";
 
-export type LeadSourceRow = { source: string; count: number; value: number; fill: string };
+// Closed-won revenue and conversion rate by lead source - a horizontal bar
+// list (not a pie of raw lead count) since the metric that actually matters
+// here is revenue-per-source, and a bar sized by that plus a text
+// conversion-rate label avoids stacking two different units (currency,
+// percent) onto one dual-axis chart.
+export type LeadSourceRow = { source: string; count: number; conversionRate: number; wonRevenue: number; fill: string };
 
 export function LeadSourceChart({ data }: { data: LeadSourceRow[] }) {
-  const total = data.reduce((s, d) => s + d.count, 0);
+  const maxRevenue = Math.max(1, ...data.map((d) => d.wonRevenue));
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="count"
-          nameKey="source"
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={100}
-          paddingAngle={2}
-          label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-          labelLine={false}
-        >
-          {data.map((entry) => (
-            <Cell key={entry.source} fill={entry.fill} stroke="#fff" strokeWidth={2} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value, name, item) => {
-            const v = (item?.payload as { value?: number } | undefined)?.value ?? 0;
-            const pct = total > 0 ? Math.round((Number(value) / total) * 100) : 0;
-            return [`${value} lead${Number(value) === 1 ? "" : "s"} (${pct}%) · ${formatCompactCurrency(v)}`, name];
-          }}
-          contentStyle={{ borderRadius: 8, borderColor: "#e2e8f0", fontSize: 13 }}
-        />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-      </PieChart>
-    </ResponsiveContainer>
+    <ul className="space-y-2.5">
+      {data.map((d) => (
+        <li key={d.source} className="flex items-center gap-3">
+          <span className="text-sm text-slate-700 w-28 shrink-0 truncate">{d.source}</span>
+          <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${(d.wonRevenue / maxRevenue) * 100}%`, backgroundColor: d.fill }}
+            />
+          </div>
+          <span className="text-xs font-medium text-slate-500 w-48 text-right shrink-0">
+            {formatCompactCurrency(d.wonRevenue)} won · {d.conversionRate}% conv ({d.count})
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
