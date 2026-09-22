@@ -5,6 +5,7 @@ import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { CompanyNameField, type AccountNameOption } from "./company-name-field";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
+import { CompletenessBar } from "@/components/completeness-bar";
 import type { AccountType } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -54,8 +55,20 @@ export function AccountForm({
 }) {
   const [contactMode, setContactMode] = useState<ContactMode>("none");
 
+  const completenessFields = [
+    { label: "Account type", filled: !!defaultValues?.accountType },
+    { label: "Industry", filled: !!defaultValues?.industry },
+    { label: "Website", filled: !!defaultValues?.website },
+    { label: "Phone", filled: !!defaultValues?.phone },
+    { label: "Address", filled: !!defaultValues?.address },
+    { label: "City", filled: !!defaultValues?.city },
+    { label: "State", filled: !!defaultValues?.state },
+    { label: "RC number / Tax ID", filled: !!defaultValues?.registrationNumber },
+  ];
+
   return (
     <form action={action} className="space-y-5 max-w-2xl">
+      <CompletenessBar fields={completenessFields} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Company name *</label>

@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
+import { CompletenessBar } from "@/components/completeness-bar";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -67,6 +68,17 @@ export function DealForm({
   const [customerPhone, setCustomerPhone] = useState(defaultValues?.customerPhone ?? "");
   const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
   const today = new Date().toISOString().slice(0, 10);
+
+  const completenessFields = [
+    { label: "Account", filled: !!accountId },
+    { label: "Contact", filled: !!contactId },
+    { label: "Equipment type", filled: !!defaultValues?.equipmentType },
+    { label: "Segment", filled: !!defaultValues?.endUseSegment },
+    { label: "Competing brand", filled: !!defaultValues?.competitorBrand },
+    { label: "Payment terms", filled: !!defaultValues?.paymentTerms },
+    { label: "Expected close date", filled: !!defaultValues?.expectedCloseDate },
+    { label: "Expected delivery date", filled: !!defaultValues?.expectedDeliveryDate },
+  ];
 
   // Picking a contact - directly, or automatically because it's the
   // account's contact - carries its name/phone into the customer fields so
@@ -135,6 +147,7 @@ export function DealForm({
   return (
     <form action={action} className="space-y-5 max-w-2xl">
       <input type="hidden" name="lineItems" value={JSON.stringify(validItems)} />
+      <CompletenessBar fields={completenessFields} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Deal title *</label>
