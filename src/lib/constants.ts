@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, CallOutcome, LostReason, EndUseSegment, AccountType, PurchaseTimeframe, PaymentTerms } from "@prisma/client";
+import type { DealStage, LeadStatus, LeadSource, EquipmentType, ActivityType, ActivityStatus, CallOutcome, ContactRole, LostReason, EndUseSegment, AccountType, PurchaseTimeframe, PaymentTerms } from "@prisma/client";
 
 // A deal's itemized total discounted more than this far below catalog price
 // needs Head approval before it can be marked Won.
@@ -288,6 +288,26 @@ export const CALL_OUTCOME_COLORS: Record<CallOutcome, { bg: string; text: string
   NO_ANSWER: { bg: "bg-slate-200", text: "text-slate-600" },
   VOICEMAIL: { bg: "bg-sky-100", text: "text-sky-700" },
   FOLLOW_UP_NEEDED: { bg: "bg-amber-100", text: "text-amber-700" },
+};
+
+export const CONTACT_ROLES: ContactRole[] = ["ECONOMIC_BUYER", "CHAMPION", "INFLUENCER", "DECISION_MAKER", "USER", "OTHER"];
+
+export const CONTACT_ROLE_LABELS: Record<ContactRole, string> = {
+  ECONOMIC_BUYER: "Economic Buyer",
+  CHAMPION: "Champion",
+  INFLUENCER: "Influencer",
+  DECISION_MAKER: "Decision Maker",
+  USER: "End User",
+  OTHER: "Other",
+};
+
+export const CONTACT_ROLE_COLORS: Record<ContactRole, { bg: string; text: string }> = {
+  ECONOMIC_BUYER: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  CHAMPION: { bg: "bg-indigo-100", text: "text-indigo-700" },
+  INFLUENCER: { bg: "bg-amber-100", text: "text-amber-700" },
+  DECISION_MAKER: { bg: "bg-violet-100", text: "text-violet-700" },
+  USER: { bg: "bg-sky-100", text: "text-sky-700" },
+  OTHER: { bg: "bg-slate-200", text: "text-slate-600" },
 };
 
 export const STAGE_DEFAULT_PROBABILITY: Record<DealStage, number> = {

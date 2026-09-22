@@ -9,7 +9,7 @@ import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
-import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
+import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms, ContactRole } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -392,4 +392,35 @@ export async function viewQuote(dealId: string) {
   }
 
   redirect(`/quote/${dealId}`);
+}
+
+// Additional stakeholders on a deal (Economic Buyer, Champion, Influencer,
+// etc.) beyond its one primary Contact - Salesforce's "Opportunity Contact
+// Role." @@unique([dealId, contactId]) on the model means re-adding the
+// same contact just changes their role instead of creating a duplicate row.
+export async function addDealContactRole(dealId: string, formData: FormData) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
+  if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+
+  const contactId = String(formData.get("contactId") ?? "");
+  const role = String(formData.get("role") ?? "");
+  if (!contactId || !role) return;
+
+  await prisma.dealContactRole.upsert({
+    where: { dealId_contactId: { dealId, contactId } },
+    create: { dealId, contactId, role: role as ContactRole },
+    update: { role: role as ContactRole },
+  });
+
+  revalidatePath(`/deals/${dealId}`);
+}
+
+export async function removeDealContactRole(dealContactRoleId: string, dealId: string) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
+  if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+
+  await prisma.dealContactRole.delete({ where: { id: dealContactRoleId } });
+  revalidatePath(`/deals/${dealId}`);
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, visibleOwnerIds } from "@/lib/rbac";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
@@ -20,6 +20,7 @@ import { deleteDeal, viewQuote, approveDealDiscount } from "../actions";
 import { StageActions } from "../stage-actions";
 import { DealItemsSection } from "../deal-items-section";
 import { SaleLineItemsTable } from "../sale-line-items-table";
+import { StakeholdersSection } from "../stakeholders-section";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,6 +39,10 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
       lineItems: { orderBy: { docDate: "asc" }, include: { product: { select: { code: true, model: true } } } },
       discountApprovedBy: { select: { name: true } },
+      contactRoles: {
+        orderBy: { createdAt: "asc" },
+        include: { contact: { select: { id: true, firstName: true, lastName: true } } },
+      },
     },
   });
 
@@ -57,10 +62,15 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const deleteAction = deleteDeal.bind(null, deal.id);
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
-  const [products, latestPriceByProduct, availableStockByProduct] = await Promise.all([
+  const ownerIds = await visibleOwnerIds(user);
+  const [products, latestPriceByProduct, availableStockByProduct, contacts] = await Promise.all([
     getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
+    prisma.contact.findMany({
+      where: { ownerId: { in: ownerIds } },
+      select: { id: true, firstName: true, lastName: true },
+    }),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,
@@ -311,6 +321,11 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
               <Avatar name={deal.owner.name} color={deal.owner.avatarColor} size={9} />
               <span className="text-sm text-slate-700">{deal.owner.name}</span>
             </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Stakeholders</h2>
+            <StakeholdersSection dealId={deal.id} stakeholders={deal.contactRoles} contacts={contacts} />
           </Card>
         </div>
         </div>

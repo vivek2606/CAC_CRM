@@ -92,6 +92,19 @@ enum CallOutcome {
   FOLLOW_UP_NEEDED
 }
 
+// Salesforce's "Opportunity Contact Role" - who a stakeholder is on a deal,
+// distinct from Deal.contactId (the one primary contact the deal's own
+// fields carry over, e.g. onto the quote). A multi-stakeholder capital-goods
+// deal often has several of these at once.
+enum ContactRole {
+  ECONOMIC_BUYER
+  CHAMPION
+  INFLUENCER
+  DECISION_MAKER
+  USER
+  OTHER
+}
+
 enum AccountType {
   CONTRACTOR
   CONSULTANT
@@ -224,6 +237,7 @@ model Contact {
   deals       Deal[]
   activities  Activity[]
   notes       Note[]
+  dealRoles   DealContactRole[]
 
   // Set only for contacts brought in via the Leads sheet import, so
   // re-running the import can safely replace its own rows.
@@ -351,6 +365,26 @@ model Deal {
   notes         Note[]
   lineItems     SaleLineItem[]
   items         DealLineItem[]
+  contactRoles  DealContactRole[]
+}
+
+// Additional stakeholders on a deal beyond its one primary Contact (the
+// contactId field above, still what the deal's own fields/quote carry) -
+// Salesforce's "Opportunity Contact Role", for a multi-stakeholder
+// capital-goods deal where the economic buyer, champion, and end user are
+// often different people.
+model DealContactRole {
+  id        String      @id @default(cuid())
+  role      ContactRole
+  createdAt DateTime    @default(now())
+
+  dealId    String
+  deal      Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact     @relation(fields: [contactId], references: [id])
+
+  @@unique([dealId, contactId])
 }
 
 // Product-level detail on a deal while it's being quoted/worked - distinct
