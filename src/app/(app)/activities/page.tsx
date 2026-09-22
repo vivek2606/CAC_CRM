@@ -32,7 +32,13 @@ export default async function ActivitiesPage() {
       select: { id: true, firstName: true, lastName: true, accountId: true },
     }),
     prisma.lead.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, title: true } }),
-    prisma.deal.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, title: true } }),
+    // Excludes Won deals - once a deal's closed and won there's nothing left
+    // to log a new activity against. Lost deals stay selectable (e.g. a
+    // win-back call).
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: { not: "WON" } },
+      select: { id: true, title: true },
+    }),
   ]);
 
   // No fixed owner/contact/account here (unlike Record Timeline's binding on
