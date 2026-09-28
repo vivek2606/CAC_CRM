@@ -10,6 +10,7 @@ import { ExportCsvButton } from "@/components/export-csv-button";
 import { CategoryChart } from "../reports/category-chart";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { GaugeChart } from "@/components/gauge-chart";
+import { YtdRepChart, YTD_SERIES_COLORS, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
 
 const TREND_MONTHS = 12;
 
@@ -71,7 +72,14 @@ export default async function TargetsPage({
   const trendStart = trendMonths[0];
   const trendEnd = new Date(Date.UTC(trendMonths[TREND_MONTHS - 1].getUTCFullYear(), trendMonths[TREND_MONTHS - 1].getUTCMonth() + 1, 1));
 
-  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals] = await Promise.all([
+  // Year-to-date window: Jan 1 of the selected month's year through the end
+  // of the selected month. Always covers the whole department (allReps),
+  // so the rep filter above doesn't hide anyone from the YTD breakdown.
+  const ytdMonths = Array.from({ length: month.getUTCMonth() + 1 }, (_, i) => new Date(Date.UTC(month.getUTCFullYear(), i, 1)));
+  const ytdStart = ytdMonths[0];
+  const allRepIds = allReps.map((r) => r.id);
+
+  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
     prisma.deal.findMany({
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
@@ -99,6 +107,14 @@ export default async function TargetsPage({
         equipmentType: { not: null },
       },
       select: { value: true, equipmentType: true },
+    }),
+    prisma.target.findMany({
+      where: { userId: { in: allRepIds }, month: { in: ytdMonths } },
+      select: { userId: true, month: true, targetValue: true },
+    }),
+    prisma.deal.findMany({
+      where: { ownerId: { in: allRepIds }, stage: "WON", closedAt: { gte: ytdStart, lt: nextMonth } },
+      select: { ownerId: true, value: true, closedAt: true },
     }),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
@@ -146,6 +162,47 @@ export default async function TargetsPage({
   const categoryRows = Array.from(categoryByName.entries())
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value);
+
+  // YTD: actual[repId][monthIdx] and target[repId][monthIdx].
+  const ytdActual = new Map(allReps.map((r) => [r.id, ytdMonths.map(() => 0)]));
+  const ytdTarget = new Map(allReps.map((r) => [r.id, ytdMonths.map(() => 0)]));
+  for (const d of ytdDeals) {
+    if (!d.closedAt) continue;
+    const row = ytdActual.get(d.ownerId);
+    if (row) row[d.closedAt.getUTCMonth()] += d.value;
+  }
+  for (const t of ytdTargets) {
+    const row = ytdTarget.get(t.userId);
+    if (row) row[t.month.getUTCMonth()] += t.targetValue;
+  }
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+  const ytdRepRows = allReps.map((r) => {
+    const actual = ytdActual.get(r.id)!;
+    const target = ytdTarget.get(r.id)!;
+    return { id: r.id, name: r.name, actual, totalActual: sum(actual), totalTarget: sum(target) };
+  });
+  const ytdMonthActual = ytdMonths.map((_, i) => sum(ytdRepRows.map((r) => r.actual[i])));
+  const ytdMonthTarget = ytdMonths.map((_, i) => sum(allReps.map((r) => ytdTarget.get(r.id)![i])));
+  const ytdTotalActual = sum(ytdMonthActual);
+  const ytdTotalTarget = sum(ytdMonthTarget);
+
+  // Chart series: one per rep in fixed (alphabetical) order; reps beyond the
+  // palette fold into a single "Other" series rather than reusing a colour.
+  const namedReps = allReps.length > YTD_SERIES_COLORS.length ? allReps.slice(0, YTD_SERIES_COLORS.length - 1) : allReps;
+  const otherReps = allReps.slice(namedReps.length);
+  const ytdSeries: YtdRepSeries[] = [
+    ...namedReps.map((r) => ({ key: `rep_${r.id}`, name: r.name })),
+    ...(otherReps.length > 0 ? [{ key: "other", name: `Other (${otherReps.length})` }] : []),
+  ];
+  const ytdChartRows: YtdRepChartRow[] = ytdMonths.map((m, i) => {
+    const row: YtdRepChartRow = { month: m.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), target: ytdMonthTarget[i] };
+    for (const r of namedReps) row[`rep_${r.id}`] = ytdActual.get(r.id)![i];
+    if (otherReps.length > 0) row.other = sum(otherReps.map((r) => ytdActual.get(r.id)![i]));
+    return row;
+  });
+  const ytdYear = month.getUTCFullYear();
+  const ytdRangeLabel = `Jan – ${month.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })} ${ytdYear}`;
+  const pctLabel = (actual: number, target: number) => (target > 0 ? `${Math.round((actual / target) * 100)}%` : "—");
 
   const scopeLabel = user.role === "HEAD" ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
 
@@ -297,6 +354,111 @@ export default async function TargetsPage({
                   );
                 })}
               </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-sm font-semibold text-slate-900">
+              {user.role === "HEAD" ? "Department sales YTD, by sales person" : "Your sales YTD"}
+            </h2>
+            <span className="text-xs text-slate-400">{ytdRangeLabel}</span>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">
+            Won sales per month, stacked by sales person, against the combined monthly target. YTD actual{" "}
+            {formatCompactCurrency(ytdTotalActual)} of {formatCompactCurrency(ytdTotalTarget)} target (
+            {pctLabel(ytdTotalActual, ytdTotalTarget)}).
+          </p>
+          <YtdRepChart data={ytdChartRows} series={ytdSeries} />
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between p-4 pb-0">
+            <h2 className="text-sm font-semibold text-slate-900">YTD sales by month - {ytdRangeLabel}</h2>
+            <ExportCsvButton
+              filename={`ytd-sales-${ytdYear}-${monthStr}.csv`}
+              headers={[
+                "Sales Person",
+                ...ytdMonths.map((m) => shortMonthLabel(m)),
+                "YTD Actual",
+                "YTD Target",
+                "Achievement %",
+              ]}
+              rows={[
+                ...ytdRepRows.map((r) => [
+                  r.name,
+                  ...r.actual,
+                  r.totalActual,
+                  r.totalTarget,
+                  r.totalTarget > 0 ? Math.round((r.totalActual / r.totalTarget) * 100) : "",
+                ]),
+                [
+                  "Department total",
+                  ...ytdMonthActual,
+                  ytdTotalActual,
+                  ytdTotalTarget,
+                  ytdTotalTarget > 0 ? Math.round((ytdTotalActual / ytdTotalTarget) * 100) : "",
+                ],
+              ]}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-4 py-3 font-medium sticky left-0 bg-white">Sales Person</th>
+                  {ytdMonths.map((m) => (
+                    <th key={m.toISOString()} className="px-3 py-3 font-medium text-right">
+                      {m.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })}
+                    </th>
+                  ))}
+                  <th className="px-3 py-3 font-medium text-right">YTD Actual</th>
+                  <th className="px-3 py-3 font-medium text-right">YTD Target</th>
+                  <th className="px-4 py-3 font-medium text-right">Achievement</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ytdRepRows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white">{r.name}</td>
+                    {r.actual.map((v, i) => (
+                      <td key={i} className="px-3 py-3 text-right text-slate-600 tabular-nums">
+                        {v > 0 ? (
+                          <Link
+                            href={`/deals/closed?stage=WON&month=${monthValue(ytdMonths[i])}&owner=${r.id}`}
+                            className="text-indigo-600 hover:text-indigo-700"
+                          >
+                            {formatCompactCurrency(v)}
+                          </Link>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    ))}
+                    <td className="px-3 py-3 text-right font-medium text-slate-800 tabular-nums">
+                      {formatCompactCurrency(r.totalActual)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-slate-600 tabular-nums">{formatCompactCurrency(r.totalTarget)}</td>
+                    <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{pctLabel(r.totalActual, r.totalTarget)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {ytdRepRows.length > 1 && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
+                    <td className="px-4 py-3 sticky left-0 bg-slate-50">Department total</td>
+                    {ytdMonthActual.map((v, i) => (
+                      <td key={i} className="px-3 py-3 text-right tabular-nums">
+                        {v > 0 ? formatCompactCurrency(v) : "—"}
+                      </td>
+                    ))}
+                    <td className="px-3 py-3 text-right tabular-nums">{formatCompactCurrency(ytdTotalActual)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{formatCompactCurrency(ytdTotalTarget)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{pctLabel(ytdTotalActual, ytdTotalTarget)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </Card>
