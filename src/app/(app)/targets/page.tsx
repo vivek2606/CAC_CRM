@@ -10,7 +10,7 @@ import { ExportCsvButton } from "@/components/export-csv-button";
 import { CategoryChart } from "../reports/category-chart";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { GaugeChart } from "@/components/gauge-chart";
-import { YtdRepChart, YTD_SERIES_COLORS, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
+import { YtdRepChart, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
 
 const TREND_MONTHS = 12;
 
@@ -75,9 +75,17 @@ export default async function TargetsPage({
   // Year-to-date window: Jan 1 of the selected month's year through the end
   // of the selected month. Always covers the whole department (allReps),
   // so the rep filter above doesn't hide anyone from the YTD breakdown.
+  // For Head it covers every won deal in the window: the core sales team
+  // individually, the Service Manager (Sikiru) as "Service", and everyone
+  // else (historical staff, other divisions) rolled up into "Others".
   const ytdMonths = Array.from({ length: month.getUTCMonth() + 1 }, (_, i) => new Date(Date.UTC(month.getUTCFullYear(), i, 1)));
   const ytdStart = ytdMonths[0];
   const allRepIds = allReps.map((r) => r.id);
+  const serviceUsers =
+    user.role === "HEAD"
+      ? await prisma.user.findMany({ where: { isActive: true, title: "Service Manager" }, select: { id: true } })
+      : [];
+  const serviceUserIds = new Set(serviceUsers.map((u) => u.id));
 
   const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
@@ -109,11 +117,15 @@ export default async function TargetsPage({
       select: { value: true, equipmentType: true },
     }),
     prisma.target.findMany({
-      where: { userId: { in: allRepIds }, month: { in: ytdMonths } },
+      where: { userId: { in: [...allRepIds, ...serviceUserIds] }, month: { in: ytdMonths } },
       select: { userId: true, month: true, targetValue: true },
     }),
     prisma.deal.findMany({
-      where: { ownerId: { in: allRepIds }, stage: "WON", closedAt: { gte: ytdStart, lt: nextMonth } },
+      where: {
+        ...(user.role === "HEAD" ? {} : { ownerId: user.id }),
+        stage: "WON",
+        closedAt: { gte: ytdStart, lt: nextMonth },
+      },
       select: { ownerId: true, value: true, closedAt: true },
     }),
   ]);
@@ -163,41 +175,45 @@ export default async function TargetsPage({
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value);
 
-  // YTD: actual[repId][monthIdx] and target[repId][monthIdx].
-  const ytdActual = new Map(allReps.map((r) => [r.id, ytdMonths.map(() => 0)]));
-  const ytdTarget = new Map(allReps.map((r) => [r.id, ytdMonths.map(() => 0)]));
+  // YTD rows: each core rep, then "Service" and "Others" (Head only, and
+  // only when they have something to show).
+  type YtdRow = { key: string; name: string; ownerId: string | null; actual: number[]; target: number[] };
+  const repRowByUserId = new Map<string, YtdRow>(
+    allReps.map((r) => [r.id, { key: `rep_${r.id}`, name: r.name, ownerId: r.id, actual: ytdMonths.map(() => 0), target: ytdMonths.map(() => 0) }]),
+  );
+  const serviceRow: YtdRow = {
+    key: "service",
+    name: "Service",
+    ownerId: serviceUsers.length === 1 ? serviceUsers[0].id : null,
+    actual: ytdMonths.map(() => 0),
+    target: ytdMonths.map(() => 0),
+  };
+  const othersRow: YtdRow = { key: "others", name: "Others", ownerId: null, actual: ytdMonths.map(() => 0), target: ytdMonths.map(() => 0) };
+  const ytdRowFor = (userId: string) =>
+    repRowByUserId.get(userId) ?? (serviceUserIds.has(userId) ? serviceRow : othersRow);
   for (const d of ytdDeals) {
     if (!d.closedAt) continue;
-    const row = ytdActual.get(d.ownerId);
-    if (row) row[d.closedAt.getUTCMonth()] += d.value;
+    ytdRowFor(d.ownerId).actual[d.closedAt.getUTCMonth()] += d.value;
   }
   for (const t of ytdTargets) {
-    const row = ytdTarget.get(t.userId);
-    if (row) row[t.month.getUTCMonth()] += t.targetValue;
+    ytdRowFor(t.userId).target[t.month.getUTCMonth()] += t.targetValue;
   }
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
-  const ytdRepRows = allReps.map((r) => {
-    const actual = ytdActual.get(r.id)!;
-    const target = ytdTarget.get(r.id)!;
-    return { id: r.id, name: r.name, actual, totalActual: sum(actual), totalTarget: sum(target) };
-  });
+  const hasData = (r: YtdRow) => sum(r.actual) > 0 || sum(r.target) > 0;
+  const ytdRepRows = [...repRowByUserId.values(), ...[serviceRow, othersRow].filter(hasData)].map((r) => ({
+    ...r,
+    totalActual: sum(r.actual),
+    totalTarget: sum(r.target),
+  }));
   const ytdMonthActual = ytdMonths.map((_, i) => sum(ytdRepRows.map((r) => r.actual[i])));
-  const ytdMonthTarget = ytdMonths.map((_, i) => sum(allReps.map((r) => ytdTarget.get(r.id)![i])));
+  const ytdMonthTarget = ytdMonths.map((_, i) => sum(ytdRepRows.map((r) => r.target[i])));
   const ytdTotalActual = sum(ytdMonthActual);
   const ytdTotalTarget = sum(ytdMonthTarget);
 
-  // Chart series: one per rep in fixed (alphabetical) order; reps beyond the
-  // palette fold into a single "Other" series rather than reusing a colour.
-  const namedReps = allReps.length > YTD_SERIES_COLORS.length ? allReps.slice(0, YTD_SERIES_COLORS.length - 1) : allReps;
-  const otherReps = allReps.slice(namedReps.length);
-  const ytdSeries: YtdRepSeries[] = [
-    ...namedReps.map((r) => ({ key: `rep_${r.id}`, name: r.name })),
-    ...(otherReps.length > 0 ? [{ key: "other", name: `Other (${otherReps.length})` }] : []),
-  ];
+  const ytdSeries: YtdRepSeries[] = ytdRepRows.map((r) => ({ key: r.key, name: r.name }));
   const ytdChartRows: YtdRepChartRow[] = ytdMonths.map((m, i) => {
     const row: YtdRepChartRow = { month: m.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), target: ytdMonthTarget[i] };
-    for (const r of namedReps) row[`rep_${r.id}`] = ytdActual.get(r.id)![i];
-    if (otherReps.length > 0) row.other = sum(otherReps.map((r) => ytdActual.get(r.id)![i]));
+    for (const r of ytdRepRows) row[r.key] = r.actual[i];
     return row;
   });
   const ytdYear = month.getUTCFullYear();
@@ -420,17 +436,19 @@ export default async function TargetsPage({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {ytdRepRows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.key}>
                     <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white">{r.name}</td>
                     {r.actual.map((v, i) => (
                       <td key={i} className="px-3 py-3 text-right text-slate-600 tabular-nums">
-                        {v > 0 ? (
+                        {v > 0 && r.ownerId ? (
                           <Link
-                            href={`/deals/closed?stage=WON&month=${monthValue(ytdMonths[i])}&owner=${r.id}`}
+                            href={`/deals/closed?stage=WON&month=${monthValue(ytdMonths[i])}&owner=${r.ownerId}`}
                             className="text-indigo-600 hover:text-indigo-700"
                           >
                             {formatCompactCurrency(v)}
                           </Link>
+                        ) : v > 0 ? (
+                          formatCompactCurrency(v)
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}

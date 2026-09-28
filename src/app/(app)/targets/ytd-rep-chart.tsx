@@ -7,11 +7,11 @@ import { formatCompactCurrency } from "@/lib/format";
 export type YtdRepChartRow = { month: string; target: number } & Record<string, number | string>;
 export type YtdRepSeries = { key: string; name: string };
 
-// Categorical hues in fixed order - a rep keeps the same colour as long as
-// the rep list order (alphabetical) doesn't change. Series past the last
-// slot are folded into "Other" by the page, never given a generated hue.
-export const YTD_SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
-const OTHER_COLOR = "#94a3b8";
+// Categorical hues in fixed order for the individual reps - a rep keeps the
+// same colour as long as the rep list order (alphabetical) doesn't change.
+// "Service" and "Others" have fixed colours of their own.
+const REP_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#e34948"];
+const FIXED_COLORS: Record<string, string> = { service: "#4a3aa7", others: "#94a3b8" };
 
 export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: YtdRepSeries[] }) {
   return (
@@ -38,7 +38,7 @@ export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: 
             dataKey={s.key}
             name={s.name}
             stackId="actual"
-            fill={s.key === "other" ? OTHER_COLOR : YTD_SERIES_COLORS[i % YTD_SERIES_COLORS.length]}
+            fill={FIXED_COLORS[s.key] ?? REP_COLORS[i % REP_COLORS.length]}
             stroke="#ffffff"
             strokeWidth={1}
             maxBarSize={36}
