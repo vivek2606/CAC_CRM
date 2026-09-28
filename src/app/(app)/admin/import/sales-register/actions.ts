@@ -18,6 +18,10 @@ const DEMO_EMAILS = [
 
 const AVATAR_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4", "#ef4444", "#0ea5e9"];
 
+function monthLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 function randomPassword(): string {
   return crypto.randomBytes(6).toString("base64url");
 }
@@ -29,7 +33,13 @@ export type ImportSummary = {
   activeUsers: { name: string; email: string; tempPassword: string }[];
   inactiveUsersCreated: number;
   dealsCreated: number;
+  dealsUpdated: number;
+  dealsRemoved: number;
   lineItemsCreated: number;
+  lineItemsReplaced: number;
+  // Set only for a "replace" upload: the months whose imported data was
+  // rebuilt from this file, e.g. "Jan 2026 – Aug 2026".
+  replacedRange: string | null;
   exchangeRatesSet: number;
   excludedServiceRows: number;
   creditNoteRowsNetted: number;
@@ -45,6 +55,7 @@ export async function importSalesRegister(
   formData: FormData
 ): Promise<ImportState> {
   const head = await requireHead();
+  const replace = formData.get("replace") === "on";
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -68,6 +79,36 @@ export async function importSalesRegister(
 
   const result = transformSalesRegister(rows);
 
+  // Replace mode: every month the file touches (first row's month through
+  // last row's month) is treated as authoritative - imported deals and line
+  // items in that window are corrected to match the file, and ones no
+  // longer in it are removed. Months outside the window aren't touched.
+  const docTimes = rows.map((r) => r.docDate.getTime());
+  const minDate = new Date(Math.min(...docTimes));
+  const maxDate = new Date(Math.max(...docTimes));
+  const rangeStart = new Date(Date.UTC(minDate.getUTCFullYear(), minDate.getUTCMonth(), 1));
+  const rangeEnd = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth() + 1, 1));
+
+  // Months with Won deals entered directly in the CRM (e.g. once the team
+  // stopped relying on the register) would be counted twice if the file's
+  // invoices for those months were imported on top - refuse and say which.
+  if (replace) {
+    const crmWon = await prisma.deal.findMany({
+      where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: rangeStart, lt: rangeEnd } },
+      select: { closedAt: true },
+    });
+    const clashMonths = Array.from(
+      new Set(crmWon.map((d) => monthLabel(new Date(Date.UTC(d.closedAt!.getUTCFullYear(), d.closedAt!.getUTCMonth(), 1))))),
+    );
+    if (clashMonths.length > 0) {
+      return {
+        error: `This file covers ${monthLabel(rangeStart)} – ${monthLabel(maxDate)}, but ${clashMonths.join(", ")} already ${
+          clashMonths.length === 1 ? "has" : "have"
+        } Won deals entered in the CRM. Remove those months' rows from the file and upload again, so those sales aren't counted twice.`,
+      };
+    }
+  }
+
   // Retire the placeholder demo accounts if they don't own anything yet.
   const demoAccountsRemoved: string[] = [];
   const demoUsers = await prisma.user.findMany({
@@ -88,11 +129,23 @@ export async function importSalesRegister(
 
   // Users (active reps get real random passwords, shown once below; inactive
   // historical records share one unusable password since they can never log in).
+  // Only people who don't exist yet get a login created (createMany below
+  // skips existing emails), so only they get a temporary password shown -
+  // a re-upload must not display passwords that were never actually set.
+  const existingUserEmails = new Set(
+    (
+      await prisma.user.findMany({
+        where: { email: { in: result.users.map((u) => u.email) } },
+        select: { email: true },
+      })
+    ).map((u) => u.email),
+  );
   const inactivePasswordHash = await bcrypt.hash(crypto.randomUUID(), 10);
   const activeCredentials: { name: string; email: string; tempPassword: string }[] = [];
   const userCreateData = [];
   let colorIdx = 0;
   for (const u of result.users) {
+    if (existingUserEmails.has(u.email)) continue;
     let passwordHash: string;
     if (u.isActive) {
       const pwd = randomPassword();
@@ -112,7 +165,9 @@ export async function importSalesRegister(
       managerId: head.id,
     });
   }
-  await prisma.user.createMany({ data: userCreateData, skipDuplicates: true });
+  if (userCreateData.length > 0) {
+    await prisma.user.createMany({ data: userCreateData, skipDuplicates: true });
+  }
 
   const dbUsers = await prisma.user.findMany({
     where: { email: { in: result.users.map((u) => u.email) } },
@@ -185,6 +240,7 @@ export async function importSalesRegister(
   const productIdByCode = new Map(dbProducts.map((p) => [p.code, p.id]));
 
   // Deals (one per transaction)
+  const fileTxnNos = result.deals.map((d) => d.txnNo);
   const dealCreateData = result.deals.map((d) => ({
     title: d.title,
     stage: "WON" as const,
@@ -197,9 +253,93 @@ export async function importSalesRegister(
     accountId: accountIdByName.get(d.custName) ?? null,
     sourceTxnNo: d.txnNo,
   }));
+
+  let dealsUpdated = 0;
+  let dealsRemoved = 0;
+  let lineItemsReplaced = 0;
+  if (replace) {
+    // Imported line items (never the "deal-item:" ones a pipeline deal won
+    // in the CRM writes) in the window, plus any belonging to this file's
+    // transactions in case a correction moved one across the window edge.
+    const existingFileDeals = await prisma.deal.findMany({
+      where: { sourceTxnNo: { in: fileTxnNos } },
+      select: { id: true },
+    });
+    const deleted = await prisma.saleLineItem.deleteMany({
+      where: {
+        NOT: { sourceKey: { startsWith: "deal-item:" } },
+        OR: [
+          { month: { gte: rangeStart, lt: rangeEnd } },
+          { dealId: { in: existingFileDeals.map((d) => d.id) } },
+        ],
+      },
+    });
+    lineItemsReplaced = deleted.count;
+
+    // Imported deals in the window that aren't in this file any more (a
+    // removed invoice, or one whose rows now net to zero or below).
+    const staleDeals = await prisma.deal.findMany({
+      where: {
+        sourceTxnNo: { not: null, notIn: fileTxnNos },
+        closedAt: { gte: rangeStart, lt: rangeEnd },
+      },
+      select: { id: true },
+    });
+    const staleIds = staleDeals.map((d) => d.id);
+    if (staleIds.length > 0) {
+      await prisma.$transaction([
+        prisma.activity.updateMany({ where: { dealId: { in: staleIds } }, data: { dealId: null } }),
+        prisma.note.updateMany({ where: { dealId: { in: staleIds } }, data: { dealId: null } }),
+        prisma.lead.updateMany({ where: { convertedDealId: { in: staleIds } }, data: { convertedDealId: null } }),
+        prisma.saleLineItem.deleteMany({ where: { dealId: { in: staleIds } } }),
+        prisma.deal.deleteMany({ where: { id: { in: staleIds } } }),
+      ]);
+      dealsRemoved = staleIds.length;
+    }
+
+    // Correct the deals that already exist - only the ones that actually
+    // changed, so a large file doesn't issue one update per invoice.
+    const existing = await prisma.deal.findMany({
+      where: { sourceTxnNo: { in: fileTxnNos } },
+      select: { id: true, sourceTxnNo: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true },
+    });
+    const existingByTxnNo = new Map(existing.map((d) => [d.sourceTxnNo!, d]));
+    const updates = [];
+    for (const d of dealCreateData) {
+      const cur = existingByTxnNo.get(d.sourceTxnNo);
+      if (!cur) continue;
+      if (
+        cur.title !== d.title ||
+        cur.value !== d.value ||
+        cur.closedAt?.getTime() !== d.closedAt.getTime() ||
+        cur.ownerId !== d.ownerId ||
+        cur.accountId !== d.accountId
+      ) {
+        updates.push(
+          prisma.deal.update({
+            where: { id: cur.id },
+            data: {
+              title: d.title,
+              value: d.value,
+              closedAt: d.closedAt,
+              ownerId: d.ownerId,
+              accountId: d.accountId,
+              stage: "WON",
+              probability: 100,
+            },
+          }),
+        );
+      }
+    }
+    for (let i = 0; i < updates.length; i += 100) {
+      await prisma.$transaction(updates.slice(i, i + 100));
+    }
+    dealsUpdated = updates.length;
+  }
+
   const dealsResult = await prisma.deal.createMany({ data: dealCreateData, skipDuplicates: true });
   const dbDeals = await prisma.deal.findMany({
-    where: { sourceTxnNo: { in: result.deals.map((d) => d.txnNo) } },
+    where: { sourceTxnNo: { in: fileTxnNos } },
     select: { id: true, sourceTxnNo: true },
   });
   const dealIdByTxnNo = new Map(dbDeals.map((d) => [d.sourceTxnNo!, d.id]));
@@ -246,7 +386,11 @@ export async function importSalesRegister(
       activeUsers: activeCredentials,
       inactiveUsersCreated: result.users.filter((u) => !u.isActive).length,
       dealsCreated: dealsResult.count,
+      dealsUpdated,
+      dealsRemoved,
       lineItemsCreated: lineItemsResult.count,
+      lineItemsReplaced,
+      replacedRange: replace ? `${monthLabel(rangeStart)} – ${monthLabel(new Date(rangeEnd.getTime() - 1))}` : null,
       exchangeRatesSet,
       excludedServiceRows: result.summary.excludedServiceRows,
       creditNoteRowsNetted: result.summary.creditNoteRowsNetted,

@@ -12,21 +12,34 @@ export function ImportForm() {
 
   return (
     <div className="space-y-6">
-      <form action={formAction} className="flex flex-wrap items-center gap-3">
-        <input
-          type="file"
-          name="file"
-          accept=".xlsx,.xls"
-          required
-          className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:px-4 file:py-2 file:text-sm file:font-medium file:cursor-pointer"
-        />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 transition-colors"
-        >
-          {isPending ? "Importing… this can take a minute" : "Import"}
-        </button>
+      <form action={formAction} className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            name="file"
+            accept=".xlsx,.xls"
+            required
+            className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:px-4 file:py-2 file:text-sm file:font-medium file:cursor-pointer"
+          />
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 transition-colors"
+          >
+            {isPending ? "Importing… this can take a minute" : "Import"}
+          </button>
+        </div>
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="replace" className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+          <span>
+            <span className="font-medium">Replace existing data for the months in this file</span>
+            <span className="block text-xs text-slate-500">
+              Use this to correct a register uploaded earlier. Every month the file covers is rebuilt to match it:
+              changed amounts, dates, customers and sales persons are updated, and invoices no longer in the file are
+              removed. Other months, and deals entered directly in the CRM, are never touched.
+            </span>
+          </span>
+        </label>
       </form>
 
       {state.error && (
@@ -36,7 +49,9 @@ export function ImportForm() {
       {state.summary && (
         <div className="space-y-4">
           <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Import complete</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              {state.summary.replacedRange ? `Replaced ${state.summary.replacedRange}` : "Import complete"}
+            </h2>
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
               <div>
                 <dt className="text-slate-500">Accounts</dt>
@@ -54,6 +69,18 @@ export function ImportForm() {
                 <dt className="text-slate-500">Deals (Won)</dt>
                 <dd className="text-lg font-semibold text-slate-800">{state.summary.dealsCreated}</dd>
               </div>
+              {state.summary.replacedRange && (
+                <>
+                  <div>
+                    <dt className="text-slate-500">Deals corrected</dt>
+                    <dd className="text-lg font-semibold text-slate-800">{state.summary.dealsUpdated}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Deals removed</dt>
+                    <dd className="text-lg font-semibold text-slate-800">{state.summary.dealsRemoved}</dd>
+                  </div>
+                </>
+              )}
               <div>
                 <dt className="text-slate-500">Sale line items</dt>
                 <dd className="text-lg font-semibold text-slate-800">{state.summary.lineItemsCreated}</dd>
@@ -78,6 +105,8 @@ export function ImportForm() {
               {state.summary.creditNoteRowsNetted} return/credit-note rows into quantities, values, and pricing
               instead of dropping them.
               {state.summary.skippedFileRows > 0 && ` Skipped ${state.summary.skippedFileRows} blank rows in the file.`}
+              {state.summary.replacedRange &&
+                ` Rebuilt ${state.summary.lineItemsCreated} line items in place of ${state.summary.lineItemsReplaced} previously imported ones.`}
             </p>
             {state.summary.demoAccountsRemoved.length > 0 && (
               <p className="text-xs text-slate-400 mt-1">

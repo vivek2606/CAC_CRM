@@ -12,7 +12,7 @@ export default async function ImportPage() {
     <div>
       <PageHeader
         title="Import Sales Register"
-        description="One-time historical data import from the Orion ERP export"
+        description="Historical data import from the Orion ERP export"
         action={
           <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
             ← All imports
@@ -48,6 +48,11 @@ export default async function ImportPage() {
             <li>
               Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a
               newer extract updates each customer&apos;s code to the most recent one in the file.
+            </li>
+            <li>
+              To correct a register uploaded earlier, tick <span className="font-medium">Replace existing data</span>{" "}
+              and upload the corrected file for just the months that need fixing. Don&apos;t include months whose
+              deals were entered directly in the CRM - the upload is refused if it would count them twice.
             </li>
             <li>This can take a minute for a large file. Don&apos;t close the tab while it&apos;s running.</li>
           </ul>
