@@ -9,9 +9,9 @@ export type YtdRepSeries = { key: string; name: string };
 
 // Categorical hues in fixed order for the individual reps - a rep keeps the
 // same colour as long as the rep list order (alphabetical) doesn't change.
-// "Service" and "Others" have fixed colours of their own.
+// "Others" has a fixed grey of its own.
 const REP_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#e34948"];
-const FIXED_COLORS: Record<string, string> = { service: "#4a3aa7", others: "#94a3b8" };
+const FIXED_COLORS: Record<string, string> = { others: "#94a3b8" };
 
 export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: YtdRepSeries[] }) {
   return (

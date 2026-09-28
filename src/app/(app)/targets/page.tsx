@@ -76,8 +76,9 @@ export default async function TargetsPage({
   // of the selected month. Always covers the whole department (allReps),
   // so the rep filter above doesn't hide anyone from the YTD breakdown.
   // For Head it covers every won deal in the window: the core sales team
-  // individually, the Service Manager (Sikiru) as "Service", and everyone
-  // else (historical staff, other divisions) rolled up into "Others".
+  // individually and everyone else (historical staff, other divisions)
+  // rolled up into "Others". Service sales are left out entirely - this is
+  // sales tracking only, and Service has no individual target.
   const ytdMonths = Array.from({ length: month.getUTCMonth() + 1 }, (_, i) => new Date(Date.UTC(month.getUTCFullYear(), i, 1)));
   const ytdStart = ytdMonths[0];
   const allRepIds = allReps.map((r) => r.id);
@@ -85,7 +86,7 @@ export default async function TargetsPage({
     user.role === "HEAD"
       ? await prisma.user.findMany({ where: { isActive: true, title: "Service Manager" }, select: { id: true } })
       : [];
-  const serviceUserIds = new Set(serviceUsers.map((u) => u.id));
+  const serviceUserIds = serviceUsers.map((u) => u.id);
 
   const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
@@ -117,12 +118,12 @@ export default async function TargetsPage({
       select: { value: true, equipmentType: true },
     }),
     prisma.target.findMany({
-      where: { userId: { in: [...allRepIds, ...serviceUserIds] }, month: { in: ytdMonths } },
+      where: { userId: { in: allRepIds }, month: { in: ytdMonths } },
       select: { userId: true, month: true, targetValue: true },
     }),
     prisma.deal.findMany({
       where: {
-        ...(user.role === "HEAD" ? {} : { ownerId: user.id }),
+        ownerId: user.role === "HEAD" ? { notIn: serviceUserIds } : user.id,
         stage: "WON",
         closedAt: { gte: ytdStart, lt: nextMonth },
       },
@@ -175,22 +176,14 @@ export default async function TargetsPage({
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value);
 
-  // YTD rows: each core rep, then "Service" and "Others" (Head only, and
-  // only when they have something to show).
+  // YTD rows: each core rep, then "Others" (Head only, and only when it has
+  // something to show).
   type YtdRow = { key: string; name: string; ownerId: string | null; actual: number[]; target: number[] };
   const repRowByUserId = new Map<string, YtdRow>(
     allReps.map((r) => [r.id, { key: `rep_${r.id}`, name: r.name, ownerId: r.id, actual: ytdMonths.map(() => 0), target: ytdMonths.map(() => 0) }]),
   );
-  const serviceRow: YtdRow = {
-    key: "service",
-    name: "Service",
-    ownerId: serviceUsers.length === 1 ? serviceUsers[0].id : null,
-    actual: ytdMonths.map(() => 0),
-    target: ytdMonths.map(() => 0),
-  };
   const othersRow: YtdRow = { key: "others", name: "Others", ownerId: null, actual: ytdMonths.map(() => 0), target: ytdMonths.map(() => 0) };
-  const ytdRowFor = (userId: string) =>
-    repRowByUserId.get(userId) ?? (serviceUserIds.has(userId) ? serviceRow : othersRow);
+  const ytdRowFor = (userId: string) => repRowByUserId.get(userId) ?? othersRow;
   for (const d of ytdDeals) {
     if (!d.closedAt) continue;
     ytdRowFor(d.ownerId).actual[d.closedAt.getUTCMonth()] += d.value;
@@ -200,7 +193,7 @@ export default async function TargetsPage({
   }
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
   const hasData = (r: YtdRow) => sum(r.actual) > 0 || sum(r.target) > 0;
-  const ytdRepRows = [...repRowByUserId.values(), ...[serviceRow, othersRow].filter(hasData)].map((r) => ({
+  const ytdRepRows = [...repRowByUserId.values(), ...[othersRow].filter(hasData)].map((r) => ({
     ...r,
     totalActual: sum(r.actual),
     totalTarget: sum(r.target),
