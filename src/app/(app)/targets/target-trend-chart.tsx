@@ -1,27 +1,14 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 export type TargetTrendRow = { month: string; target: number; actual: number };
 
 const labelStyle = { fontSize: 10, fontWeight: 700, fill: "#334155" };
 
-// One unit for the whole chart, picked from the largest bar, so the bare
-// numbers above the bars always read in the same unit as the Y axis
-// (e.g. axis "₦400M", label "452").
-function chartUnit(data: TargetTrendRow[]): { divisor: number; suffix: string } {
-  const max = Math.max(0, ...data.flatMap((r) => [r.target, r.actual]));
-  if (max >= 1e10) return { divisor: 1e9, suffix: "B" };
-  if (max >= 1e6) return { divisor: 1e6, suffix: "M" };
-  if (max >= 1e3) return { divisor: 1e3, suffix: "K" };
-  return { divisor: 1, suffix: "" };
-}
-
 export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
-  const { divisor, suffix } = chartUnit(data);
-  const inUnit = (v: number) => Math.round(v / divisor).toLocaleString("en-NG");
-  const label = (v: unknown) => (Number(v) > 0 ? inUnit(Number(v)) : "");
+  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.target, r.actual]));
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -31,7 +18,7 @@ export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => (Number(v) === 0 ? "₦0" : `₦${inUnit(Number(v))}${suffix}`)}
+          tickFormatter={axisTick}
           width={64}
         />
         <Tooltip
