@@ -20,7 +20,8 @@ import { Sparkline } from "./sparkline";
 import { GaugeChart } from "@/components/gauge-chart";
 import { ShareStackedBar, type ShareBarRow } from "@/components/share-stacked-bar";
 import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
-import { Target, TrendingUp, Wallet, Percent, ArrowRight, AlertTriangle, CalendarRange, Gauge } from "lucide-react";
+import { Target, TrendingUp, Wallet, Trophy, ArrowRight, AlertTriangle, CalendarRange, Gauge } from "lucide-react";
+import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
 
 const SPARKLINE_MONTHS = 6;
 
@@ -89,7 +90,7 @@ export default async function DashboardPage() {
     wonThisMonth,
     wonLastMonth,
     wonYTD,
-    closedDeals,
+    ytd,
     activeLeads,
     leadStatusGroups,
     upcomingActivities,
@@ -125,14 +126,8 @@ export default async function DashboardPage() {
       _sum: { value: true },
       _count: true,
     }),
-    // Win rate only makes sense over deals actually run through the pipeline
-    // here - the historical Sales Register import is a billing export of
-    // completed sales only, with no "Lost" counterpart, so including it
-    // would always show ~100% regardless of real performance.
-    prisma.deal.findMany({
-      where: { ownerId: { in: ownerIds }, stage: { in: ["WON", "LOST"] }, sourceTxnNo: null },
-      select: { stage: true },
-    }),
+    // YTD achievement vs. target - same figures as the Targets page cards.
+    getYtdSummary(user.role === "HEAD" ? { kind: "department" } : { kind: "rep", userId: user.id }, targetMonth),
     prisma.lead.count({
       where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
     }),
@@ -298,8 +293,8 @@ export default async function DashboardPage() {
       value: sparklineByMonth.get(key) ?? 0,
     };
   });
-  const wonCount = closedDeals.filter((d) => d.stage === "WON").length;
-  const winRate = closedDeals.length > 0 ? Math.round((wonCount / closedDeals.length) * 100) : 0;
+  const ytdPct = achievementPct(ytd.actual, ytd.target);
+  const ytdGrowth = growthPct(ytd.actual, ytd.lastYearActual);
 
   const wonThisMonthValue = wonThisMonth._sum.value ?? 0;
   const wonLastMonthValue = wonLastMonth._sum.value ?? 0;
@@ -421,10 +416,23 @@ export default async function DashboardPage() {
             accent="sky"
           />
           <StatCard
-            label="Win Rate"
-            value={`${winRate}%`}
-            sub={closedDeals.length > 0 ? `${wonCount} of ${closedDeals.length} closed` : "No pipeline deals closed yet"}
-            icon={<Percent className="h-4 w-4 text-amber-500" />}
+            label="YTD vs Target"
+            value={ytdPct == null ? "—" : `${ytdPct}%`}
+            sub={
+              <>
+                {ytd.target > 0
+                  ? `${formatCompactCurrency(ytd.actual)} of ${formatCompactCurrency(ytd.target)} target`
+                  : "No targets set this year"}
+                {ytdGrowth != null && (
+                  <span className={ytdGrowth >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                    {" "}
+                    · {ytdGrowth >= 0 ? "+" : ""}
+                    {ytdGrowth}% vs last year
+                  </span>
+                )}
+              </>
+            }
+            icon={<Trophy className="h-4 w-4 text-amber-500" />}
             accent="amber"
           />
         </div>

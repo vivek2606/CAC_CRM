@@ -10,6 +10,7 @@ import { ExportCsvButton } from "@/components/export-csv-button";
 import { CategoryChart } from "../reports/category-chart";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { GaugeChart } from "@/components/gauge-chart";
+import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
 import { YtdRepChart, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
 
 const TREND_MONTHS = 12;
@@ -88,7 +89,7 @@ export default async function TargetsPage({
       : [];
   const serviceUserIds = serviceUsers.map((u) => u.id);
 
-  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals] = await Promise.all([
+  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals, ytdSummary] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
     prisma.deal.findMany({
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
@@ -129,6 +130,8 @@ export default async function TargetsPage({
       },
       select: { ownerId: true, value: true, closedAt: true },
     }),
+    // Summary cards: follow the Sales Person filter (department or one rep).
+    getYtdSummary(selectedRepId ? { kind: "rep", userId: selectedRepId } : { kind: "department" }, month),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const actualByUserId = new Map<string, number>();
@@ -211,6 +214,8 @@ export default async function TargetsPage({
   });
   const ytdYear = month.getUTCFullYear();
   const ytdRangeLabel = `Jan – ${month.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })} ${ytdYear}`;
+  const ytdSummaryPct = achievementPct(ytdSummary.actual, ytdSummary.target);
+  const ytdGrowthPct = growthPct(ytdSummary.actual, ytdSummary.lastYearActual);
   const pctLabel = (actual: number, target: number) => (target > 0 ? `${Math.round((actual / target) * 100)}%` : "—");
 
   const scopeLabel = user.role === "HEAD" ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
@@ -264,14 +269,28 @@ export default async function TargetsPage({
           </button>
         </form>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="p-4">
-            <p className="text-sm text-slate-500">Total Target</p>
-            <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(totalTarget)}</p>
+            <p className="text-sm text-slate-500">YTD Target</p>
+            <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(ytdSummary.target)}</p>
+            <p className="text-xs text-slate-400 mt-1">{ytdRangeLabel}</p>
           </Card>
           <Card className="p-4">
-            <p className="text-sm text-slate-500">Total Actual</p>
-            <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(totalActual)}</p>
+            <p className="text-sm text-slate-500">YTD Achievement</p>
+            <p className="text-2xl font-semibold text-slate-900 mt-1">{formatCompactCurrency(ytdSummary.actual)}</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {ytdSummaryPct == null ? "No target set" : `${ytdSummaryPct}% of target`}
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-sm text-slate-500">YTD vs Last Year</p>
+            <p className="text-2xl font-semibold text-slate-900 mt-1">
+              {ytdGrowthPct == null ? "—" : `${ytdGrowthPct >= 0 ? "+" : ""}${ytdGrowthPct}%`}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {formatCompactCurrency(ytdSummary.actual)} this year vs {formatCompactCurrency(ytdSummary.lastYearActual)}{" "}
+              same period {ytdYear - 1}
+            </p>
           </Card>
           <Card className="p-4 flex items-center justify-center">
             <GaugeChart
