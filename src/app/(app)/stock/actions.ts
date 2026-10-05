@@ -182,6 +182,8 @@ export type BulkReceiptState = {
     pricesUpdated: number;
     productsCreated: string[];
     alreadyRecorded: number;
+    // Rows with a blank or 0 quantity - nothing to add, skipped.
+    zeroQtyRows: number;
     problems: StockReceiptRowProblem[];
   };
 };
@@ -205,7 +207,7 @@ export async function importStockReceipts(_prev: BulkReceiptState | undefined, f
     return { error: e instanceof Error ? e.message : "Could not read the uploaded file." };
   }
   const problems = [...parsed.problems];
-  if (parsed.rows.length === 0 && problems.length === 0) return { error: "No usable rows found in the file." };
+  if (parsed.rows.length === 0 && problems.length === 0 && parsed.zeroQtyRows === 0) return { error: "No usable rows found in the file." };
 
   const { productIdFor, productsCreated } = await resolveProductCodes(parsed.rows);
 
@@ -260,12 +262,13 @@ export async function importStockReceipts(_prev: BulkReceiptState | undefined, f
 
   return {
     summary: {
-      rowsRead: parsed.rows.length + parsed.problems.length,
+      rowsRead: parsed.rows.length + parsed.problems.length + parsed.zeroQtyRows,
       receiptsAdded: toAdd.length,
       unitsAdded: toAdd.reduce((s, r) => s + r.quantity, 0),
       pricesUpdated: priceByProductMonth.size,
       productsCreated,
       alreadyRecorded: ready.length - toAdd.length,
+      zeroQtyRows: parsed.zeroQtyRows,
       problems: problems.sort((a, b) => a.rowNumber - b.rowNumber),
     },
   };
@@ -320,6 +323,8 @@ export type BulkInTransitState = {
     // Matches worth a look: by model (exact or partial) and new products.
     matches: ProductMatch[];
     alreadyRecorded: number;
+    // Rows with a blank or 0 quantity - nothing to add, skipped.
+    zeroQtyRows: number;
     problems: StockReceiptRowProblem[];
   };
 };
@@ -339,7 +344,7 @@ export async function importInTransit(_prev: BulkInTransitState | undefined, for
     return { error: e instanceof Error ? e.message : "Could not read the uploaded file." };
   }
   const problems = [...parsed.problems];
-  if (parsed.rows.length === 0 && problems.length === 0) return { error: "No usable rows found in the file." };
+  if (parsed.rows.length === 0 && problems.length === 0 && parsed.zeroQtyRows === 0) return { error: "No usable rows found in the file." };
 
   // Rows are matched by code, else by model (most recently used code for
   // it); models seen for the first time get a temporary code.
@@ -371,11 +376,12 @@ export async function importInTransit(_prev: BulkInTransitState | undefined, for
   revalidateStock();
   return {
     summary: {
-      rowsRead: parsed.rows.length + parsed.problems.length,
+      rowsRead: parsed.rows.length + parsed.problems.length + parsed.zeroQtyRows,
       added: toAdd.length,
       units: toAdd.reduce((s, r) => s + r.quantity, 0),
       matches: matches.filter((m) => m.how !== "code"),
       alreadyRecorded: ready.length - toAdd.length,
+      zeroQtyRows: parsed.zeroQtyRows,
       problems: problems.sort((a, b) => a.rowNumber - b.rowNumber),
     },
   };

@@ -61,7 +61,7 @@ export function cellValue(v: ExcelJS.CellValue): unknown {
 
 export async function parseStockReceiptsBuffer(
   buffer: ArrayBuffer,
-): Promise<{ rows: RawStockReceiptRow[]; problems: StockReceiptRowProblem[] }> {
+): Promise<{ rows: RawStockReceiptRow[]; problems: StockReceiptRowProblem[]; zeroQtyRows: number }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const ws = wb.worksheets[0];
@@ -78,6 +78,9 @@ export async function parseStockReceiptsBuffer(
 
   const rows: RawStockReceiptRow[] = [];
   const problems: StockReceiptRowProblem[] = [];
+  // A blank quantity counts as 0, and a 0 row adds nothing - it's skipped
+  // (and counted), not reported as an error.
+  let zeroQtyRows = 0;
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
     const get = (i: number) => (i === -1 ? null : cellValue(row.getCell(i).value));
@@ -97,8 +100,9 @@ export async function parseStockReceiptsBuffer(
     const quantity = num(idx.quantity);
     if (!productCode && quantity == null) return; // blank row
     if (!productCode) return void problems.push({ rowNumber, problem: "No product code" });
-    if (quantity == null || Number.isNaN(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
-      return void problems.push({ rowNumber, problem: `Quantity must be a whole number above 0 (${productCode})` });
+    if (quantity == null || quantity === 0) return void zeroQtyRows++;
+    if (Number.isNaN(quantity) || quantity < 0 || !Number.isInteger(quantity)) {
+      return void problems.push({ rowNumber, problem: `Quantity must be a whole number, 0 or more (${productCode})` });
     }
     const rawDate = get(idx.receivedAt);
     const receivedAt = parseReceiptDate(rawDate);
@@ -121,5 +125,5 @@ export async function parseStockReceiptsBuffer(
       note: str(idx.note),
     });
   });
-  return { rows, problems };
+  return { rows, problems, zeroQtyRows };
 }

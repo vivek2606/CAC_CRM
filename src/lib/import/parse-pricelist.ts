@@ -82,11 +82,12 @@ export async function parsePricelistBuffer(
     const rawCategory = getStr("CATEGORY");
     const category = rawCategory ? normalizeCategory(rawCategory) : null;
     const month = parseMonthCell(getRaw("MONTH"));
-    const quantity = getNum("Quantity");
+    // A blank quantity means none in stock.
+    const quantity = getNum("Quantity") ?? 0;
     const landedCost = getNum("Landed Cost");
     const dealerPrice = getNum("Dealer's Price");
 
-    if (!productCode || !model || !category || quantity == null) {
+    if (!productCode || !model || !category) {
       skippedRows++;
       return;
     }

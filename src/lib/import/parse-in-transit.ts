@@ -33,7 +33,7 @@ export const IN_TRANSIT_TEMPLATE_HEADERS = ["Product Code", "Model", "Category",
 // day-first DD/MM/YYYY.
 export async function parseInTransitBuffer(
   buffer: ArrayBuffer,
-): Promise<{ rows: RawInTransitRow[]; problems: StockReceiptRowProblem[] }> {
+): Promise<{ rows: RawInTransitRow[]; problems: StockReceiptRowProblem[]; zeroQtyRows: number }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const ws = wb.worksheets[0];
@@ -50,6 +50,9 @@ export async function parseInTransitBuffer(
 
   const rows: RawInTransitRow[] = [];
   const problems: StockReceiptRowProblem[] = [];
+  // A blank quantity counts as 0, and a 0 row has nothing in transit - it's
+  // skipped (and counted), not reported as an error.
+  let zeroQtyRows = 0;
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
     const get = (i: number) => (i === -1 ? null : cellValue(row.getCell(i).value));
@@ -75,9 +78,11 @@ export async function parseInTransitBuffer(
     if (!productCode && !model && (rawQty == null || rawQty === "")) return; // blank row
     if (!productCode && !model) return void problems.push({ rowNumber, problem: "No product code or model" });
     const label = productCode ?? model!;
-    const quantity = typeof rawQty === "number" ? rawQty : Number(String(rawQty ?? "").replace(/[,\s]/g, ""));
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      return void problems.push({ rowNumber, problem: `Quantity must be a whole number above 0 (${label})` });
+    const qtyText = typeof rawQty === "number" ? "" : String(rawQty ?? "").replace(/[,\s]/g, "");
+    const quantity = typeof rawQty === "number" ? rawQty : qtyText === "" ? 0 : Number(qtyText);
+    if (quantity === 0) return void zeroQtyRows++;
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      return void problems.push({ rowNumber, problem: `Quantity must be a whole number, 0 or more (${label})` });
     }
     const eta = date(idx.eta, "ETA", label);
     const orderedAt = date(idx.orderedAt, "order date", label);
@@ -95,5 +100,5 @@ export async function parseInTransitBuffer(
       note: str(idx.note),
     });
   });
-  return { rows, problems };
+  return { rows, problems, zeroQtyRows };
 }

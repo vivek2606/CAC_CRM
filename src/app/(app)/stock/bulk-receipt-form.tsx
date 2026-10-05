@@ -52,6 +52,11 @@ export function BulkReceiptForm({ today }: { today: string }) {
             {s.unitsAdded} unit{s.unitsAdded === 1 ? "" : "s"}) from {s.rowsRead} row{s.rowsRead === 1 ? "" : "s"}
             {s.pricesUpdated > 0 && <>, {s.pricesUpdated} dealer&apos;s price{s.pricesUpdated === 1 ? "" : "s"} updated</>}.
           </p>
+          {s.zeroQtyRows > 0 && (
+            <p className="text-slate-500">
+              Skipped {s.zeroQtyRows} row{s.zeroQtyRows === 1 ? "" : "s"} with no quantity (blank or 0).
+            </p>
+          )}
           {s.alreadyRecorded > 0 && (
             <p className="text-slate-500">
               Skipped {s.alreadyRecorded} row{s.alreadyRecorded === 1 ? "" : "s"} already recorded (same item, date and quantity).
