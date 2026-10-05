@@ -239,8 +239,9 @@ export async function importSalesRegister(
   });
   const productIdByCode = new Map(dbProducts.map((p) => [p.code, p.id]));
 
-  // Deals (one per transaction)
-  const fileTxnNos = result.deals.map((d) => d.txnNo);
+  // Deals (one per document - Txn Code + Txn No)
+  const fileTxnNos = Array.from(new Set(result.deals.map((d) => d.txnNo)));
+  const fileDocKeys = result.deals.map((d) => d.docKey);
   const dealCreateData = result.deals.map((d) => ({
     title: d.title,
     stage: "WON" as const,
@@ -252,7 +253,43 @@ export async function importSalesRegister(
     ownerId: userIdByKey.get(d.ownerKey) ?? head.id,
     accountId: accountIdByName.get(d.custName) ?? null,
     sourceTxnNo: d.txnNo,
+    sourceDocKey: d.docKey,
   }));
+
+  // Deals imported before documents were keyed by Txn Code + Txn No only
+  // carry sourceTxnNo. Adopt each one as the matching document in this file
+  // (same Txn No, preferring the same date) instead of creating a duplicate
+  // next to it. Where two documents shared that Txn No, the other one is
+  // created fresh below.
+  const legacyDeals = await prisma.deal.findMany({
+    where: { sourceDocKey: null, sourceTxnNo: { in: fileTxnNos } },
+    select: { id: true, sourceTxnNo: true, closedAt: true },
+  });
+  if (legacyDeals.length > 0) {
+    const taken = new Set(
+      (
+        await prisma.deal.findMany({ where: { sourceDocKey: { in: fileDocKeys } }, select: { sourceDocKey: true } })
+      ).map((d) => d.sourceDocKey!),
+    );
+    const docsByTxnNo = new Map<number, typeof result.deals>();
+    for (const d of result.deals) {
+      const list = docsByTxnNo.get(d.txnNo);
+      if (list) list.push(d);
+      else docsByTxnNo.set(d.txnNo, [d]);
+    }
+    const day = (d: Date | null) => d?.toISOString().slice(0, 10);
+    const adoptions = [];
+    for (const legacy of legacyDeals) {
+      const candidates = (docsByTxnNo.get(legacy.sourceTxnNo!) ?? []).filter((d) => !taken.has(d.docKey));
+      const match = candidates.find((d) => day(d.closedAt) === day(legacy.closedAt)) ?? candidates[0];
+      if (!match) continue;
+      taken.add(match.docKey);
+      adoptions.push(prisma.deal.update({ where: { id: legacy.id }, data: { sourceDocKey: match.docKey } }));
+    }
+    for (let i = 0; i < adoptions.length; i += 100) {
+      await prisma.$transaction(adoptions.slice(i, i + 100));
+    }
+  }
 
   let dealsUpdated = 0;
   let dealsRemoved = 0;
@@ -260,9 +297,9 @@ export async function importSalesRegister(
   if (replace) {
     // Imported line items (never the "deal-item:" ones a pipeline deal won
     // in the CRM writes) in the window, plus any belonging to this file's
-    // transactions in case a correction moved one across the window edge.
+    // documents in case a correction moved one across the window edge.
     const existingFileDeals = await prisma.deal.findMany({
-      where: { sourceTxnNo: { in: fileTxnNos } },
+      where: { sourceDocKey: { in: fileDocKeys } },
       select: { id: true },
     });
     const deleted = await prisma.saleLineItem.deleteMany({
@@ -277,11 +314,13 @@ export async function importSalesRegister(
     lineItemsReplaced = deleted.count;
 
     // Imported deals in the window that aren't in this file any more (a
-    // removed invoice, or one whose rows now net to zero or below).
+    // removed invoice, one whose rows now net to zero, or an old deal that
+    // couldn't be matched to a document).
     const staleDeals = await prisma.deal.findMany({
       where: {
-        sourceTxnNo: { not: null, notIn: fileTxnNos },
+        sourceTxnNo: { not: null },
         closedAt: { gte: rangeStart, lt: rangeEnd },
+        OR: [{ sourceDocKey: null }, { sourceDocKey: { notIn: fileDocKeys } }],
       },
       select: { id: true },
     });
@@ -300,13 +339,13 @@ export async function importSalesRegister(
     // Correct the deals that already exist - only the ones that actually
     // changed, so a large file doesn't issue one update per invoice.
     const existing = await prisma.deal.findMany({
-      where: { sourceTxnNo: { in: fileTxnNos } },
-      select: { id: true, sourceTxnNo: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true },
+      where: { sourceDocKey: { in: fileDocKeys } },
+      select: { id: true, sourceDocKey: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true },
     });
-    const existingByTxnNo = new Map(existing.map((d) => [d.sourceTxnNo!, d]));
+    const existingByDocKey = new Map(existing.map((d) => [d.sourceDocKey!, d]));
     const updates = [];
     for (const d of dealCreateData) {
-      const cur = existingByTxnNo.get(d.sourceTxnNo);
+      const cur = existingByDocKey.get(d.sourceDocKey);
       if (!cur) continue;
       if (
         cur.title !== d.title ||
@@ -335,14 +374,26 @@ export async function importSalesRegister(
       await prisma.$transaction(updates.slice(i, i + 100));
     }
     dealsUpdated = updates.length;
+  } else if (result.lineItems.some((li) => li.docKey.includes("/"))) {
+    // Line items imported before documents were keyed by Txn Code have the
+    // old key format, so this file's line items wouldn't be recognized as
+    // already imported - drop the old-format ones in the file's window so
+    // they're recreated once under the new key instead of doubled.
+    const deleted = await prisma.saleLineItem.deleteMany({
+      where: {
+        month: { gte: rangeStart, lt: rangeEnd },
+        NOT: [{ sourceKey: { startsWith: "deal-item:" } }, { sourceKey: { contains: "/" } }],
+      },
+    });
+    lineItemsReplaced = deleted.count;
   }
 
   const dealsResult = await prisma.deal.createMany({ data: dealCreateData, skipDuplicates: true });
   const dbDeals = await prisma.deal.findMany({
-    where: { sourceTxnNo: { in: fileTxnNos } },
-    select: { id: true, sourceTxnNo: true },
+    where: { sourceDocKey: { in: fileDocKeys } },
+    select: { id: true, sourceDocKey: true },
   });
-  const dealIdByTxnNo = new Map(dbDeals.map((d) => [d.sourceTxnNo!, d.id]));
+  const dealIdByDocKey = new Map(dbDeals.map((d) => [d.sourceDocKey!, d.id]));
 
   // Line items (product-level detail per historical sale, for category/month reporting)
   const lineItemCreateData = result.lineItems
@@ -351,7 +402,7 @@ export async function importSalesRegister(
       sourceKey: li.sourceKey,
       productId: productIdByCode.get(li.itemCode)!,
       ownerId: userIdByKey.get(li.ownerKey) ?? head.id,
-      dealId: dealIdByTxnNo.get(li.txnNo) ?? null,
+      dealId: dealIdByDocKey.get(li.docKey) ?? null,
       docDate: li.docDate,
       month: li.month,
       qty: li.qty,

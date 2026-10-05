@@ -3,6 +3,9 @@ import { computeCapacityKw } from "@/lib/capacity";
 
 export type RawSalesRow = {
   txnNo: number;
+  // Orion document series, e.g. "INALOS-12" (Lagos invoice) or "SRNCOMN-12"
+  // (sales return) - Txn No is only unique within a series.
+  txnCode: string;
   docDate: Date;
   custCode: string;
   custName: string;
@@ -35,6 +38,7 @@ export type TransformedUser = {
   title: string;
 };
 export type TransformedDeal = {
+  docKey: string;
   txnNo: number;
   title: string;
   value: number;
@@ -45,6 +49,7 @@ export type TransformedDeal = {
 export type TransformedLineItem = {
   sourceKey: string;
   itemCode: string;
+  docKey: string;
   txnNo: number;
   docDate: Date;
   month: Date;
@@ -83,6 +88,12 @@ function monthKey(date: Date): string {
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+// Identifies one Orion document: Txn Code + Txn No, or Txn No alone for an
+// export without the Txn Code column.
+export function docKeyFor(row: Pick<RawSalesRow, "txnCode" | "txnNo">): string {
+  return row.txnCode ? `${row.txnCode}/${row.txnNo}` : String(row.txnNo);
 }
 
 function placeholderEmail(name: string): string {
@@ -163,15 +174,17 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     }
   }
 
-  // Deals: one per transaction (Txn No), summing line item values.
-  const dealGroups = new Map<number, RawSalesRow[]>();
+  // Deals: one per document (Txn Code + Txn No), summing line item values.
+  const dealGroups = new Map<string, RawSalesRow[]>();
   for (const row of kept) {
-    const group = dealGroups.get(row.txnNo);
+    const key = docKeyFor(row);
+    const group = dealGroups.get(key);
     if (group) group.push(row);
-    else dealGroups.set(row.txnNo, [row]);
+    else dealGroups.set(key, [row]);
   }
   const deals: TransformedDeal[] = [];
-  for (const [txnNo, group] of dealGroups) {
+  for (const [docKey, group] of dealGroups) {
+    const txnNo = group[0].txnNo;
     const value = group.reduce((sum, r) => sum + r.netAmt, 0);
     // A transaction that nets to exactly zero has nothing to record. A
     // return/credit note (negative net) is kept as a negative-value Won
@@ -182,6 +195,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     if (value === 0) continue;
     const first = group[0];
     deals.push({
+      docKey,
       txnNo,
       title: value < 0 ? `${first.custName} — Return #${txnNo}` : `${first.custName} — Order #${txnNo}`,
       value,
@@ -202,7 +216,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   // transaction didn't become a Deal still gets a line item here, just with
   // no dealId - see the sales-register import action.
   //
-  // sourceKey identifies "the Nth row for this Txn No + Item Code" rather
+  // sourceKey identifies "the Nth row for this document + Item Code" rather
   // than a row's raw position in the whole file - a position-based key
   // shifts for every row once ANY earlier row in the file is filtered
   // differently (e.g. this fix itself, which stopped filtering out returns),
@@ -210,12 +224,14 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   // items instead of being recognized as already-imported.
   const pairOccurrence = new Map<string, number>();
   const lineItems: TransformedLineItem[] = kept.map((row) => {
-    const pairKey = `${row.txnNo}::${row.itemCode}`;
+    const docKey = docKeyFor(row);
+    const pairKey = `${docKey}::${row.itemCode}`;
     const occurrence = pairOccurrence.get(pairKey) ?? 0;
     pairOccurrence.set(pairKey, occurrence + 1);
     return {
-      sourceKey: `${row.txnNo}-${row.itemCode}-${occurrence}`,
+      sourceKey: `${docKey}-${row.itemCode}-${occurrence}`,
       itemCode: row.itemCode,
+      docKey,
       txnNo: row.txnNo,
       docDate: row.docDate,
       month: firstOfMonth(row.docDate),

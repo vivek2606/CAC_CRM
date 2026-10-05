@@ -357,15 +357,22 @@ model Deal {
 
   sourceLead    Lead?       @relation("LeadConversion")
 
-  // Set only for deals brought in via the historical sales-register import,
-  // so re-running an import can't create duplicate deals.
-  sourceTxnNo   Int?        @unique
+  // Set only for deals brought in via the historical sales-register import.
+  // sourceDocKey ("<Txn Code>/<Txn No>") is what identifies the document, so
+  // re-running an import can't create duplicates - Orion numbers each
+  // document series (Lagos invoices, sales returns, ...) separately, so the
+  // same Txn No can belong to two different documents. sourceTxnNo is kept
+  // as the plain invoice number for display and as the "imported" marker.
+  sourceTxnNo   Int?
+  sourceDocKey  String?     @unique
 
   activities    Activity[]
   notes         Note[]
   lineItems     SaleLineItem[]
   items         DealLineItem[]
   contactRoles  DealContactRole[]
+
+  @@index([sourceTxnNo])
 }
 
 // Additional stakeholders on a deal beyond its one primary Contact (the

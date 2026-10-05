@@ -67,6 +67,9 @@ export async function parseSalesRegisterBuffer(
       const n = Number(v);
       return Number.isNaN(n) ? 0 : n;
     };
+    // Optional: older exports may not have it, in which case Txn No alone
+    // identifies the document (as it did before this column was read).
+    const txnCode = idx("Txn Code") === -1 ? "" : (getStr("Txn Code") ?? "");
     const getDate = (col: string): Date => {
       const v = row.getCell(idx(col)).value;
       if (v instanceof Date) return v;
@@ -75,6 +78,7 @@ export async function parseSalesRegisterBuffer(
 
     rows.push({
       txnNo,
+      txnCode,
       docDate: getDate("Doc Date"),
       custCode: getStr("Cust Code") ?? "",
       custName: getStr("Cust Name") ?? "",
