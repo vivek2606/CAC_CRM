@@ -14,9 +14,14 @@ export default async function ImportPage() {
         title="Import Sales Register"
         description="Historical data import from the Orion ERP export"
         action={
-          <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
-            ← All imports
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/admin/import/sales-register/reconcile" className="text-sm text-indigo-600 hover:text-indigo-700">
+              Reconcile sales totals →
+            </Link>
+            <Link href="/admin/import" className="text-sm text-indigo-600 hover:text-indigo-700">
+              ← All imports
+            </Link>
+          </div>
         }
       />
       <div className="p-6 space-y-4">
