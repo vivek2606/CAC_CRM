@@ -14,9 +14,14 @@ const REP_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008
 const FIXED_COLORS: Record<string, string> = { others: "#94a3b8" };
 
 export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: YtdRepSeries[] }) {
-  // Each month's department total, labelled on top of its stack as a bare
-  // whole number in the same unit as the Y axis.
-  const rows = data.map((r) => ({ ...r, __total: series.reduce((s, x) => s + Number(r[x.key] ?? 0), 0) }));
+  // Each month's department total, labelled as a bare whole number in the
+  // same unit as the Y axis. The label rides an invisible line at whichever
+  // is higher - the top of the stack or the target point - so it always
+  // sits clear above both instead of on top of the target marker.
+  const rows = data.map((r) => {
+    const total = series.reduce((s, x) => s + Number(r[x.key] ?? 0), 0);
+    return { ...r, __total: total, __labelAt: Math.max(total, r.target) };
+  });
   const { label, axisTick } = chartUnit(rows.flatMap((r) => [r.__total, r.target]));
   return (
     <ResponsiveContainer width="100%" height={320}>
@@ -46,11 +51,7 @@ export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: 
             stroke="#ffffff"
             strokeWidth={1}
             maxBarSize={36}
-          >
-            {i === series.length - 1 && (
-              <LabelList dataKey="__total" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "#334155" }} formatter={label} />
-            )}
-          </Bar>
+          />
         ))}
         <Line
           type="monotone"
@@ -61,6 +62,23 @@ export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: 
           strokeDasharray="5 4"
           dot={{ r: 3, fill: "#0f172a" }}
         />
+        <Line
+          dataKey="__labelAt"
+          stroke="none"
+          dot={false}
+          activeDot={false}
+          legendType="none"
+          tooltipType="none"
+          isAnimationActive={false}
+        >
+          <LabelList
+            dataKey="__total"
+            position="top"
+            offset={9}
+            style={{ fontSize: 11, fontWeight: 700, fill: "#334155" }}
+            formatter={label}
+          />
+        </Line>
       </ComposedChart>
     </ResponsiveContainer>
   );
