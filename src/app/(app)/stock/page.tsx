@@ -8,6 +8,7 @@ import { VAT_RATE } from "@/lib/constants";
 import { PendingOrderForm } from "./pending-order-form";
 import { PendingOrderActions } from "./pending-order-actions";
 import { StockReceiptForm } from "./stock-receipt-form";
+import { BulkReceiptForm } from "./bulk-receipt-form";
 import { DeleteReceiptButton } from "./delete-receipt-button";
 
 const STATUS_LABEL = { OPEN: "Open", FULFILLED: "Delivered", CANCELLED: "Cancelled" } as const;
@@ -158,6 +159,15 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
               automatically. Enter a dealer&apos;s price only if it changed with this arrival - basic, excluding VAT.
             </p>
             <StockReceiptForm products={productOptions} today={today} />
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">Bulk upload</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                One row per arrival: Product Code, Quantity, Date Received, and Dealer&apos;s Price (basic, excl. VAT) only if it
+                changed. Add Model and Category to create an item that isn&apos;t in the system yet. Re-uploading the same
+                sheet won&apos;t double-count - rows already recorded are skipped.
+              </p>
+              <BulkReceiptForm today={today} />
+            </div>
           </Card>
         )}
 
