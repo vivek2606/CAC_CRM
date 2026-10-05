@@ -11,10 +11,13 @@ import { prisma } from "@/lib/prisma";
 export type YtdScope = { kind: "department" } | { kind: "rep"; userId: string };
 
 export type YtdSummary = {
-  // Jan 1 through the end of `throughMonth`, this year and the same window
-  // a year earlier.
+  // Jan 1 through the end of `throughMonth` (or through today, while
+  // `throughMonth` is the current month), and the matching window a year
+  // earlier - lastYearEnd is exclusive.
   start: Date;
   end: Date;
+  lastYearStart: Date;
+  lastYearEnd: Date;
   target: number;
   actual: number;
   lastYearActual: number;
@@ -26,7 +29,14 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
   const start = new Date(Date.UTC(year, 0, 1));
   const end = new Date(Date.UTC(year, lastMonth + 1, 1));
   const lyStart = new Date(Date.UTC(year - 1, 0, 1));
-  const lyEnd = new Date(Date.UTC(year - 1, lastMonth + 1, 1));
+  // While the month is still running, compare like for like: this year has
+  // only reached today, so last year stops at the same date rather than
+  // taking in the whole of that month.
+  const now = new Date();
+  const isCurrentMonth = year === now.getUTCFullYear() && lastMonth === now.getUTCMonth();
+  const lyEnd = isCurrentMonth
+    ? new Date(Date.UTC(year - 1, lastMonth, now.getUTCDate() + 1))
+    : new Date(Date.UTC(year - 1, lastMonth + 1, 1));
   const months = Array.from({ length: lastMonth + 1 }, (_, i) => new Date(Date.UTC(year, i, 1)));
 
   let ownerFilter: { in: string[] } | { notIn: string[] } | string;
@@ -61,6 +71,8 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
   return {
     start,
     end,
+    lastYearStart: lyStart,
+    lastYearEnd: lyEnd,
     target: targetAgg._sum.targetValue ?? 0,
     actual: actualAgg._sum.value ?? 0,
     lastYearActual: lyAgg._sum.value ?? 0,

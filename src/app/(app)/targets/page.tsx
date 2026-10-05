@@ -216,6 +216,9 @@ export default async function TargetsPage({
   const ytdRangeLabel = `Jan – ${month.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })} ${ytdYear}`;
   const ytdSummaryPct = achievementPct(ytdSummary.actual, ytdSummary.target);
   const ytdGrowthPct = growthPct(ytdSummary.actual, ytdSummary.lastYearActual);
+  const lastYearRangeLabel = `${ytdSummary.lastYearStart.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – ${new Date(
+    ytdSummary.lastYearEnd.getTime() - 1,
+  ).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
   const pctLabel = (actual: number, target: number) => (target > 0 ? `${Math.round((actual / target) * 100)}%` : "—");
 
   const scopeLabel = user.role === "HEAD" ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
@@ -289,7 +292,7 @@ export default async function TargetsPage({
             </p>
             <p className="text-xs text-slate-400 mt-1">
               {formatCompactCurrency(ytdSummary.actual)} this year vs {formatCompactCurrency(ytdSummary.lastYearActual)}{" "}
-              same period {ytdYear - 1}
+              for {lastYearRangeLabel}
             </p>
           </Card>
           <Card className="p-4 flex items-center justify-center">
