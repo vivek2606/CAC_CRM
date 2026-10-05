@@ -1,7 +1,7 @@
 "use client";
 
-import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, LabelList, ResponsiveContainer } from "recharts";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 // One row per month: { month, target, [seriesKey]: actual, ... }
 export type YtdRepChartRow = { month: string; target: number } & Record<string, number | string>;
@@ -14,16 +14,20 @@ const REP_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008
 const FIXED_COLORS: Record<string, string> = { others: "#94a3b8" };
 
 export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: YtdRepSeries[] }) {
+  // Each month's department total, labelled on top of its stack as a bare
+  // whole number in the same unit as the Y axis.
+  const rows = data.map((r) => ({ ...r, __total: series.reduce((s, x) => s + Number(r[x.key] ?? 0), 0) }));
+  const { label, axisTick } = chartUnit(rows.flatMap((r) => [r.__total, r.target]));
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <ComposedChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
+      <ComposedChart data={rows} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke="#f1f5f9" />
         <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
           width={64}
         />
         <Tooltip
@@ -42,7 +46,11 @@ export function YtdRepChart({ data, series }: { data: YtdRepChartRow[]; series: 
             stroke="#ffffff"
             strokeWidth={1}
             maxBarSize={36}
-          />
+          >
+            {i === series.length - 1 && (
+              <LabelList dataKey="__total" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "#334155" }} formatter={label} />
+            )}
+          </Bar>
         ))}
         <Line
           type="monotone"

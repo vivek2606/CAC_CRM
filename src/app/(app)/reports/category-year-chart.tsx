@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 // One hue, light -> dark, since years are an ordered progression rather than
 // unrelated categories.
@@ -17,6 +17,8 @@ export type CategoryYearRow = { category: string } & Record<string, number | str
 
 export function CategoryYearCompareChart({ data, years }: { data: CategoryYearRow[]; years: number[] }) {
   const height = Math.max(240, data.length * 48);
+  // Bare whole numbers on the bars, in the same unit as the value axis.
+  const { label, axisTick } = chartUnit(data.flatMap((r) => years.map((y) => Number(r[String(y)] ?? 0))));
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 40, left: 8, bottom: 0 }}>
@@ -25,7 +27,7 @@ export function CategoryYearCompareChart({ data, years }: { data: CategoryYearRo
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
         />
         <YAxis
           type="category"
@@ -52,8 +54,8 @@ export function CategoryYearCompareChart({ data, years }: { data: CategoryYearRo
             <LabelList
               dataKey={String(year)}
               position="right"
-              style={{ fontSize: 9, fill: "#64748b" }}
-              formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")}
+              style={{ fontSize: 10, fontWeight: 700, fill: "#334155" }}
+              formatter={label}
             />
           </Bar>
         ))}

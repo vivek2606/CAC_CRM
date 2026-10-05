@@ -1,7 +1,7 @@
 "use client";
 
-import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from "recharts";
+import { formatCurrency, chartUnit } from "@/lib/format";
 
 export type WaterfallStep = {
   name: string;
@@ -12,7 +12,15 @@ export type WaterfallStep = {
   kind: "total" | "new" | "lost" | "won";
 };
 
-type WaterfallRow = { name: string; base: number; delta: number; kind: WaterfallStep["kind"]; display: number };
+type WaterfallRow = {
+  name: string;
+  base: number;
+  delta: number;
+  kind: WaterfallStep["kind"];
+  display: number;
+  // What the bar's label shows: the total, or the step's signed change.
+  signedDisplay: number;
+};
 
 const KIND_COLOR: Record<WaterfallStep["kind"], string> = {
   total: "#6366f1", // indigo - matches the app's primary accent
@@ -32,15 +40,22 @@ export function PipelineWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
   const rows = steps.reduce<{ rows: WaterfallRow[]; running: number }>(
     (acc, s) => {
       if (s.kind === "total") {
-        acc.rows.push({ name: s.name, base: 0, delta: s.display, kind: s.kind, display: s.display });
+        acc.rows.push({ name: s.name, base: 0, delta: s.display, kind: s.kind, display: s.display, signedDisplay: s.display });
         return { rows: acc.rows, running: s.display };
       }
       const base = s.delta >= 0 ? acc.running : acc.running + s.delta;
-      acc.rows.push({ name: s.name, base, delta: Math.abs(s.delta), kind: s.kind, display: s.delta });
+      acc.rows.push({ name: s.name, base, delta: Math.abs(s.delta), kind: s.kind, display: s.delta, signedDisplay: s.delta });
       return { rows: acc.rows, running: acc.running + s.delta };
     },
     { rows: [], running: 0 }
   ).rows;
+  // Bare whole numbers on the bars, in the same unit as the Y axis: totals
+  // as-is, movements signed (+ adds to the pipeline, - takes away).
+  const { axisTick, inUnit } = chartUnit(rows.map((r) => r.base + r.delta));
+  const stepLabel = (v: unknown) => {
+    const n = Number(v);
+    return n === 0 ? "" : n > 0 ? inUnit(n) : `-${inUnit(-n)}`;
+  };
 
   return (
     <ResponsiveContainer width="100%" height={260}>
@@ -50,7 +65,7 @@ export function PipelineWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
           width={56}
         />
         <Tooltip
@@ -74,6 +89,12 @@ export function PipelineWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
           {rows.map((r, i) => (
             <Cell key={i} fill={KIND_COLOR[r.kind]} />
           ))}
+          <LabelList
+            dataKey="signedDisplay"
+            position="top"
+            style={{ fontSize: 11, fontWeight: 700, fill: "#334155" }}
+            formatter={stepLabel}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

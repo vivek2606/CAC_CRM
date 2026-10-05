@@ -33,13 +33,15 @@ export function formatCompactCurrency(value: number): string {
 export function chartUnit(values: number[]): {
   label: (v: unknown) => string;
   axisTick: (v: unknown) => string;
+  inUnit: (v: number) => string;
 } {
-  const max = Math.max(0, ...values);
+  const max = Math.max(0, ...values.map(Math.abs));
   const [divisor, suffix] = max >= 1e10 ? [1e9, "B"] : max >= 1e6 ? [1e6, "M"] : max >= 1e3 ? [1e3, "K"] : [1, ""];
   const inUnit = (v: number) => Math.round(v / divisor).toLocaleString("en-NG");
   return {
     label: (v) => (Number(v) > 0 ? inUnit(Number(v)) : ""),
     axisTick: (v) => (Number(v) === 0 ? "₦0" : `₦${inUnit(Number(v))}${suffix}`),
+    inUnit,
   };
 }
 

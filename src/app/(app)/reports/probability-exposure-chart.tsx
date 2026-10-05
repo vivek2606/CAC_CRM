@@ -1,22 +1,24 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 export type ProbabilityExposureRow = { bucket: string; pipeline: number; leads: number };
 
-const labelStyle = { fontSize: 9, fill: "#64748b" };
+const labelStyle = { fontSize: 10, fontWeight: 700, fill: "#334155" };
 
 export function ProbabilityExposureChart({ data }: { data: ProbabilityExposureRow[] }) {
+  // Bare whole numbers on the bars, in the same unit as the value axis.
+  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.pipeline, r.leads]));
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }} barGap={6}>
         <XAxis dataKey="bucket" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
           width={64}
         />
         <Tooltip
@@ -25,10 +27,10 @@ export function ProbabilityExposureChart({ data }: { data: ProbabilityExposureRo
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="pipeline" name="Open Deals" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={22}>
-          <LabelList dataKey="pipeline" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+          <LabelList dataKey="pipeline" position="top" style={labelStyle} formatter={label} />
         </Bar>
         <Bar dataKey="leads" name="Open Leads" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={22}>
-          <LabelList dataKey="leads" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+          <LabelList dataKey="leads" position="top" style={labelStyle} formatter={label} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

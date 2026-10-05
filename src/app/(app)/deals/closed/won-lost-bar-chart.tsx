@@ -1,25 +1,27 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 export type WonLostRow = { name: string; won: number; lost: number };
 
-const labelStyle = { fontSize: 10, fill: "#64748b" };
+const labelStyle = { fontSize: 10, fontWeight: 700, fill: "#334155" };
 
 // Used for both the month-wise trend and the sales-person-wise breakdown on
 // the Closed Deals insights section - same shape (named row, Won vs Lost
 // value) either way.
 export function WonLostBarChart({ data }: { data: WonLostRow[] }) {
+  // Bare whole numbers on the bars, in the same unit as the value axis.
+  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.won, r.lost]));
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }} barGap={6}>
         <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
           width={64}
         />
         <Tooltip
@@ -28,10 +30,10 @@ export function WonLostBarChart({ data }: { data: WonLostRow[] }) {
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="won" name="Won" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28}>
-          <LabelList dataKey="won" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+          <LabelList dataKey="won" position="top" style={labelStyle} formatter={label} />
         </Bar>
         <Bar dataKey="lost" name="Lost" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28}>
-          <LabelList dataKey="lost" position="top" style={labelStyle} formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")} />
+          <LabelList dataKey="lost" position="top" style={labelStyle} formatter={label} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>

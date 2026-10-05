@@ -1,12 +1,14 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 export type CategoryChartRow = { category: string; value: number };
 
 export function CategoryChart({ data }: { data: CategoryChartRow[] }) {
   const height = Math.max(220, data.length * 40);
+  // Bare whole numbers on the bars, in the same unit as the value axis.
+  const { label, axisTick } = chartUnit(data.map((r) => r.value));
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 48, left: 8, bottom: 0 }}>
@@ -15,7 +17,7 @@ export function CategoryChart({ data }: { data: CategoryChartRow[] }) {
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={axisTick}
         />
         <YAxis
           type="category"
@@ -33,8 +35,8 @@ export function CategoryChart({ data }: { data: CategoryChartRow[] }) {
           <LabelList
             dataKey="value"
             position="right"
-            style={{ fontSize: 11, fill: "#64748b" }}
-            formatter={(v) => (Number(v) > 0 ? formatCompactCurrency(Number(v)) : "")}
+            style={{ fontSize: 11, fontWeight: 700, fill: "#334155" }}
+            formatter={label}
           />
         </Bar>
       </BarChart>
