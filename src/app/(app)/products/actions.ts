@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
 import { computeCapacityKw, isCapacityCategory } from "@/lib/capacity";
 import { productSchema } from "@/lib/schemas";
+import { assignProductCode } from "@/lib/product-match";
 
 function blankToNull(value: FormDataEntryValue | undefined) {
   return typeof value === "string" && value.trim() !== "" ? value : null;
@@ -16,7 +17,21 @@ export async function updateProduct(productId: string, formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = productSchema.parse({ ...raw, capacityKw: blankToNull(formData.get("capacityKw") ?? undefined) });
 
-  await prisma.product.update({ where: { id: productId }, data: parsed });
+  // A changed code goes through assignProductCode(): a temporary (TEMP-)
+  // product given an ERP code that another product already has is merged
+  // into that product, which keeps its own details.
+  const current = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { code: true } });
+  if (parsed.code.trim() !== current.code) {
+    const resultId = await assignProductCode(productId, parsed.code);
+    if (resultId !== productId) {
+      revalidatePath("/products");
+      revalidatePath("/stock");
+      redirect("/products");
+    }
+  }
+  const { code: _code, ...rest } = parsed;
+  void _code;
+  await prisma.product.update({ where: { id: productId }, data: rest });
 
   revalidatePath("/products");
   redirect("/products");

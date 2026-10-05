@@ -6,7 +6,18 @@ import { receiveInTransit, cancelInTransit, type FormState } from "./actions";
 
 // Per-row controls for an in-transit line (Head only): receive all or part
 // of it into stock on a given date, or cancel it.
-export function InTransitActions({ id, quantity, today }: { id: string; quantity: number; today: string }) {
+export function InTransitActions({
+  id,
+  quantity,
+  today,
+  tempCode,
+}: {
+  id: string;
+  quantity: number;
+  today: string;
+  // Set when the item is still on a temporary code - asks for the ERP code.
+  tempCode?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [isCancelling, startCancel] = useTransition();
   const router = useRouter();
@@ -55,6 +66,14 @@ export function InTransitActions({ id, quantity, today }: { id: string; quantity
         aria-label="Quantity received"
       />
       <input name="receivedAt" type="date" defaultValue={today} className="rounded-md border border-slate-200 px-2 py-1 text-xs" aria-label="Date entered stock" />
+      {tempCode && (
+        <input
+          name="erpCode"
+          placeholder="ERP product code"
+          className="w-36 rounded-md border border-amber-300 px-2 py-1 text-xs"
+          aria-label="ERP product code"
+        />
+      )}
       <button type="submit" disabled={isPending} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-60">
         {isPending ? "…" : "Add to stock"}
       </button>

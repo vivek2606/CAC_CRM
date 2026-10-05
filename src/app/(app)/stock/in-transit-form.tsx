@@ -102,7 +102,39 @@ export function BulkInTransitForm() {
               and reference).
             </p>
           )}
-          {s.productsCreated.length > 0 && <p className="text-slate-500">New products created: {s.productsCreated.join(", ")}</p>}
+          {s.matches.length > 0 && (
+            <div>
+              <p className="font-medium text-slate-700">Matched by model - please check:</p>
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="py-1 pr-3 font-medium">Sheet model</th>
+                      <th className="py-1 pr-3 font-medium">Product code used</th>
+                      <th className="py-1 font-medium">How</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {s.matches.map((m, i) => (
+                      <tr key={i}>
+                        <td className="py-1 pr-3 text-slate-700">{m.sheetModel ?? m.sheetCode}</td>
+                        <td className="py-1 pr-3">
+                          <span className="font-medium text-slate-800">{m.code}</span>
+                          {m.how === "model-partial" && <span className="block text-slate-400">{m.productModel}</span>}
+                        </td>
+                        <td className="py-1">
+                          {m.how === "model" && <span className="text-slate-600">Most recent code for this model</span>}
+                          {m.how === "model-partial" && <span className="text-amber-700">Partial model match - confirm it&apos;s the right item</span>}
+                          {m.how === "created-temp" && <span className="text-indigo-700">New model - temporary code until the ERP code is known</span>}
+                          {m.how === "created" && <span className="text-indigo-700">New product created with the sheet&apos;s code</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {s.problems.length > 0 && (
             <div>
               <p className="font-medium text-amber-700">

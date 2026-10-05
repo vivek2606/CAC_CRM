@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
 import { parseStockReceiptsBuffer, type StockReceiptRowProblem } from "@/lib/import/parse-stock-receipts";
 import { parseInTransitBuffer } from "@/lib/import/parse-in-transit";
+import { matchProductsByCodeOrModel, assignProductCode, isTempCode, type ProductMatch } from "@/lib/product-match";
 import { normalizeCategory } from "@/lib/import/category";
 import { computeCapacityKw } from "@/lib/capacity";
 
@@ -316,7 +317,8 @@ export type BulkInTransitState = {
     rowsRead: number;
     added: number;
     units: number;
-    productsCreated: string[];
+    // Matches worth a look: by model (exact or partial) and new products.
+    matches: ProductMatch[];
     alreadyRecorded: number;
     problems: StockReceiptRowProblem[];
   };
@@ -339,12 +341,14 @@ export async function importInTransit(_prev: BulkInTransitState | undefined, for
   const problems = [...parsed.problems];
   if (parsed.rows.length === 0 && problems.length === 0) return { error: "No usable rows found in the file." };
 
-  const { productIdFor, productsCreated } = await resolveProductCodes(parsed.rows);
+  // Rows are matched by code, else by model (most recently used code for
+  // it); models seen for the first time get a temporary code.
+  const { productIdFor, matches } = await matchProductsByCodeOrModel(parsed.rows);
   const ready = [];
   for (const r of parsed.rows) {
-    const productId = productIdFor(r.productCode);
+    const productId = productIdFor(r);
     if (!productId) {
-      problems.push({ rowNumber: r.rowNumber, problem: `Product code ${r.productCode} not found - add Model and Category to create it` });
+      problems.push({ rowNumber: r.rowNumber, problem: `Product code ${r.productCode} not found - add its Model to match or create it` });
       continue;
     }
     ready.push({ productId, quantity: r.quantity, eta: r.eta, orderedAt: r.orderedAt, reference: r.reference, note: r.note });
@@ -370,7 +374,7 @@ export async function importInTransit(_prev: BulkInTransitState | undefined, for
       rowsRead: parsed.rows.length + parsed.problems.length,
       added: toAdd.length,
       units: toAdd.reduce((s, r) => s + r.quantity, 0),
-      productsCreated,
+      matches: matches.filter((m) => m.how !== "code"),
       alreadyRecorded: ready.length - toAdd.length,
       problems: problems.sort((a, b) => a.rowNumber - b.rowNumber),
     },
@@ -387,15 +391,27 @@ export async function receiveInTransit(_prev: FormState | undefined, formData: F
   const receivedAt = utcDate(String(formData.get("receivedAt") ?? ""));
   if (!Number.isInteger(quantity) || quantity <= 0) return { error: "Quantity must be a whole number above 0." };
   if (!receivedAt) return { error: "Enter the date it entered stock." };
-  const order = await prisma.inTransitOrder.findUnique({ where: { id } });
+  const order = await prisma.inTransitOrder.findUnique({ where: { id }, include: { product: { select: { code: true } } } });
   if (!order || order.status !== "IN_TRANSIT") return { error: "This shipment is no longer in transit." };
   if (quantity > order.quantity) return { error: `Only ${order.quantity} unit(s) are in transit on this line.` };
+
+  // A product still on a temporary code gets its ERP code as it arrives
+  // (merged into the ERP product if that already exists).
+  let productId = order.productId;
+  const erpCode = String(formData.get("erpCode") ?? "").trim();
+  if (erpCode && isTempCode(order.product.code)) {
+    try {
+      productId = await assignProductCode(order.productId, erpCode);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Could not set the product code." };
+    }
+  }
 
   const remaining = order.quantity - quantity;
   await prisma.$transaction([
     prisma.stockReceipt.create({
       data: {
-        productId: order.productId,
+        productId,
         quantity,
         receivedAt,
         note: order.reference ? `In transit: ${order.reference}` : "From in transit",

@@ -12,6 +12,7 @@ import { BulkReceiptForm } from "./bulk-receipt-form";
 import { DeleteReceiptButton } from "./delete-receipt-button";
 import { InTransitForm, BulkInTransitForm } from "./in-transit-form";
 import { InTransitActions } from "./in-transit-actions";
+import { isTempCode } from "@/lib/product-match";
 import { ExportCsvButton } from "@/components/export-csv-button";
 
 const STATUS_LABEL = { OPEN: "Open", FULFILLED: "Delivered", CANCELLED: "Cancelled" } as const;
@@ -415,7 +416,14 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-slate-800 font-medium">{o.product.model}</div>
-                          <div className="text-xs text-slate-400">{o.product.code}</div>
+                          <div className="text-xs text-slate-400">
+                            {o.product.code}
+                            {isTempCode(o.product.code) && (
+                              <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                                temporary code
+                              </span>
+                            )}
+                          </div>
                           {o.note && <div className="text-xs text-slate-500 mt-0.5">{o.note}</div>}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-slate-800 tabular-nums">
@@ -427,7 +435,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                         <td className="px-4 py-3 text-slate-600 tabular-nums">{availableStock.get(o.productId) ?? "—"}</td>
                         {isHead && (
                           <td className="px-4 py-3">
-                            <InTransitActions id={o.id} quantity={o.quantity} today={today} />
+                            <InTransitActions id={o.id} quantity={o.quantity} today={today} tempCode={isTempCode(o.product.code)} />
                           </td>
                         )}
                       </tr>
@@ -446,8 +454,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
               <div className="border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">Bulk upload</h3>
                 <p className="text-xs text-slate-500 mb-4">
-                  One row per shipment line: Product Code, Quantity, ETA, and optionally Order Date and Reference. Rows matching a
-                  line already in transit are skipped.
+                  One row per shipment line: Model (or Product Code), Quantity, ETA, and optionally Order Date and Reference. A
+                  model is matched to the product code used most recently for it; a model that&apos;s new gets a temporary code
+                  (TEMP-####) - enter the ERP code when you Receive it. Rows matching a line already in transit are skipped.
                 </p>
                 <BulkInTransitForm />
               </div>

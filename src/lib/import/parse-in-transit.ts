@@ -3,7 +3,9 @@ import { cellValue, parseReceiptDate, type StockReceiptRowProblem } from "./pars
 
 export type RawInTransitRow = {
   rowNumber: number;
-  productCode: string;
+  // Optional when Model is given - the model is then matched to the code
+  // used most recently for it, or given a temporary code if it's new.
+  productCode: string | null;
   model: string | null;
   category: string | null;
   quantity: number;
@@ -26,8 +28,8 @@ const COLUMNS = {
 
 export const IN_TRANSIT_TEMPLATE_HEADERS = ["Product Code", "Model", "Category", "Quantity", "ETA", "Order Date", "Reference", "Note"];
 
-// Same shape and rules as the stock-received sheet: Product Code and
-// Quantity required; ETA and Order Date take Excel dates, YYYY-MM-DD or
+// Same shape and rules as the stock-received sheet: Quantity plus a Product
+// Code or a Model; ETA and Order Date take Excel dates, YYYY-MM-DD or
 // day-first DD/MM/YYYY.
 export async function parseInTransitBuffer(
   buffer: ArrayBuffer,
@@ -43,7 +45,7 @@ export async function parseInTransitBuffer(
   });
   const col = (names: string[]) => headers.findIndex((h) => h != null && names.includes(h));
   const idx = Object.fromEntries(Object.entries(COLUMNS).map(([k, names]) => [k, col(names)])) as Record<keyof typeof COLUMNS, number>;
-  const missing = [idx.productCode === -1 && "Product Code", idx.quantity === -1 && "Quantity"].filter(Boolean);
+  const missing = [idx.productCode === -1 && idx.model === -1 && "Product Code or Model", idx.quantity === -1 && "Quantity"].filter(Boolean);
   if (missing.length > 0) throw new Error(`Missing expected column(s): ${missing.join(", ")}`);
 
   const rows: RawInTransitRow[] = [];
@@ -68,21 +70,23 @@ export async function parseInTransitBuffer(
     };
 
     const productCode = str(idx.productCode);
+    const model = str(idx.model);
     const rawQty = get(idx.quantity);
-    if (!productCode && (rawQty == null || rawQty === "")) return; // blank row
-    if (!productCode) return void problems.push({ rowNumber, problem: "No product code" });
+    if (!productCode && !model && (rawQty == null || rawQty === "")) return; // blank row
+    if (!productCode && !model) return void problems.push({ rowNumber, problem: "No product code or model" });
+    const label = productCode ?? model!;
     const quantity = typeof rawQty === "number" ? rawQty : Number(String(rawQty ?? "").replace(/[,\s]/g, ""));
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      return void problems.push({ rowNumber, problem: `Quantity must be a whole number above 0 (${productCode})` });
+      return void problems.push({ rowNumber, problem: `Quantity must be a whole number above 0 (${label})` });
     }
-    const eta = date(idx.eta, "ETA", productCode);
-    const orderedAt = date(idx.orderedAt, "order date", productCode);
+    const eta = date(idx.eta, "ETA", label);
+    const orderedAt = date(idx.orderedAt, "order date", label);
     if (eta === undefined || orderedAt === undefined) return;
 
     rows.push({
       rowNumber,
       productCode,
-      model: str(idx.model),
+      model,
       category: str(idx.category),
       quantity,
       eta,
