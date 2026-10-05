@@ -90,6 +90,8 @@ export default async function DashboardPage() {
     wonThisMonth,
     wonLastMonth,
     wonYTD,
+    wonThisMonthCount,
+    wonYTDCount,
     ytd,
     activeLeads,
     leadStatusGroups,
@@ -112,7 +114,6 @@ export default async function DashboardPage() {
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth } },
       _sum: { value: true },
-      _count: true,
     }),
     // Prior month's Won total, for the "vs last month" trend badge next to
     // the Won This Month stat - a fixed calendar-month comparison, not a
@@ -124,7 +125,14 @@ export default async function DashboardPage() {
     prisma.deal.aggregate({
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfYear } },
       _sum: { value: true },
-      _count: true,
+    }),
+    // Deal counts exclude imported returns (negative-value Won entries) -
+    // they reduce the sums above but aren't deals won.
+    prisma.deal.count({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfMonth }, value: { gt: 0 } },
+    }),
+    prisma.deal.count({
+      where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfYear }, value: { gt: 0 } },
     }),
     // YTD achievement vs. target - same figures as the Targets page cards.
     getYtdSummary(user.role === "HEAD" ? { kind: "department" } : { kind: "rep", userId: user.id }, targetMonth),
@@ -380,7 +388,7 @@ export default async function DashboardPage() {
             value={formatCompactCurrency(wonThisMonth._sum.value ?? 0)}
             sub={
               <>
-                {wonThisMonth._count} deal{wonThisMonth._count === 1 ? "" : "s"} closed
+                {wonThisMonthCount} deal{wonThisMonthCount === 1 ? "" : "s"} closed
                 {momTrendLabel && <span className={momTrendColor}> · {momTrendLabel}</span>} ·{" "}
                 <Link
                   href={`/deals/closed?stage=WON&month=${monthValue(targetMonth)}`}
@@ -398,7 +406,7 @@ export default async function DashboardPage() {
             value={formatCompactCurrency(wonYTD._sum.value ?? 0)}
             sub={
               <>
-                {wonYTD._count} won since Jan 1 ·{" "}
+                {wonYTDCount} won since Jan 1 ·{" "}
                 <Link href="/reports/category" className="text-indigo-600 hover:text-indigo-700">
                   compare years
                 </Link>

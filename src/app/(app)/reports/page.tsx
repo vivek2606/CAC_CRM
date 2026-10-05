@@ -175,7 +175,9 @@ export default async function ReportsPage() {
       weightedOpenValue: openDeals.reduce((s, d) => s + d.value * (d.probability / 100), 0),
       openCount: openDeals.length,
       wonQuarterValue: wonThisQuarter.reduce((s, d) => s + d.value, 0),
-      wonQuarterCount: wonThisQuarter.length,
+      // Imported returns (negative-value Won entries) net into the value
+      // above but aren't deals won.
+      wonQuarterCount: wonThisQuarter.filter((d) => d.value > 0).length,
       winRate,
       activeLeads,
       pendingActivities,

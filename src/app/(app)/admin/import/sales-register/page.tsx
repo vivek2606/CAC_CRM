@@ -42,8 +42,8 @@ export default async function ImportPage() {
             <li>Installation/service billing lines are excluded automatically.</li>
             <li>
               Return/credit-note lines (negative Qty and Net Amt) are netted into the affected product&apos;s
-              quantity and value, rather than dropped - a transaction whose rows net to zero or below just
-              doesn&apos;t become a Won deal on its own.
+              quantity and value, rather than dropped. A return raised as its own invoice is recorded as a
+              negative &quot;Return&quot; entry, so sales totals are net of returns.
             </li>
             <li>
               Safe to re-run on the same file — already-imported records are skipped, not duplicated. Uploading a

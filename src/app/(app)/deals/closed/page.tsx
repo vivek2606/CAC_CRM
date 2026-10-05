@@ -140,10 +140,13 @@ export default async function ClosedDealsPage({
     }),
   ]);
 
-  const wonInsightDeals = insightDeals.filter((d) => d.stage === "WON");
+  // Imported returns are negative-value Won entries: they count toward the
+  // value totals (sales are net of returns) but not as deals won.
+  const wonInsightEntries = insightDeals.filter((d) => d.stage === "WON");
+  const wonInsightDeals = wonInsightEntries.filter((d) => d.value > 0);
   const lostInsightDeals = insightDeals.filter((d) => d.stage === "LOST");
   const closedInsightCount = wonInsightDeals.length + lostInsightDeals.length;
-  const totalWonValue = wonInsightDeals.reduce((s, d) => s + d.value, 0);
+  const totalWonValue = wonInsightEntries.reduce((s, d) => s + d.value, 0);
   const winRate = closedInsightCount > 0 ? Math.round((wonInsightDeals.length / closedInsightCount) * 100) : null;
   const avgDealSize = wonInsightDeals.length > 0 ? totalWonValue / wonInsightDeals.length : 0;
   const avgCycleDays =

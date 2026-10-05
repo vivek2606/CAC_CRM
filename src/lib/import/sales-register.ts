@@ -173,15 +173,17 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   const deals: TransformedDeal[] = [];
   for (const [txnNo, group] of dealGroups) {
     const value = group.reduce((sum, r) => sum + r.netAmt, 0);
-    // A transaction that's a pure return/credit note, or a partial return
-    // that wipes out its own order's value, doesn't become a Won deal - but
-    // its rows still feed the line items below either way, so the product
-    // quantities/values they affected are still netted correctly.
-    if (!(value > 0)) continue;
+    // A transaction that nets to exactly zero has nothing to record. A
+    // return/credit note (negative net) is kept as a negative-value Won
+    // deal: Orion raises returns under their own Txn No with no link back
+    // to the original invoice, so this is the only way the sales totals
+    // (Dashboard, Targets, Closed Deals - all summed from Deal.value) net
+    // them off instead of overstating sales by everything later returned.
+    if (value === 0) continue;
     const first = group[0];
     deals.push({
       txnNo,
-      title: `${first.custName} — Order #${txnNo}`,
+      title: value < 0 ? `${first.custName} — Return #${txnNo}` : `${first.custName} — Order #${txnNo}`,
       value,
       closedAt: first.docDate,
       custName: first.custName,
