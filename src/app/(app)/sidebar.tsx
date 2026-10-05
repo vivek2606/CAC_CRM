@@ -18,6 +18,8 @@ import {
   PieChart,
   X,
   KeyRound,
+  Boxes,
+  ClipboardList,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -42,7 +44,9 @@ type NavColor =
   | "cyan"
   | "lime"
   | "yellow"
-  | "pink";
+  | "pink"
+  | "red"
+  | "blue";
 
 const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   indigo: { text: "text-indigo-500", bar: "bg-indigo-500" },
@@ -58,6 +62,8 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   lime: { text: "text-lime-500", bar: "bg-lime-500" },
   yellow: { text: "text-yellow-500", bar: "bg-yellow-500" },
   pink: { text: "text-pink-500", bar: "bg-pink-500" },
+  red: { text: "text-red-500", bar: "bg-red-500" },
+  blue: { text: "text-blue-500", bar: "bg-blue-500" },
 };
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
@@ -69,11 +75,13 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/contacts", label: "Contacts", icon: Contact, color: "rose" },
   { href: "/activities", label: "Activities", icon: CheckSquare, color: "teal" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
+  { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
   { href: "/reports/category", label: "Sales by Category", icon: PieChart, color: "fuchsia" },
 ];
 
 const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
   { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
+  { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
   { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow" },
   { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink" },

@@ -17,31 +17,53 @@ export async function getLatestPriceByProduct(): Promise<Map<string, number>> {
   return map;
 }
 
-// Each product's approximate current stock: the most recent Stock & Price
-// List snapshot's quantity, minus whatever's been sold (Won) since that
-// snapshot was taken - so a deal won the day of or before the snapshot is
-// already excluded (it was counted, or not, in the snapshot itself), while
-// one won after it draws down the figure shown here. A product with no
-// snapshot at all is left out of the map entirely (stock untracked for it),
+// Each product's current stock: its latest Stock & Price List snapshot,
+// plus fresh units received after it (Stock Receipts), minus every unit
+// billed after it - SaleLineItem covers both Sales Register billing and
+// deals won in the CRM (net of returns). The snapshot is counted as of the
+// end of its date, so billing and receipts on that date are taken to be in
+// it already. A product with no snapshot starts from its first receipt. A
+// product with neither is left out of the map (stock untracked for it),
 // rather than reading as zero.
 export async function getAvailableStockByProduct(): Promise<Map<string, number>> {
-  const stocks = await prisma.productStock.findMany({
-    select: { productId: true, quantity: true, asOfDate: true },
-  });
-  if (stocks.length === 0) return new Map();
+  const [snapshots, receipts] = await Promise.all([
+    prisma.productStock.findMany({ select: { productId: true, quantity: true, asOfDate: true } }),
+    prisma.stockReceipt.findMany({ select: { productId: true, quantity: true, receivedAt: true } }),
+  ]);
 
-  const cutoff = stocks.reduce((max, s) => (s.asOfDate > max ? s.asOfDate : max), stocks[0].asOfDate);
-  const sold = await prisma.dealLineItem.groupBy({
-    by: ["productId"],
-    where: { deal: { stage: "WON", closedAt: { gt: cutoff } } },
-    _sum: { qty: true },
+  // Per product: the stock at the start of `from`, before billing is taken off.
+  const base = new Map<string, { qty: number; from: Date }>();
+  for (const s of snapshots) {
+    base.set(s.productId, {
+      qty: s.quantity,
+      from: new Date(Date.UTC(s.asOfDate.getUTCFullYear(), s.asOfDate.getUTCMonth(), s.asOfDate.getUTCDate() + 1)),
+    });
+  }
+  const firstReceipt = new Map<string, Date>();
+  for (const r of receipts) {
+    if (base.has(r.productId)) continue;
+    const cur = firstReceipt.get(r.productId);
+    if (!cur || r.receivedAt < cur) firstReceipt.set(r.productId, r.receivedAt);
+  }
+  for (const [productId, from] of firstReceipt) base.set(productId, { qty: 0, from });
+  for (const r of receipts) {
+    const b = base.get(r.productId)!;
+    if (r.receivedAt >= b.from || firstReceipt.has(r.productId)) b.qty += r.quantity;
+  }
+  if (base.size === 0) return new Map();
+
+  const earliest = Array.from(base.values()).reduce((min, b) => (b.from < min ? b.from : min), new Date());
+  const billed = await prisma.saleLineItem.findMany({
+    where: { productId: { in: Array.from(base.keys()) }, docDate: { gte: earliest } },
+    select: { productId: true, qty: true, docDate: true },
   });
-  const soldByProduct = new Map(sold.map((s) => [s.productId, s._sum.qty ?? 0]));
+  for (const li of billed) {
+    const b = base.get(li.productId)!;
+    if (li.docDate >= b.from) b.qty -= li.qty;
+  }
 
   const map = new Map<string, number>();
-  for (const s of stocks) {
-    map.set(s.productId, Math.max(0, s.quantity - (soldByProduct.get(s.productId) ?? 0)));
-  }
+  for (const [productId, b] of base) map.set(productId, Math.max(0, Math.round(b.qty)));
   return map;
 }
 

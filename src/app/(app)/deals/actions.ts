@@ -424,3 +424,17 @@ export async function removeDealContactRole(dealContactRoleId: string, dealId: s
   await prisma.dealContactRole.delete({ where: { id: dealContactRoleId } });
   revalidatePath(`/deals/${dealId}`);
 }
+
+// Negotiation-stage flag: count this deal's line items toward the next
+// Midea factory order if they aren't in stock (see /reorder).
+export async function setDealConsiderForReorder(dealId: string, considerForReorder: boolean) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { ownerId: true, stage: true } });
+  if (!deal || !canAccessOwner(user, deal.ownerId)) throw new Error("Not allowed.");
+  if (considerForReorder && deal.stage !== "NEGOTIATION") {
+    throw new Error("Only a deal in Negotiation can be flagged for future ordering.");
+  }
+  await prisma.deal.update({ where: { id: dealId }, data: { considerForReorder } });
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/reorder");
+}

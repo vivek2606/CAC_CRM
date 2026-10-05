@@ -158,6 +158,8 @@ model User {
   targets       Target[]  @relation("SalesTarget")
   saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
   approvedDealDiscounts Deal[] @relation("DiscountApprover")
+  stockReceipts StockReceipt[] @relation("StockReceiptCreator")
+  pendingOrders PendingOrder[] @relation("PendingOrderOwner")
 }
 
 model Target {
@@ -366,6 +368,10 @@ model Deal {
   sourceTxnNo   Int?
   sourceDocKey  String?     @unique
 
+  // Set by the sales person on a Negotiation-stage deal: its line items can
+  // be counted toward the next Midea factory order if they aren't in stock.
+  considerForReorder Boolean @default(false)
+
   activities    Activity[]
   notes         Note[]
   lineItems     SaleLineItem[]
@@ -505,6 +511,59 @@ model Product {
   saleLineItems    SaleLineItem[]
   dealLineItems    DealLineItem[]
   stock            ProductStock?
+  stockReceipts    StockReceipt[]
+  pendingOrders    PendingOrder[]
+}
+
+// Fresh units arriving in the warehouse, entered by the Head as they land.
+// Added on top of the latest Stock & Price List snapshot (when received
+// after it) - see getAvailableStockByProduct().
+model StockReceipt {
+  id          String   @id @default(cuid())
+  quantity    Int
+  receivedAt  DateTime // the date the units entered stock (UTC midnight)
+  // Set when this arrival comes with an updated dealer's price - basic,
+  // excl. VAT, same as every other dealerPrice. Also written to Pricelist
+  // for that month so it becomes the current price.
+  dealerPrice Float?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+
+  createdById String
+  createdBy   User     @relation("StockReceiptCreator", fields: [createdById], references: [id])
+
+  @@index([productId, receivedAt])
+}
+
+enum PendingOrderStatus {
+  OPEN
+  FULFILLED
+  CANCELLED
+}
+
+// An order a sales person has taken for an item that isn't in stock - fed
+// into the reorder report (paid ones count as firm demand).
+model PendingOrder {
+  id              String             @id @default(cuid())
+  quantity        Int
+  customerName    String
+  paymentReceived Boolean            @default(false)
+  status          PendingOrderStatus @default(OPEN)
+  note            String?
+  fulfilledAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  productId       String
+  product         Product            @relation(fields: [productId], references: [id])
+
+  ownerId         String
+  owner           User               @relation("PendingOrderOwner", fields: [ownerId], references: [id])
+
+  @@index([status])
 }
 
 model Pricelist {

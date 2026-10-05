@@ -21,6 +21,7 @@ import { StageActions } from "../stage-actions";
 import { DealItemsSection } from "../deal-items-section";
 import { SaleLineItemsTable } from "../sale-line-items-table";
 import { StakeholdersSection } from "../stakeholders-section";
+import { ReorderFlag } from "../reorder-flag";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -145,6 +146,16 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                   What&apos;s being quoted on this deal. Feeds Sales by Category once it&apos;s won.
                 </p>
                 <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
+                {deal.stage === "NEGOTIATION" && (
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <ReorderFlag
+                      dealId={deal.id}
+                      checked={deal.considerForReorder}
+                      itemCount={deal.items.length}
+                      unitCount={deal.items.reduce((s, i) => s + i.qty, 0)}
+                    />
+                  </div>
+                )}
               </>
             )}
           </Card>
