@@ -88,6 +88,9 @@ export default async function ReorderPage({
       // paid orders already owed - shown for every item, before stock is
       // taken off, so there's always a quantity to plan with.
       const tentative = Math.ceil(targetStock + paid);
+      // Paid orders (all sales managers) beyond stock + in transit - always
+      // part of the order below, flagged so it isn't missed.
+      const shortfall = Math.max(0, paid - stock - transit);
       // Paid pending orders are owed out of the next arrival on top of the
       // normal cover; flagged Negotiation deals are shown separately since
       // they may not close.
@@ -95,15 +98,23 @@ export default async function ReorderPage({
       const suggested = Math.max(0, Math.ceil(targetStock + paid - stock - transit));
       const suggestedWithPipeline = Math.max(0, Math.ceil(targetStock + paid + pipeline - stock - transit));
       const monthsCover = avgMonthly > 0 ? Math.max(0, stock - paid) / avgMonthly : null;
-      return { ...p, avgMonthly, stock, transit, eta, paid, unpaid, pipeline, targetStock, tentative, suggested, suggestedWithPipeline, monthsCover };
+      return { ...p, avgMonthly, stock, transit, eta, paid, unpaid, pipeline, targetStock, tentative, shortfall, suggested, suggestedWithPipeline, monthsCover };
     })
     .filter((r) => r.avgMonthly > 0 || r.paid > 0 || r.unpaid > 0 || r.pipeline > 0 || r.transit > 0)
-    .sort((a, b) => b.suggestedWithPipeline - a.suggestedWithPipeline || b.tentative - a.tentative || b.avgMonthly - a.avgMonthly);
+    .sort(
+      (a, b) =>
+        b.shortfall - a.shortfall ||
+        b.suggestedWithPipeline - a.suggestedWithPipeline ||
+        b.tentative - a.tentative ||
+        b.avgMonthly - a.avgMonthly,
+    );
 
   const toOrder = rows.filter((r) => r.suggested > 0);
   const totalSuggested = rows.reduce((s, r) => s + r.suggested, 0);
   const totalWithPipeline = rows.reduce((s, r) => s + r.suggestedWithPipeline, 0);
   const totalTentative = rows.reduce((s, r) => s + r.tentative, 0);
+  const shortRows = rows.filter((r) => r.shortfall > 0);
+  const totalShort = shortRows.reduce((s, r) => s + r.shortfall, 0);
   const lowCover = rows.filter((r) => r.monthsCover != null && r.monthsCover < LEAD_TIME_DAYS / 30).length;
   const fmt = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 1 });
   const href = (over: Record<string, string | number>) => {
@@ -159,7 +170,16 @@ export default async function ReorderPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card className={`p-4 ${shortRows.length > 0 ? "border-rose-200 bg-rose-50/40" : ""}`}>
+            <p className="text-sm text-slate-500">Short for paid orders</p>
+            <p className={`text-2xl font-semibold mt-1 ${shortRows.length > 0 ? "text-rose-700" : "text-slate-900"}`}>
+              {shortRows.length} model{shortRows.length === 1 ? "" : "s"}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {totalShort} unit{totalShort === 1 ? "" : "s"} paid for beyond stock + in transit
+            </p>
+          </Card>
           <Card className="p-4">
             <p className="text-sm text-slate-500">Tentative quantity</p>
             <p className="text-2xl font-semibold text-slate-900 mt-1">{fmt(totalTentative)} units</p>
@@ -188,7 +208,8 @@ export default async function ReorderPage({
               Average monthly sales = units billed {monthLabel(windowStart)} – {monthLabel(new Date(windowEnd.getTime() - 1))},
               net of returns. Tentative qty = {coverMonths} months of average sales + paid pending orders - what the next{" "}
               {coverMonths} months need. Order now = tentative qty − stock now − goods in transit (0 means stock already
-              covers it). Keep stock and the in-transit list up to date so these stay accurate.
+              covers it), and always includes any shortfall for paid orders - flagged in red. Keep stock and the in-transit list
+              up to date so these stay accurate.
             </p>
             <ExportCsvButton
               filename={`reorder-${now.toISOString().slice(0, 10)}.csv`}
@@ -204,6 +225,7 @@ export default async function ReorderPage({
                 "Pending (paid)",
                 "Pending (unpaid)",
                 "Flagged in negotiation",
+                "Short for paid orders",
                 `Tentative qty (${coverMonths} mo sales + paid pending)`,
                 "Suggested order",
                 "Suggested incl. negotiation",
@@ -220,6 +242,7 @@ export default async function ReorderPage({
                 r.paid,
                 r.unpaid,
                 r.pipeline,
+                r.shortfall,
                 r.tentative,
                 r.suggested,
                 r.suggestedWithPipeline,
@@ -238,17 +261,23 @@ export default async function ReorderPage({
                     <th className="px-4 py-3 font-medium">Item</th>
                     <th className="px-2.5 py-3 font-medium text-right">Avg / mo</th>
                     <th className="px-2.5 py-3 font-medium text-right" title={`${coverMonths} months of average sales + paid pending orders`}>
-                      Tentative qty
+                      Tentative
                     </th>
                     <th className="px-2.5 py-3 font-medium text-right">Stock</th>
                     <th className="px-2.5 py-3 font-medium text-right">In transit</th>
-                    <th className="px-2.5 py-3 font-medium text-right">Cover (mo)</th>
-                    <th className="px-2.5 py-3 font-medium text-right">Pending paid / unpaid</th>
-                    <th className="px-2.5 py-3 font-medium text-right">Negotiation</th>
+                    <th className="px-2.5 py-3 font-medium text-right" title="Months of cover">
+                      Cover
+                    </th>
+                    <th className="px-2.5 py-3 font-medium text-right" title="Open pending orders: paid / unpaid">
+                      Pending
+                    </th>
+                    <th className="px-2.5 py-3 font-medium text-right" title="Units in flagged Negotiation deals">
+                      Neg.
+                    </th>
                     <th className="px-2.5 py-3 font-medium text-right" title="Tentative qty − stock − in transit">
                       Order now
                     </th>
-                    <th className="px-4 py-3 font-medium text-right">Order incl. neg.</th>
+                    <th className="px-4 py-3 font-medium text-right">+ Neg.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -259,6 +288,11 @@ export default async function ReorderPage({
                         <div className="text-xs text-slate-400">
                           {r.code} · {r.category}
                         </div>
+                        {r.shortfall > 0 && (
+                          <span className="mt-1 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+                            Short {r.shortfall} for paid orders
+                          </span>
+                        )}
                       </td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-700">{fmt(r.avgMonthly)}</td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums font-semibold text-indigo-700">{r.tentative}</td>
@@ -285,7 +319,7 @@ export default async function ReorderPage({
                       </td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-700">{r.pipeline || "—"}</td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums font-semibold text-slate-900">
-                        {r.suggested > 0 ? r.suggested : <span className="font-normal text-slate-400">0 - covered</span>}
+                        {r.suggested > 0 ? r.suggested : <span className="font-normal text-slate-400">0</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{r.suggestedWithPipeline}</td>
                     </tr>

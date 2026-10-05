@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing";
+import { getAvailableStockByProduct, getInTransitByProduct, getPendingShortfalls } from "@/lib/pricing";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { VAT_RATE } from "@/lib/constants";
@@ -12,6 +12,7 @@ import { BulkReceiptForm } from "./bulk-receipt-form";
 import { DeleteReceiptButton } from "./delete-receipt-button";
 import { InTransitForm, BulkInTransitForm } from "./in-transit-form";
 import { InTransitActions } from "./in-transit-actions";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 const STATUS_LABEL = { OPEN: "Open", FULFILLED: "Delivered", CANCELLED: "Cancelled" } as const;
 const STATUS_BADGE = {
@@ -49,6 +50,52 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     }),
     getInTransitByProduct(),
   ]);
+  const [shortfalls, salesPeople] = await Promise.all([
+    getPendingShortfalls(availableStock, inTransitByProduct),
+    isHead
+      ? prisma.user.findMany({
+          where: { isActive: true, title: "Sales Manager" },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve(undefined),
+  ]);
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  // Open pending orders, model x sales person (always from the open set,
+  // whichever filter the list below is on).
+  const openPending = showAll
+    ? await prisma.pendingOrder.findMany({
+        where: { ownerId: { in: ownerIds }, status: "OPEN" },
+        include: { product: { select: { code: true, model: true } }, owner: { select: { name: true } } },
+      })
+    : pendingOrders;
+  const pivotPeople = Array.from(new Map(openPending.map((o) => [o.ownerId, o.owner.name])).entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const pivotByProduct = new Map<string, { model: string; code: string; total: number; paid: number; byPerson: Map<string, { qty: number; paid: number }> }>();
+  for (const o of openPending) {
+    const row = pivotByProduct.get(o.productId) ?? { model: o.product.model, code: o.product.code, total: 0, paid: 0, byPerson: new Map() };
+    const cell = row.byPerson.get(o.ownerId) ?? { qty: 0, paid: 0 };
+    cell.qty += o.quantity;
+    row.total += o.quantity;
+    if (o.paymentReceived) {
+      cell.paid += o.quantity;
+      row.paid += o.quantity;
+    }
+    row.byPerson.set(o.ownerId, cell);
+    pivotByProduct.set(o.productId, row);
+  }
+  const pivotRows = Array.from(pivotByProduct.entries())
+    .map(([productId, r]) => ({ productId, ...r }))
+    .sort((a, b) => b.total - a.total || a.model.localeCompare(b.model));
+  const personTotal = (id: string) => pivotRows.reduce((s, r) => s + (r.byPerson.get(id)?.qty ?? 0), 0);
+  const personPaid = (id: string) => pivotRows.reduce((s, r) => s + (r.byPerson.get(id)?.paid ?? 0), 0);
+  const pivotTotal = pivotRows.reduce((s, r) => s + r.total, 0);
+  const pivotPaid = pivotRows.reduce((s, r) => s + r.paid, 0);
+  const shortList = Array.from(shortfalls.entries())
+    .map(([productId, s]) => ({ productId, ...s, product: productById.get(productId) }))
+    .sort((a, b) => b.shortfall - a.shortfall);
 
   const productOptions = products.map((p) => ({
     id: p.id,
@@ -85,11 +132,146 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">Add a pending order</h2>
           <p className="text-xs text-slate-500 mb-4">
-            For an order you&apos;ve picked up for an item that isn&apos;t in stock. Paid orders count as firm demand
-            in the reorder report.
+            For an order picked up for an item that isn&apos;t in stock or in transit. Paid orders count as firm
+            demand and go into the next factory order.{isHead && " You can log one on behalf of a sales manager."}
           </p>
-          <PendingOrderForm products={productOptions} />
+          <PendingOrderForm products={productOptions} salesPeople={salesPeople} />
         </Card>
+
+        {shortList.length > 0 && (
+          <Card className="p-5 border-rose-200 bg-rose-50/40">
+            <h2 className="text-sm font-semibold text-rose-700 mb-1">
+              {shortList.length} model{shortList.length === 1 ? "" : "s"} short for paid orders
+            </h2>
+            <p className="text-xs text-slate-600 mb-3">
+              Paid pending orders from all sales managers add up to more than what&apos;s in stock plus in transit. The
+              shortfall is added to the next factory order in Reorder Planning.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="py-2 pr-4 font-medium">Model</th>
+                    <th className="py-2 pr-4 font-medium text-right">Paid pending</th>
+                    <th className="py-2 pr-4 font-medium text-right">In stock</th>
+                    <th className="py-2 pr-4 font-medium text-right">In transit</th>
+                    <th className="py-2 font-medium text-right">Short by</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rose-100">
+                  {shortList.map((r) => (
+                    <tr key={r.productId}>
+                      <td className="py-2 pr-4">
+                        <span className="font-medium text-slate-800">{r.product?.model ?? "—"}</span>
+                        <span className="ml-1.5 text-xs text-slate-400">{r.product?.code}</span>
+                      </td>
+                      <td className="py-2 pr-4 text-right tabular-nums">{r.paid}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums">{r.stock}</td>
+                      <td className="py-2 pr-4 text-right tabular-nums">{r.inTransit}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-rose-700">{r.shortfall}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        {pivotRows.length > 0 && (
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-0">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Open pending orders by sales person</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Units per model; the smaller figure is how many are paid.</p>
+              </div>
+              <ExportCsvButton
+                filename={`pending-orders-by-sales-person-${today}.csv`}
+                headers={["Model", "Code", ...pivotPeople.flatMap((p) => [`${p.name} (qty)`, `${p.name} (paid)`]), "Total qty", "Total paid", "In stock", "In transit"]}
+                rows={[
+                  ...pivotRows.map((r) => [
+                    r.model,
+                    r.code,
+                    ...pivotPeople.flatMap((p) => [r.byPerson.get(p.id)?.qty ?? 0, r.byPerson.get(p.id)?.paid ?? 0]),
+                    r.total,
+                    r.paid,
+                    availableStock.get(r.productId) ?? "",
+                    inTransitByProduct.get(r.productId)?.qty ?? 0,
+                  ]),
+                  ["Total", "", ...pivotPeople.flatMap((p) => [personTotal(p.id), personPaid(p.id)]), pivotTotal, pivotPaid, "", ""],
+                ]}
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-4 py-3 font-medium">Model</th>
+                    {pivotPeople.map((p) => (
+                      <th key={p.id} className="px-3 py-3 font-medium text-right">
+                        {p.name.split(" ")[0]}
+                      </th>
+                    ))}
+                    <th className="px-3 py-3 font-medium text-right">Total</th>
+                    <th className="px-3 py-3 font-medium text-right">In stock</th>
+                    <th className="px-4 py-3 font-medium text-right">In transit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pivotRows.map((r) => (
+                    <tr key={r.productId}>
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium text-slate-800">{r.model}</span>
+                        <span className="ml-1.5 text-xs text-slate-400">{r.code}</span>
+                        {shortfalls.has(r.productId) && (
+                          <span className="ml-2 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+                            Short {shortfalls.get(r.productId)!.shortfall}
+                          </span>
+                        )}
+                      </td>
+                      {pivotPeople.map((p) => {
+                        const c = r.byPerson.get(p.id);
+                        return (
+                          <td key={p.id} className="px-3 py-2.5 text-right tabular-nums">
+                            {c ? (
+                              <>
+                                <span className="font-medium text-slate-800">{c.qty}</span>
+                                <span className="ml-1 text-xs text-emerald-600">{c.paid} paid</span>
+                              </>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        <span className="font-semibold text-slate-900">{r.total}</span>
+                        <span className="ml-1 text-xs text-emerald-600">{r.paid} paid</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{availableStock.get(r.productId) ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{inTransitByProduct.get(r.productId)?.qty ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900">
+                    <td className="px-4 py-2.5">Total</td>
+                    {pivotPeople.map((p) => (
+                      <td key={p.id} className="px-3 py-2.5 text-right tabular-nums">
+                        {personTotal(p.id)}
+                        <span className="ml-1 text-xs font-normal text-emerald-600">{personPaid(p.id)} paid</span>
+                      </td>
+                    ))}
+                    <td className="px-3 py-2.5 text-right tabular-nums">
+                      {pivotTotal}
+                      <span className="ml-1 text-xs font-normal text-emerald-600">{pivotPaid} paid</span>
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </Card>
+        )}
 
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3 p-4 pb-0">
@@ -135,10 +317,18 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                     return (
                       <tr key={o.id}>
                         <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatDate(o.createdAt)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[180px]">
                           <div className="text-slate-800 font-medium">{o.product.model}</div>
                           <div className="text-xs text-slate-400">{o.product.code}</div>
                           {o.note && <div className="text-xs text-slate-500 mt-0.5">{o.note}</div>}
+                          {o.status === "OPEN" && shortfalls.has(o.productId) && (
+                            <span
+                              className="mt-1 inline-flex whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700"
+                              title="Paid orders for this model exceed stock + in transit - the shortfall is added to the next factory order"
+                            >
+                              Model short {shortfalls.get(o.productId)!.shortfall}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-slate-800 tabular-nums">{o.quantity}</td>
                         <td className="px-4 py-3 text-slate-700">{o.customerName}</td>

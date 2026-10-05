@@ -9,8 +9,11 @@ const inputClass =
 
 export function PendingOrderForm({
   products,
+  salesPeople,
 }: {
   products: (SearchableOption & { availableQty: number | null; inTransit: { qty: number; eta: Date | null } | null })[];
+  // Set for the Head only: log the order on behalf of one of these.
+  salesPeople?: { id: string; name: string }[];
 }) {
   const [productId, setProductId] = useState("");
   // The form's own fields clear after each submit (React resets a form
@@ -57,6 +60,19 @@ export function PendingOrderForm({
           <input name="customerName" required className={inputClass} />
         </div>
       </div>
+      {salesPeople && (
+        <div className="max-w-xs">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Sales person</label>
+          <select name="ownerId" defaultValue="" className={inputClass}>
+            <option value="">Me</option>
+            {salesPeople.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-4">
         <input name="note" placeholder="Note (optional)" className={`${inputClass} flex-1 min-w-[200px]`} />
         <label className="flex items-center gap-2 text-sm text-slate-700">

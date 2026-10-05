@@ -39,6 +39,16 @@ export async function addPendingOrder(_prev: FormState | undefined, formData: Fo
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
 
+  // The Head can log an order on behalf of a sales person; everyone else
+  // logs their own.
+  let ownerId = user.id;
+  const onBehalfOf = String(formData.get("ownerId") ?? "");
+  if (user.role === "HEAD" && onBehalfOf) {
+    const owner = await prisma.user.findUnique({ where: { id: onBehalfOf }, select: { id: true } });
+    if (!owner) return { error: "Pick a valid sales person." };
+    ownerId = owner.id;
+  }
+
   await prisma.pendingOrder.create({
     data: {
       productId: parsed.data.productId,
@@ -46,7 +56,7 @@ export async function addPendingOrder(_prev: FormState | undefined, formData: Fo
       customerName: parsed.data.customerName,
       note: parsed.data.note || null,
       paymentReceived: formData.get("paymentReceived") === "on",
-      ownerId: user.id,
+      ownerId,
     },
   });
   revalidateStock();

@@ -84,6 +84,33 @@ export async function getInTransitByProduct(): Promise<Map<string, { qty: number
   return map;
 }
 
+// Models where paid, still-open pending orders - across every sales
+// person - add up to more than is in stock plus on its way. The shortfall
+// has to be ordered from the factory on top of normal stock cover.
+export type PendingShortfall = { paid: number; stock: number; inTransit: number; shortfall: number };
+export async function getPendingShortfalls(
+  available?: Map<string, number>,
+  inTransit?: Map<string, { qty: number; eta: Date | null }>,
+): Promise<Map<string, PendingShortfall>> {
+  const [paid, stock, transit] = await Promise.all([
+    prisma.pendingOrder.groupBy({
+      by: ["productId"],
+      where: { status: "OPEN", paymentReceived: true },
+      _sum: { quantity: true },
+    }),
+    available ?? getAvailableStockByProduct(),
+    inTransit ?? getInTransitByProduct(),
+  ]);
+  const map = new Map<string, PendingShortfall>();
+  for (const p of paid) {
+    const paidQty = p._sum.quantity ?? 0;
+    const s = stock.get(p.productId) ?? 0;
+    const t = transit.get(p.productId)?.qty ?? 0;
+    if (paidQty > s + t) map.set(p.productId, { paid: paidQty, stock: s, inTransit: t, shortfall: paidQty - s - t });
+  }
+  return map;
+}
+
 // Short text for a product picker, e.g. "12 in transit, ETA 05 Dec 2026".
 export function inTransitLabel(t: { qty: number; eta: Date | null } | undefined): string | null {
   if (!t || t.qty <= 0) return null;
