@@ -19,7 +19,14 @@ import { CompletenessBar } from "@/components/completeness-bar";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
-type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
+type ProductOption = {
+  id: string;
+  label: string;
+  defaultPrice: number | null;
+  availableQty: number | null;
+  // e.g. "12 in transit, ETA 05 Dec 2026" - set when units are on the way.
+  inTransitLabel?: string | null;
+};
 type LineItemRow = { productId: string; qty: string; unitPrice: string };
 
 export function DealForm({
@@ -345,12 +352,13 @@ export function DealForm({
                         placeholder="Type to search models..."
                         emptyLabel="unset"
                       />
-                      {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null) && (
+                      {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null || selectedProduct.inTransitLabel) && (
                         <p className="mt-1 text-xs text-amber-600">
                           {selectedProduct.defaultPrice != null &&
                             `Tentative price: ${formatCurrency(selectedProduct.defaultPrice)} (excl. 7.5% VAT)`}
                           {selectedProduct.defaultPrice != null && selectedProduct.availableQty != null && " · "}
                           {selectedProduct.availableQty != null && `Approx. ${selectedProduct.availableQty} unit(s) available`}
+                          {selectedProduct.inTransitLabel && ` · ${selectedProduct.inTransitLabel}`}
                         </p>
                       )}
                     </div>

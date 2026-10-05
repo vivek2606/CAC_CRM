@@ -24,11 +24,15 @@ export default async function ImportPricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: <strong>PRODUCT CODE</strong>, <strong>MODEL</strong>, <strong>CATEGORY</strong>,{" "}
-              <strong>MONTH</strong>, <strong>Quantity</strong>, <strong>Landed Cost</strong>, and{" "}
-              <strong>Dealer&apos;s Price</strong>.
+              Columns required: <strong>PRODUCT CODE</strong>, <strong>MODEL</strong>, <strong>CATEGORY</strong> and{" "}
+              <strong>Quantity</strong>. Optional: <strong>Dealer&apos;s Price</strong>, <strong>Landed Cost</strong> and{" "}
+              <strong>MONTH</strong> - leave them out for a quantities-only opening stock.
             </li>
-            <li>Landed Cost and Dealer&apos;s Price are both taken as-is in Naira, excluding VAT @ 7.5%.</li>
+            <li>
+              Landed Cost and Dealer&apos;s Price are both taken as-is in Naira, excluding VAT @ 7.5%. A row without a
+              Dealer&apos;s Price keeps the item&apos;s current price; a priced row with no MONTH is filed under the opening
+              stock date&apos;s month.
+            </li>
             <li>Products are matched by Product Code — a known code updates that product; a new one is created.</li>
             <li>
               This file should list every item currently available, with its quantity — anything not in this file
@@ -36,9 +40,9 @@ export default async function ImportPricelistPage() {
               it.
             </li>
             <li>
-              &quot;Stock counted as of&quot; should be the date the quantities were actually true - any Won deal
-              dated on or before it is assumed already reflected in these numbers; any Won deal dated after it draws
-              the quantity down further.
+              &quot;Opening stock at the start of&quot; is the first day these quantities apply - count before that
+              day&apos;s billing. Every billing (Sales Register or a deal won in the CRM) and every arrival dated on or
+              after it adjusts the quantity from there.
             </li>
             <li>Safe to re-run for prices — re-uploading for the same MONTH replaces that month&apos;s prices instead of duplicating them. Stock is always fully replaced by the latest upload.</li>
           </ul>

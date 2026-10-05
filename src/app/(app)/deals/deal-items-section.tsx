@@ -9,7 +9,14 @@ type DealItem = {
   unitPrice: number;
   product: { code: string; model: string; category: string };
 };
-type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
+type ProductOption = {
+  id: string;
+  label: string;
+  defaultPrice: number | null;
+  availableQty: number | null;
+  // e.g. "12 in transit, ETA 05 Dec 2026" - set when units are on the way.
+  inTransitLabel?: string | null;
+};
 
 export function DealItemsSection({
   dealId,

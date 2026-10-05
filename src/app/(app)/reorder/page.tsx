@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
-import { getAvailableStockByProduct } from "@/lib/pricing";
+import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing";
+import { formatDate } from "@/lib/format";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { ExportCsvButton } from "@/components/export-csv-button";
 
@@ -38,7 +39,7 @@ export default async function ReorderPage({
   const windowEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - windowMonths, 1));
 
-  const [sold, available, pending, flagged] = await Promise.all([
+  const [sold, available, pending, flagged, inTransit] = await Promise.all([
     // Billed quantities, net of returns - Sales Register and CRM-won deals.
     prisma.saleLineItem.groupBy({
       by: ["productId"],
@@ -56,6 +57,7 @@ export default async function ReorderPage({
       where: { deal: { stage: "NEGOTIATION", considerForReorder: true } },
       _sum: { qty: true },
     }),
+    getInTransitByProduct(),
   ]);
 
   const soldBy = new Map(sold.map((s) => [s.productId, s._sum.qty ?? 0]));
@@ -64,7 +66,7 @@ export default async function ReorderPage({
   for (const p of pending) (p.paymentReceived ? paidBy : unpaidBy).set(p.productId, p._sum.quantity ?? 0);
   const flaggedBy = new Map(flagged.map((f) => [f.productId, f._sum.qty ?? 0]));
 
-  const productIds = new Set([...soldBy.keys(), ...paidBy.keys(), ...unpaidBy.keys(), ...flaggedBy.keys()]);
+  const productIds = new Set([...soldBy.keys(), ...paidBy.keys(), ...unpaidBy.keys(), ...flaggedBy.keys(), ...inTransit.keys()]);
   const products = await prisma.product.findMany({
     where: { id: { in: Array.from(productIds) } },
     select: { id: true, code: true, model: true, category: true },
@@ -79,16 +81,19 @@ export default async function ReorderPage({
       const paid = paidBy.get(p.id) ?? 0;
       const unpaid = unpaidBy.get(p.id) ?? 0;
       const pipeline = flaggedBy.get(p.id) ?? 0;
+      const transit = inTransit.get(p.id)?.qty ?? 0;
+      const eta = inTransit.get(p.id)?.eta ?? null;
       const targetStock = avgMonthly * coverMonths;
       // Paid pending orders are owed out of the next arrival on top of the
       // normal cover; flagged Negotiation deals are shown separately since
       // they may not close.
-      const suggested = Math.max(0, Math.ceil(targetStock + paid - stock));
-      const suggestedWithPipeline = Math.max(0, Math.ceil(targetStock + paid + pipeline - stock));
+      // Units already on the way from the factory count against the order.
+      const suggested = Math.max(0, Math.ceil(targetStock + paid - stock - transit));
+      const suggestedWithPipeline = Math.max(0, Math.ceil(targetStock + paid + pipeline - stock - transit));
       const monthsCover = avgMonthly > 0 ? Math.max(0, stock - paid) / avgMonthly : null;
-      return { ...p, avgMonthly, stock, paid, unpaid, pipeline, targetStock, suggested, suggestedWithPipeline, monthsCover };
+      return { ...p, avgMonthly, stock, transit, eta, paid, unpaid, pipeline, targetStock, suggested, suggestedWithPipeline, monthsCover };
     })
-    .filter((r) => r.avgMonthly > 0 || r.paid > 0 || r.unpaid > 0 || r.pipeline > 0)
+    .filter((r) => r.avgMonthly > 0 || r.paid > 0 || r.unpaid > 0 || r.pipeline > 0 || r.transit > 0)
     .sort((a, b) => b.suggestedWithPipeline - a.suggestedWithPipeline || b.avgMonthly - a.avgMonthly);
 
   const toOrder = rows.filter((r) => r.suggested > 0);
@@ -171,9 +176,9 @@ export default async function ReorderPage({
           <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-0">
             <p className="text-xs text-slate-500 max-w-3xl">
               Average monthly sales = units billed {monthLabel(windowStart)} – {monthLabel(new Date(windowEnd.getTime() - 1))},
-              net of returns. Suggested order = {coverMonths} months of average sales + paid pending orders − stock now.
-              Units already ordered from the factory but not yet received aren&apos;t tracked here - deduct them before
-              ordering.
+              net of returns. Suggested order = {coverMonths} months of average sales + paid pending orders − stock now −
+              goods in transit. Keep the in-transit list on the Stock page up to date so orders already placed aren&apos;t
+              suggested again.
             </p>
             <ExportCsvButton
               filename={`reorder-${now.toISOString().slice(0, 10)}.csv`}
@@ -183,6 +188,8 @@ export default async function ReorderPage({
                 "Code",
                 "Avg monthly sales",
                 "Stock now",
+                "In transit",
+                "Earliest ETA",
                 "Months of cover",
                 "Pending (paid)",
                 "Pending (unpaid)",
@@ -197,6 +204,8 @@ export default async function ReorderPage({
                 r.code,
                 Math.round(r.avgMonthly * 10) / 10,
                 r.stock,
+                r.transit,
+                r.eta ? r.eta.toISOString().slice(0, 10) : "",
                 r.monthsCover == null ? "" : Math.round(r.monthsCover * 10) / 10,
                 r.paid,
                 r.unpaid,
@@ -219,6 +228,7 @@ export default async function ReorderPage({
                     <th className="px-4 py-3 font-medium">Item</th>
                     <th className="px-2.5 py-3 font-medium text-right">Avg / mo</th>
                     <th className="px-2.5 py-3 font-medium text-right">Stock</th>
+                    <th className="px-2.5 py-3 font-medium text-right">In transit</th>
                     <th className="px-2.5 py-3 font-medium text-right">Cover (mo)</th>
                     <th className="px-2.5 py-3 font-medium text-right">Paid pending</th>
                     <th className="px-2.5 py-3 font-medium text-right">Unpaid pending</th>
@@ -238,6 +248,10 @@ export default async function ReorderPage({
                       </td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-700">{fmt(r.avgMonthly)}</td>
                       <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-700">{r.stock}</td>
+                      <td className="px-2.5 py-2.5 text-right tabular-nums text-slate-700">
+                        {r.transit || "—"}
+                        {r.eta && <div className="text-[11px] text-slate-400">ETA {formatDate(r.eta)}</div>}
+                      </td>
                       <td
                         className={`px-2.5 py-2.5 text-right tabular-nums ${
                           r.monthsCover != null && r.monthsCover < 3 ? "text-rose-600 font-medium" : "text-slate-700"

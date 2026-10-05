@@ -14,11 +14,11 @@ export function ImportForm() {
     <div className="space-y-6">
       <form action={formAction} className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Stock counted as of</label>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Opening stock at the start of</label>
           <input
             type="date"
             name="stockAsOfDate"
-            max={today}
+            defaultValue={today}
             required
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
@@ -65,8 +65,8 @@ export function ImportForm() {
             </div>
           </dl>
           <p className="text-xs text-slate-400 mt-4">
-            Stock snapshot dated {state.summary.stockAsOfDate} — every other product not in this file now reads as
-            zero in stock as of that date.
+            Opening stock set at the start of {state.summary.stockAsOfDate} - billing and arrivals from that date onward
+            adjust it. Every product not in this file now reads as zero in stock.
             {state.summary.skippedFileRows > 0 &&
               ` Skipped ${state.summary.skippedFileRows} blank/incomplete row(s) in the file.`}
           </p>

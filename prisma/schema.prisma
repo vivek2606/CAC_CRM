@@ -159,6 +159,7 @@ model User {
   saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
   approvedDealDiscounts Deal[] @relation("DiscountApprover")
   stockReceipts StockReceipt[] @relation("StockReceiptCreator")
+  inTransitOrders InTransitOrder[] @relation("InTransitCreator")
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
 }
 
@@ -513,6 +514,37 @@ model Product {
   stock            ProductStock?
   stockReceipts    StockReceipt[]
   pendingOrders    PendingOrder[]
+  inTransitOrders  InTransitOrder[]
+}
+
+enum InTransitStatus {
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+// Goods ordered from the factory and on their way, with the expected
+// arrival. quantity is what's still in transit; receiving part or all of it
+// records a StockReceipt and moves those units into stock.
+model InTransitOrder {
+  id          String          @id @default(cuid())
+  quantity    Int
+  receivedQty Int             @default(0)
+  eta         DateTime?       // tentative arrival date (UTC midnight)
+  orderedAt   DateTime?
+  reference   String?         // PO / proforma / container no.
+  note        String?
+  status      InTransitStatus @default(IN_TRANSIT)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  productId   String
+  product     Product         @relation(fields: [productId], references: [id])
+
+  createdById String
+  createdBy   User            @relation("InTransitCreator", fields: [createdById], references: [id])
+
+  @@index([status])
 }
 
 // Fresh units arriving in the warehouse, entered by the Head as they land.

@@ -5,13 +5,15 @@ export type RawPricelistRow = {
   productCode: string;
   model: string;
   category: string;
-  month: Date;
+  // Price columns are optional, so a quantities-only opening stock sheet
+  // works too. A row with no Dealer's Price leaves the item's price as is.
+  month: Date | null;
   quantity: number;
-  landedCost: number;
-  dealerPrice: number;
+  landedCost: number | null;
+  dealerPrice: number | null;
 };
 
-const REQUIRED_COLUMNS = ["PRODUCT CODE", "MODEL", "CATEGORY", "MONTH", "Quantity", "Landed Cost", "Dealer's Price"];
+const REQUIRED_COLUMNS = ["PRODUCT CODE", "MODEL", "CATEGORY", "Quantity"];
 
 function parseMonthCell(value: unknown): Date | null {
   if (value instanceof Date) return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
@@ -51,7 +53,7 @@ export async function parsePricelistBuffer(
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
 
-    const getRaw = (col: string): unknown => row.getCell(idx(col)).value;
+    const getRaw = (col: string): unknown => (idx(col) === -1 ? null : row.getCell(idx(col)).value);
     const getStr = (col: string): string | null => {
       const v = getRaw(col);
       if (v == null) return null;
@@ -66,7 +68,12 @@ export async function parsePricelistBuffer(
       const v = getRaw(col);
       if (typeof v === "number") return v;
       if (v == null) return null;
-      const n = Number(v);
+      const raw = typeof v === "object" && "result" in (v as object) ? (v as { result: unknown }).result : v;
+      if (typeof raw === "number") return raw;
+      // A blank cell means "no value" (e.g. no price), never 0.
+      const text = String(raw ?? "").replace(/[₦,\s]/g, "");
+      if (text === "") return null;
+      const n = Number(text);
       return Number.isNaN(n) ? null : n;
     };
 
@@ -79,7 +86,7 @@ export async function parsePricelistBuffer(
     const landedCost = getNum("Landed Cost");
     const dealerPrice = getNum("Dealer's Price");
 
-    if (!productCode || !model || !category || !month || quantity == null || landedCost == null || dealerPrice == null) {
+    if (!productCode || !model || !category || quantity == null) {
       skippedRows++;
       return;
     }

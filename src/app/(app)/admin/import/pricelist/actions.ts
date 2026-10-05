@@ -18,7 +18,7 @@ export type ImportSummary = {
 
 export type ImportState = { error?: string; summary?: ImportSummary };
 
-const stockDateSchema = z.string().min(1, "Please pick the date this stock was counted as of.");
+const stockDateSchema = z.string().min(1, "Please pick the opening stock date.");
 
 export async function importPricelistStock(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
   await requireHead();
@@ -52,7 +52,10 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
     return { error: "No usable rows found in the file." };
   }
 
-  const result = transformPricelistStock(rows);
+  const result = transformPricelistStock(
+    rows,
+    new Date(Date.UTC(stockAsOfDate.getUTCFullYear(), stockAsOfDate.getUTCMonth(), 1)),
+  );
 
   // Products - matched by code, same as Price Master. Sub-category isn't in
   // this sheet, so a brand-new product gets "Uncategorized" (fixed up later
@@ -100,9 +103,11 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
     priceEntriesSet++;
   }
 
-  // Stock - a full replacement snapshot: everything not in this upload reads
-  // as zero as of this date, since the sheet is described as "the available
-  // items as of yesterday" (an exhaustive count, not a partial patch).
+  // Stock - a full replacement opening stock: everything not in this upload
+  // reads as zero from this date, since the sheet is an exhaustive count of
+  // what's available at the start of that day (not a partial patch). Billing
+  // and arrivals dated on or after it are applied on top - see
+  // getAvailableStockByProduct().
   await prisma.productStock.updateMany({ data: { quantity: 0, asOfDate: stockAsOfDate } });
   let stockEntriesSet = 0;
   for (const entry of result.stockEntries) {

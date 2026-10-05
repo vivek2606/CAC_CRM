@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../deal-form";
 import { createDeal } from "../actions";
@@ -9,7 +9,7 @@ export default async function NewDealPage() {
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const [owners, accounts, contacts, products, latestPriceByProduct, availableStockByProduct, wonDealsForCycle] =
+  const [owners, accounts, contacts, products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, wonDealsForCycle] =
     await Promise.all([
       user.role === "HEAD"
         ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
@@ -22,6 +22,7 @@ export default async function NewDealPage() {
       getQuotableProducts(),
       getLatestPriceByProduct(),
       getAvailableStockByProduct(),
+    getInTransitByProduct(),
       // Feeds the Expected Close Date's smart default below - only WON
       // deals have a real, meaningful cycle length (an open deal's "cycle
       // so far" isn't its actual cycle length yet).
@@ -35,6 +36,7 @@ export default async function NewDealPage() {
     label: `${p.model} (${p.code})`,
     defaultPrice: latestPriceByProduct.get(p.id) ?? null,
     availableQty: availableStockByProduct.get(p.id) ?? null,
+    inTransitLabel: inTransitLabel(inTransitByProduct.get(p.id)),
   }));
 
   // Smart default Expected Close Date: today + the team's average historical

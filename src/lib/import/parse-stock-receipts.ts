@@ -50,7 +50,7 @@ export function parseReceiptDate(v: unknown): Date | null {
   return null;
 }
 
-function cellValue(v: ExcelJS.CellValue): unknown {
+export function cellValue(v: ExcelJS.CellValue): unknown {
   if (v != null && typeof v === "object" && !(v instanceof Date)) {
     if ("result" in v) return (v as { result: unknown }).result;
     if ("text" in v) return (v as { text: unknown }).text;

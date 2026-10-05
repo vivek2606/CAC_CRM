@@ -10,7 +10,7 @@ export type TransformedProduct = {
 export type TransformedPriceEntry = {
   productCode: string;
   month: Date;
-  landedCost: number;
+  landedCost: number | null;
   dealerPrice: number;
 };
 export type TransformedStockEntry = { productCode: string; quantity: number };
@@ -22,7 +22,9 @@ export type PricelistStockTransformResult = {
   summary: { totalRowsIn: number; keptRows: number };
 };
 
-export function transformPricelistStock(rows: RawPricelistRow[]): PricelistStockTransformResult {
+// defaultMonth is used for a priced row with no MONTH (the opening stock
+// date's month).
+export function transformPricelistStock(rows: RawPricelistRow[], defaultMonth: Date): PricelistStockTransformResult {
   const totalRowsIn = rows.length;
 
   // Last row for a product code wins, in case the sheet lists it twice.
@@ -37,12 +39,14 @@ export function transformPricelistStock(rows: RawPricelistRow[]): PricelistStock
       model: row.model,
       capacityKw: computeCapacityKw(row.category, row.model),
     });
-    priceMap.set(row.productCode, {
-      productCode: row.productCode,
-      month: row.month,
-      landedCost: row.landedCost,
-      dealerPrice: row.dealerPrice,
-    });
+    if (row.dealerPrice != null) {
+      priceMap.set(row.productCode, {
+        productCode: row.productCode,
+        month: row.month ?? defaultMonth,
+        landedCost: row.landedCost,
+        dealerPrice: row.dealerPrice,
+      });
+    }
     stockMap.set(row.productCode, { productCode: row.productCode, quantity: row.quantity });
   }
 

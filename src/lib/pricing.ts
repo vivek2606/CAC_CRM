@@ -17,14 +17,14 @@ export async function getLatestPriceByProduct(): Promise<Map<string, number>> {
   return map;
 }
 
-// Each product's current stock: its latest Stock & Price List snapshot,
-// plus fresh units received after it (Stock Receipts), minus every unit
-// billed after it - SaleLineItem covers both Sales Register billing and
-// deals won in the CRM (net of returns). The snapshot is counted as of the
-// end of its date, so billing and receipts on that date are taken to be in
-// it already. A product with no snapshot starts from its first receipt. A
-// product with neither is left out of the map (stock untracked for it),
-// rather than reading as zero.
+// Each product's current stock: its latest opening stock (Stock & Price
+// List upload), plus fresh units received from that date on (Stock
+// Receipts), minus every unit billed from that date on - SaleLineItem
+// covers both Sales Register billing and deals won in the CRM (net of
+// returns). The opening stock applies at the START of its date, so that
+// day's billing and arrivals adjust it. A product with no opening stock
+// starts from its first receipt. A product with neither is left out of the
+// map (stock untracked for it), rather than reading as zero.
 export async function getAvailableStockByProduct(): Promise<Map<string, number>> {
   const [snapshots, receipts] = await Promise.all([
     prisma.productStock.findMany({ select: { productId: true, quantity: true, asOfDate: true } }),
@@ -36,7 +36,7 @@ export async function getAvailableStockByProduct(): Promise<Map<string, number>>
   for (const s of snapshots) {
     base.set(s.productId, {
       qty: s.quantity,
-      from: new Date(Date.UTC(s.asOfDate.getUTCFullYear(), s.asOfDate.getUTCMonth(), s.asOfDate.getUTCDate() + 1)),
+      from: new Date(Date.UTC(s.asOfDate.getUTCFullYear(), s.asOfDate.getUTCMonth(), s.asOfDate.getUTCDate())),
     });
   }
   const firstReceipt = new Map<string, Date>();
@@ -65,6 +65,32 @@ export async function getAvailableStockByProduct(): Promise<Map<string, number>>
   const map = new Map<string, number>();
   for (const [productId, b] of base) map.set(productId, Math.max(0, Math.round(b.qty)));
   return map;
+}
+
+// Units on their way from the factory, per product: total still in transit
+// and the earliest expected arrival among its open lines.
+export async function getInTransitByProduct(): Promise<Map<string, { qty: number; eta: Date | null }>> {
+  const open = await prisma.inTransitOrder.findMany({
+    where: { status: "IN_TRANSIT", quantity: { gt: 0 } },
+    select: { productId: true, quantity: true, eta: true },
+  });
+  const map = new Map<string, { qty: number; eta: Date | null }>();
+  for (const o of open) {
+    const cur = map.get(o.productId) ?? { qty: 0, eta: null };
+    cur.qty += o.quantity;
+    if (o.eta && (!cur.eta || o.eta < cur.eta)) cur.eta = o.eta;
+    map.set(o.productId, cur);
+  }
+  return map;
+}
+
+// Short text for a product picker, e.g. "12 in transit, ETA 05 Dec 2026".
+export function inTransitLabel(t: { qty: number; eta: Date | null } | undefined): string | null {
+  if (!t || t.qty <= 0) return null;
+  const eta = t.eta
+    ? `, ETA ${t.eta.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}`
+    : "";
+  return `${t.qty} in transit${eta}`;
 }
 
 // Products a rep can actually search for and quote - ones with a current

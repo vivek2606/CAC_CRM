@@ -5,7 +5,14 @@ import { addDealLineItem } from "./actions";
 import { SearchableSelect } from "@/components/searchable-select";
 import { formatCurrency } from "@/lib/format";
 
-type ProductOption = { id: string; label: string; defaultPrice: number | null; availableQty: number | null };
+type ProductOption = {
+  id: string;
+  label: string;
+  defaultPrice: number | null;
+  availableQty: number | null;
+  // e.g. "12 in transit, ETA 05 Dec 2026" - set when units are on the way.
+  inTransitLabel?: string | null;
+};
 
 export function AddLineItemForm({ dealId, products }: { dealId: string; products: ProductOption[] }) {
   const [productId, setProductId] = useState("");
@@ -41,12 +48,13 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
           onSelect={(opt) => handleProductChange(opt?.id ?? "")}
           placeholder="Type to search models..."
         />
-        {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null) && (
+        {selectedProduct && (selectedProduct.defaultPrice != null || selectedProduct.availableQty != null || selectedProduct.inTransitLabel) && (
           <p className="mt-1 text-xs text-amber-600">
             {selectedProduct.defaultPrice != null &&
               `Tentative price: ${formatCurrency(selectedProduct.defaultPrice)} (excl. 7.5% VAT)`}
             {selectedProduct.defaultPrice != null && selectedProduct.availableQty != null && " · "}
             {selectedProduct.availableQty != null && `Approx. ${selectedProduct.availableQty} unit(s) available`}
+            {selectedProduct.inTransitLabel && ` · ${selectedProduct.inTransitLabel}`}
           </p>
         )}
       </div>

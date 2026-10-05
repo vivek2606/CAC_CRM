@@ -7,7 +7,11 @@ import { SearchableSelect, type SearchableOption } from "@/components/searchable
 const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
-export function PendingOrderForm({ products }: { products: (SearchableOption & { availableQty: number | null })[] }) {
+export function PendingOrderForm({
+  products,
+}: {
+  products: (SearchableOption & { availableQty: number | null; inTransit: { qty: number; eta: Date | null } | null })[];
+}) {
   const [productId, setProductId] = useState("");
   // The form's own fields clear after each submit (React resets a form
   // action's inputs); the item picker and other state are reset here.
@@ -35,6 +39,12 @@ export function PendingOrderForm({ products }: { products: (SearchableOption & {
           {selected && (
             <p className="mt-1 text-xs text-amber-600">
               {selected.availableQty == null ? "Stock not tracked for this item" : `${selected.availableQty} unit(s) in stock now`}
+              {selected.inTransit &&
+                ` · ${selected.inTransit.qty} in transit${
+                  selected.inTransit.eta
+                    ? `, ETA ${new Date(selected.inTransit.eta).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}`
+                    : ""
+                }`}
             </p>
           )}
         </div>

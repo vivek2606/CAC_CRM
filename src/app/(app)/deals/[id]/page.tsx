@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, visibleOwnerIds } from "@/lib/rbac";
-import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate, formatDuration } from "@/lib/format";
@@ -64,10 +64,11 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
   const ownerIds = await visibleOwnerIds(user);
-  const [products, latestPriceByProduct, availableStockByProduct, contacts] = await Promise.all([
+  const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts] = await Promise.all([
     getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
+    getInTransitByProduct(),
     prisma.contact.findMany({
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true },
@@ -78,6 +79,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
     label: `${p.model} (${p.code})`,
     defaultPrice: latestPriceByProduct.get(p.id) ?? null,
     availableQty: availableStockByProduct.get(p.id) ?? null,
+    inTransitLabel: inTransitLabel(inTransitByProduct.get(p.id)),
   }));
 
   const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);

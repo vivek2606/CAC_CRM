@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds } from "@/lib/rbac";
-import { getAvailableStockByProduct } from "@/lib/pricing";
+import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { VAT_RATE } from "@/lib/constants";
@@ -10,6 +10,8 @@ import { PendingOrderActions } from "./pending-order-actions";
 import { StockReceiptForm } from "./stock-receipt-form";
 import { BulkReceiptForm } from "./bulk-receipt-form";
 import { DeleteReceiptButton } from "./delete-receipt-button";
+import { InTransitForm, BulkInTransitForm } from "./in-transit-form";
+import { InTransitActions } from "./in-transit-actions";
 
 const STATUS_LABEL = { OPEN: "Open", FULFILLED: "Delivered", CANCELLED: "Cancelled" } as const;
 const STATUS_BADGE = {
@@ -26,7 +28,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const showAll = (await searchParams).show === "all";
   const ownerIds = await visibleOwnerIds(user);
 
-  const [products, availableStock, pendingOrders, receipts] = await Promise.all([
+  const [products, availableStock, pendingOrders, receipts, inTransit, inTransitByProduct] = await Promise.all([
     prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } }),
     getAvailableStockByProduct(),
     prisma.pendingOrder.findMany({
@@ -40,17 +42,26 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       take: 30,
       include: { product: { select: { code: true, model: true } } },
     }),
+    prisma.inTransitOrder.findMany({
+      where: { status: "IN_TRANSIT" },
+      orderBy: [{ eta: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+      include: { product: { select: { code: true, model: true } } },
+    }),
+    getInTransitByProduct(),
   ]);
 
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
     availableQty: availableStock.get(p.id) ?? null,
+    inTransit: inTransitByProduct.get(p.id) ?? null,
   }));
   const openOrders = pendingOrders.filter((o) => o.status === "OPEN");
   const paidUnits = openOrders.filter((o) => o.paymentReceived).reduce((s, o) => s + o.quantity, 0);
   const unpaidUnits = openOrders.filter((o) => !o.paymentReceived).reduce((s, o) => s + o.quantity, 0);
   const today = new Date().toISOString().slice(0, 10);
+  const todayStart = new Date(`${today}T00:00:00.000Z`);
+  const inTransitUnits = inTransit.reduce((s, o) => s + o.quantity, 0);
 
   return (
     <div>
@@ -170,6 +181,89 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             </div>
           </Card>
         )}
+
+        <Card>
+          <div className="p-4 pb-0">
+            <h2 className="text-sm font-semibold text-slate-900">Goods in transit</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {inTransitUnits} unit{inTransitUnits === 1 ? "" : "s"} ordered from the factory and on the way. Not in stock until
+              received{isHead ? " - use Receive when they land" : ""}.
+            </p>
+          </div>
+          {inTransit.length === 0 ? (
+            <div className="p-4">
+              <EmptyState title="Nothing in transit" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-4 py-3 font-medium">Tentative arrival</th>
+                    <th className="px-4 py-3 font-medium">Item</th>
+                    <th className="px-4 py-3 font-medium text-right">Qty in transit</th>
+                    <th className="px-4 py-3 font-medium">Reference</th>
+                    <th className="px-4 py-3 font-medium">Ordered</th>
+                    <th className="px-4 py-3 font-medium">In stock now</th>
+                    {isHead && <th className="px-4 py-3 font-medium" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {inTransit.map((o) => {
+                    const overdue = o.eta != null && o.eta < todayStart;
+                    return (
+                      <tr key={o.id}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {o.eta ? (
+                            <span className={overdue ? "text-rose-600 font-medium" : "text-slate-700"}>
+                              {formatDate(o.eta)}
+                              {overdue && " (overdue)"}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Not set</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-slate-800 font-medium">{o.product.model}</div>
+                          <div className="text-xs text-slate-400">{o.product.code}</div>
+                          {o.note && <div className="text-xs text-slate-500 mt-0.5">{o.note}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-800 tabular-nums">
+                          {o.quantity}
+                          {o.receivedQty > 0 && <div className="text-xs font-normal text-slate-400">{o.receivedQty} already received</div>}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{o.reference ?? "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{o.orderedAt ? formatDate(o.orderedAt) : "—"}</td>
+                        <td className="px-4 py-3 text-slate-600 tabular-nums">{availableStock.get(o.productId) ?? "—"}</td>
+                        {isHead && (
+                          <td className="px-4 py-3">
+                            <InTransitActions id={o.id} quantity={o.quantity} today={today} />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {isHead && (
+            <div className="border-t border-slate-100 p-5 space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Add goods in transit</h3>
+                <InTransitForm products={productOptions} />
+              </div>
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-sm font-semibold text-slate-900 mb-1">Bulk upload</h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  One row per shipment line: Product Code, Quantity, ETA, and optionally Order Date and Reference. Rows matching a
+                  line already in transit are skipped.
+                </p>
+                <BulkInTransitForm />
+              </div>
+            </div>
+          )}
+        </Card>
 
         <Card>
           <div className="p-4 pb-0">
