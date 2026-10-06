@@ -7,7 +7,8 @@ import { Card } from "@/components/ui";
 
 const initialState: ImportState = {};
 
-export function ImportForm() {
+// defaultUpTo: "YYYY-MM" - the month before CRM-entered sales start.
+export function ImportForm({ defaultUpTo, crmFromLabel }: { defaultUpTo: string; crmFromLabel: string | null }) {
   const [state, formAction, isPending] = useActionState(importSalesRegister, initialState);
 
   return (
@@ -28,6 +29,23 @@ export function ImportForm() {
           >
             {isPending ? "Importing… this can take a minute" : "Import"}
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          <label htmlFor="upTo" className="font-medium">
+            Import rows up to
+          </label>
+          <input
+            id="upTo"
+            type="month"
+            name="upTo"
+            defaultValue={defaultUpTo}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+          />
+          <span className="text-xs text-slate-500">
+            {crmFromLabel
+              ? `Rows after this month are left out - sales from ${crmFromLabel} are entered in the CRM.`
+              : "Rows after this month are left out. Clear it to import the whole file."}
+          </span>
         </div>
         <label className="flex items-start gap-2 text-sm text-slate-700">
           <input type="checkbox" name="replace" className="mt-0.5 h-4 w-4 rounded border-slate-300" />
@@ -107,6 +125,8 @@ export function ImportForm() {
               {state.summary.creditNoteRowsNetted} return/credit-note rows into quantities, values, and pricing
               instead of dropping them.
               {state.summary.skippedFileRows > 0 && ` Skipped ${state.summary.skippedFileRows} blank rows in the file.`}
+              {state.summary.upToLabel &&
+                ` Imported rows up to ${state.summary.upToLabel}; left out ${state.summary.rowsAfterUpTo} later rows.`}
               {state.summary.replacedRange &&
                 ` Rebuilt ${state.summary.lineItemsCreated} line items in place of ${state.summary.lineItemsReplaced} previously imported ones.`}
             </p>

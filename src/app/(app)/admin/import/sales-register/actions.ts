@@ -48,6 +48,9 @@ export type ImportSummary = {
   demoAccountsRemoved: string[];
   totalDealValue: number;
   skippedFileRows: number;
+  // "Import up to" month, and how many file rows after it were left out.
+  upToLabel: string | null;
+  rowsAfterUpTo: number;
 };
 
 export type ImportState = { error?: string; summary?: ImportSummary };
@@ -77,6 +80,21 @@ export async function importSalesRegister(
 
   if (rows.length === 0) {
     return { error: "No usable rows found in the file." };
+  }
+
+  // "Import up to": rows dated after that month are left out, e.g. the
+  // months whose sales are now entered in the CRM.
+  let upToLabel: string | null = null;
+  let rowsAfterUpTo = 0;
+  const upTo = String(formData.get("upTo") ?? "").match(/^(\d{4})-(\d{1,2})$/);
+  if (upTo) {
+    const upToMonth = new Date(Date.UTC(Number(upTo[1]), Number(upTo[2]) - 1, 1));
+    const cutoff = new Date(Date.UTC(upToMonth.getUTCFullYear(), upToMonth.getUTCMonth() + 1, 1));
+    const before = rows.length;
+    rows = rows.filter((r) => r.docDate < cutoff);
+    rowsAfterUpTo = before - rows.length;
+    upToLabel = monthLabel(upToMonth);
+    if (rows.length === 0) return { error: `The file has no rows up to ${upToLabel}.` };
   }
 
   const result = transformSalesRegister(rows);
@@ -474,6 +492,8 @@ export async function importSalesRegister(
       demoAccountsRemoved,
       totalDealValue,
       skippedFileRows,
+      upToLabel,
+      rowsAfterUpTo,
     },
   };
 }
