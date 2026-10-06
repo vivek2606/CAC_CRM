@@ -61,8 +61,9 @@ export default async function ImportPage() {
               by a Sales Register file.
             </li>
             <li>
-              Project &amp; Service billing lines are kept out of product sales, stock and the category report, but saved as
-              project billing and counted toward each sales person&apos;s incentive.
+              Project &amp; Service lines, and everything invoiced under the Service Manager, are kept out of product
+              sales, stock and the category report. Under a sales person they are saved as project billing and count toward
+              their target and incentive; under the Service Manager they show as service billing.
             </li>
             <li>
               Return/credit-note lines (negative Qty and Net Amt) are netted into the affected product&apos;s

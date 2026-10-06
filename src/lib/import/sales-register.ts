@@ -122,13 +122,18 @@ function placeholderEmail(name: string): string {
 export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   const totalRowsIn = rows.length;
 
-  const excludedService = rows.filter((r) => r.category === "Project & Service");
+  // Project & Service lines, and everything invoiced under the Service
+  // Manager (Sikiru) - his invoices are service billing even when the line
+  // is a unit or a part - are kept out of product sales.
+  const isServiceBilling = (r: RawSalesRow) =>
+    r.category === "Project & Service" || lookupRosterEntry(r.salesman)?.title === "Service Manager";
+  const excludedService = rows.filter(isServiceBilling);
   // Return/credit-note rows (negative Qty and Net Amt) are kept, not dropped
   // - excluding them entirely used to leave a product's total quantity/value
   // sold overstated by whatever was later returned. They're netted into
   // quantities, values, and pricing below; only Deal creation (further down)
   // still requires a transaction's rows to net to a positive value.
-  const kept = rows.filter((r) => r.category !== "Project & Service");
+  const kept = rows.filter((r) => !isServiceBilling(r));
   const creditNoteRows = kept.filter((r) => r.netAmt < 0);
 
   // Sort ascending by date so "last write wins" == "most recent" for dedup maps.
