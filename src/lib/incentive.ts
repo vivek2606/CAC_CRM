@@ -1,28 +1,92 @@
-// Monthly sales incentive scheme.
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+
+// Monthly sales incentive scheme. Every number and the support staff list
+// are editable by the Head (Incentives -> Scheme settings) and stored in
+// AppSetting "incentive"; DEFAULT_INCENTIVE_SETTINGS applies until then.
 //
 //   Achievement = month's Won sales / month's target.
-//   >= 100%       -> 0.5% of the month's sales
-//   >= 90% < 100% -> 0.4%
-//   < 90% (or no target) -> not eligible
-//
-// An eligible sales person keeps 80% of their incentive; 20% goes into a
-// pool shared with the support staff: the Sales Coordinator takes the first
-// N50,000 and the balance is split equally among the rest.
+//   Highest tier whose threshold is met sets the rate (e.g. >= 100% -> 0.5%,
+//   >= 90% -> 0.4%); below every threshold, or no target -> not eligible.
+//   An eligible sales person keeps salesPersonSharePct of the incentive; the
+//   rest goes into a support staff pool. The coordinator takes up to
+//   coordinatorFirstShare first and the balance is split equally among the
+//   other support staff.
+//   Salary support: named sales people also get a % of their (gross)
+//   incentive on top, paid by the company - not out of the support pool.
 
-export const INCENTIVE_TIERS = [
-  { minAchievement: 1.0, rate: 0.005 },
-  { minAchievement: 0.9, rate: 0.004 },
-] as const;
-export const SALES_PERSON_SHARE = 0.8;
-export const SUPPORT_POOL_SHARE = 0.2;
-export const COORDINATOR_FIRST_SHARE = 50_000;
+export const incentiveSettingsSchema = z.object({
+  tiers: z
+    .array(
+      z.object({
+        minAchievementPct: z.number().min(0).max(1000),
+        ratePct: z.number().min(0).max(100),
+      }),
+    )
+    .min(1, "Add at least one rate tier."),
+  salesPersonSharePct: z.number().min(0).max(100),
+  coordinatorFirstShare: z.number().min(0),
+  supportStaff: z.array(
+    z.object({
+      name: z.string().trim().min(1, "Every support staff member needs a name."),
+      role: z.string().trim(),
+      coordinator: z.boolean(),
+      // Optional login: that user then sees their own share on the
+      // Incentives page.
+      userId: z.string().nullable(),
+    }),
+  ),
+  // Extra paid on top of the sales person's share, as a % of their gross
+  // incentive (e.g. 100% = the full incentive again). Matched by login,
+  // or by name until a login is picked.
+  salarySupport: z
+    .array(
+      z.object({
+        name: z.string().trim(),
+        userId: z.string().nullable(),
+        pct: z.number().min(0).max(1000),
+      }),
+    )
+    .default([]),
+});
+export type IncentiveSettings = z.infer<typeof incentiveSettingsSchema>;
 
-export const SUPPORT_STAFF = [
-  { name: "Joy Sale", role: "Sales Coordinator", coordinator: true },
-  { name: "Ogunremi Seye", role: "Design Support", coordinator: false },
-  { name: "Stephen Ani", role: "Design Support", coordinator: false },
-  { name: "Okunade Sikiru", role: "Service Support", coordinator: false },
-] as const;
+export const DEFAULT_INCENTIVE_SETTINGS: IncentiveSettings = {
+  tiers: [
+    { minAchievementPct: 100, ratePct: 0.5 },
+    { minAchievementPct: 90, ratePct: 0.4 },
+  ],
+  salesPersonSharePct: 80,
+  coordinatorFirstShare: 50_000,
+  supportStaff: [
+    { name: "Joy Sale", role: "Sales Coordinator", coordinator: true, userId: null },
+    { name: "Ogunremi Seye", role: "Design Support", coordinator: false, userId: null },
+    { name: "Stephen Ani", role: "Design Support", coordinator: false, userId: null },
+    { name: "Okunade Sikiru", role: "Service Support", coordinator: false, userId: null },
+  ],
+  salarySupport: [{ name: "Chris Mokobia", userId: null, pct: 100 }],
+};
+
+const SETTINGS_KEY = "incentive";
+
+export async function getIncentiveSettings(): Promise<IncentiveSettings> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: SETTINGS_KEY } });
+    const parsed = row ? incentiveSettingsSchema.safeParse(row.value) : null;
+    return parsed?.success ? parsed.data : DEFAULT_INCENTIVE_SETTINGS;
+  } catch {
+    // Settings table not created yet - the defaults still work.
+    return DEFAULT_INCENTIVE_SETTINGS;
+  }
+}
+
+export async function saveIncentiveSettings(settings: IncentiveSettings) {
+  await prisma.appSetting.upsert({
+    where: { key: SETTINGS_KEY },
+    create: { key: SETTINGS_KEY, value: settings },
+    update: { value: settings },
+  });
+}
 
 export type SalesIncentive = {
   userId: string;
@@ -30,41 +94,67 @@ export type SalesIncentive = {
   target: number;
   sales: number;
   achievement: number | null; // fraction, e.g. 0.95; null when no target
-  rate: number; // 0 when not eligible
+  rate: number; // fraction, 0 when not eligible
   incentive: number; // sales x rate
-  payout: number; // 80% kept by the sales person
-  toPool: number; // 20% shared with support staff
+  payout: number; // the sales person's share
+  toPool: number; // shared with support staff
+  salarySupportPct: number; // 0 when none
+  salarySupport: number; // extra on top, from the company
+  totalToReceive: number; // payout + salarySupport
 };
 
-export type SupportShare = { name: string; role: string; amount: number };
+export type SupportShare = { name: string; role: string; coordinator: boolean; userId: string | null; amount: number };
 
-export function rateFor(achievement: number | null): number {
+export function rateFor(achievement: number | null, settings: IncentiveSettings): number {
   if (achievement == null) return 0;
-  // Tiny tolerance so floating-point noise (e.g. 89.99999999%) doesn't
-  // drop an exact 90% / 100% achievement into the tier below.
-  return INCENTIVE_TIERS.find((t) => achievement + 1e-9 >= t.minAchievement)?.rate ?? 0;
+  const tiers = [...settings.tiers].sort((a, b) => b.minAchievementPct - a.minAchievementPct);
+  // Tiny tolerance so floating-point noise (e.g. 89.99999999%) doesn't drop
+  // an exact threshold into the tier below.
+  const tier = tiers.find((t) => achievement * 100 + 1e-7 >= t.minAchievementPct);
+  return tier ? tier.ratePct / 100 : 0;
 }
 
-export function calculateSalesIncentive(p: { userId: string; name: string; target: number; sales: number }): SalesIncentive {
+export function calculateSalesIncentive(
+  p: { userId: string; name: string; target: number; sales: number },
+  settings: IncentiveSettings,
+): SalesIncentive {
   const achievement = p.target > 0 ? p.sales / p.target : null;
-  const rate = rateFor(achievement);
+  const rate = rateFor(achievement, settings);
   const incentive = Math.max(0, p.sales) * rate;
+  const share = settings.salesPersonSharePct / 100;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  const support = settings.salarySupport.find((s) => (s.userId ? s.userId === p.userId : norm(s.name) === norm(p.name)));
+  const salarySupportPct = support?.pct ?? 0;
+  const payout = incentive * share;
+  const salarySupport = incentive * (salarySupportPct / 100);
   return {
     ...p,
     achievement,
     rate,
     incentive,
-    payout: incentive * SALES_PERSON_SHARE,
-    toPool: incentive * SUPPORT_POOL_SHARE,
+    payout,
+    toPool: incentive - payout,
+    salarySupportPct,
+    salarySupport,
+    totalToReceive: payout + salarySupport,
   };
 }
 
-// The coordinator takes up to N50,000 first; whatever is left is divided
-// equally among the other support staff. A pool under N50,000 goes wholly
-// to the coordinator.
-export function distributeSupportPool(pool: number): SupportShare[] {
-  const coordinatorAmount = Math.min(pool, COORDINATOR_FIRST_SHARE);
-  const others = SUPPORT_STAFF.filter((s) => !s.coordinator);
-  const each = others.length > 0 ? (pool - coordinatorAmount) / others.length : 0;
-  return SUPPORT_STAFF.map((s) => ({ name: s.name, role: s.role, amount: s.coordinator ? coordinatorAmount : each }));
+// The coordinator takes up to coordinatorFirstShare first; the rest is split
+// equally among the other support staff (or among everyone, when no
+// coordinator is set). A pool under the first share goes wholly to the
+// coordinator.
+export function distributeSupportPool(pool: number, settings: IncentiveSettings): SupportShare[] {
+  const staff = settings.supportStaff;
+  const coordinatorIdx = staff.findIndex((s) => s.coordinator);
+  const coordinatorAmount = coordinatorIdx === -1 ? 0 : Math.min(pool, settings.coordinatorFirstShare);
+  const sharers = staff.filter((_, i) => i !== coordinatorIdx);
+  const each = sharers.length > 0 ? (pool - coordinatorAmount) / sharers.length : 0;
+  return staff.map((s, i) => ({
+    name: s.name,
+    role: s.role,
+    coordinator: i === coordinatorIdx,
+    userId: s.userId,
+    amount: i === coordinatorIdx ? coordinatorAmount + (sharers.length === 0 ? pool - coordinatorAmount : 0) : each,
+  }));
 }

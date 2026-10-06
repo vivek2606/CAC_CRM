@@ -650,3 +650,11 @@ model TentativePrice {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Small app-wide settings the Head can edit, stored as JSON by key - e.g.
+// "incentive" holds the incentive scheme (rates, split, support staff).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
