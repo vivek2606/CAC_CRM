@@ -96,7 +96,10 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
   // Nothing is calculated before the scheme's start month.
   const [sy, sm] = settings.startMonth.split("-").map(Number);
   const startMonth = new Date(Date.UTC(sy, sm - 1, 1));
-  if (month < startMonth) {
+  // Earlier months of the start year can be worked out for the Head's
+  // reference only; everyone else, and earlier years, see nothing.
+  const referenceOnly = isHead && month < startMonth && month.getUTCFullYear() === startMonth.getUTCFullYear();
+  if (month < startMonth && !referenceOnly) {
     return (
       <div>
         <PageHeader title={isHead ? "Incentives" : "My Incentive"} description={monthLabel(month)} />
@@ -211,7 +214,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
     <div>
       <PageHeader
         title="Incentives"
-        description={`Monthly incentive for every employee - ${period}`}
+        description={`Monthly incentive for every employee - ${period}${referenceOnly ? " (reference only)" : ""}`}
         action={
           <Link href="/incentives/settings" className="text-sm text-indigo-600 hover:text-indigo-700">
             Scheme settings →
@@ -220,6 +223,13 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
       />
       <div className="p-6 space-y-4">
         {monthPicker}
+
+        {referenceOnly && (
+          <Card className="p-4 border-amber-200 bg-amber-50 text-sm text-amber-800">
+            For reference only - the scheme starts from {monthLabel(startMonth)}. {monthLabel(month)} is worked out with
+            the current scheme settings, is visible only to you, and isn&apos;t payable.
+          </Card>
+        )}
 
         <Card className="p-4 text-xs text-slate-600 leading-relaxed">
           <span className="font-semibold text-slate-800">How it&apos;s calculated: </span>
