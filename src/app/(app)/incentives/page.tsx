@@ -291,7 +291,15 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((r) => (
                     <tr key={r.userId}>
-                      <td className="px-4 py-3 font-medium text-slate-800 whitespace-normal min-w-[150px]">{r.name}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800 whitespace-normal min-w-[150px]">
+                        <Link
+                          href={`/reports/sales-breakdown?rep=${r.userId}&month=${monthValue(month)}`}
+                          className="hover:text-indigo-600"
+                          title="See every line behind this figure"
+                        >
+                          {r.name}
+                        </Link>
+                      </td>
                       <td className="px-2.5 py-3 text-right tabular-nums text-slate-700" title={formatCurrency(r.sales)}>
                         {formatCompactCurrency(r.sales)}
                         {r.projectSales !== 0 && (
