@@ -189,11 +189,12 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     }
   }
 
-  // Orion reuses a Txn Code + Txn No for unrelated invoices (different
-  // customer, date and salesman - e.g. a product invoice and a later
-  // project invoice). Merged, the whole lot went to the first row's
-  // salesman, so such a number is split into one document per date +
-  // customer + salesman. Numbers used once keep their plain key.
+  // From May 2026 the register mixes two billing entities (Somotex and
+  // Sakuragi - both CAC sales) whose Txn Code + Txn No can coincide for
+  // unrelated invoices, and the export has no entity column. Merged, the
+  // whole lot went to the first row's salesman, so such a number is split
+  // into one document per date + customer + salesman. Numbers used once
+  // keep their plain key.
   const docSignature = (r: RawSalesRow) =>
     `${r.docDate.toISOString().slice(0, 10)}~${(r.custCode || r.custName).trim()}~${normalizeSalesmanName(r.salesman)}`;
   const signaturesByBase = new Map<string, Set<string>>();
