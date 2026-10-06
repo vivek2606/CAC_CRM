@@ -39,6 +39,10 @@ export async function parseSalesRegisterBuffer(
     throw new Error(`Missing expected column(s): ${missing.join(", ")}`);
   }
 
+  // Optional billing company column (Somotex / Sakuragi), any of these names.
+  const ENTITY_COLUMNS = ["company", "company name", "entity", "billing company", "billing entity", "legal entity"];
+  const entityIdx = headers.findIndex((h) => h != null && ENTITY_COLUMNS.includes(h.toLowerCase()));
+
   const rows: RawSalesRow[] = [];
   let skippedRows = 0;
 
@@ -92,6 +96,7 @@ export async function parseSalesRegisterBuffer(
       netAmt: getNum("Net Amt"),
       exchangeRate: getNum("Exchange Rate"),
       salesman: getStr("Salesmen") ?? "",
+      entity: entityIdx === -1 ? undefined : (getStr(headers[entityIdx]) ?? undefined),
     });
   });
 

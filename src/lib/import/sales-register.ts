@@ -19,6 +19,8 @@ export type RawSalesRow = {
   netAmt: number;
   exchangeRate: number;
   salesman: string;
+  // Billing company (Somotex / Sakuragi), when the export has that column.
+  entity?: string;
 };
 
 export type TransformedAccount = { name: string; code: string; city: string | null; ownerKey: string };
@@ -191,12 +193,14 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
 
   // From May 2026 the register mixes two billing entities (Somotex and
   // Sakuragi - both CAC sales) whose Txn Code + Txn No can coincide for
-  // unrelated invoices, and the export has no entity column. Merged, the
-  // whole lot went to the first row's salesman, so such a number is split
-  // into one document per date + customer + salesman. Numbers used once
-  // keep their plain key.
+  // unrelated invoices. Merged, the whole lot went to the first row's
+  // salesman, so such a number is split into one document per date +
+  // customer + salesman (+ billing company, when the export has a Company /
+  // Entity column). Numbers used once keep their plain key.
   const docSignature = (r: RawSalesRow) =>
-    `${r.docDate.toISOString().slice(0, 10)}~${(r.custCode || r.custName).trim()}~${normalizeSalesmanName(r.salesman)}`;
+    `${r.docDate.toISOString().slice(0, 10)}~${(r.custCode || r.custName).trim()}~${normalizeSalesmanName(r.salesman)}${
+      r.entity ? `~${r.entity.trim().toUpperCase()}` : ""
+    }`;
   const signaturesByBase = new Map<string, Set<string>>();
   for (const row of kept) {
     const base = docKeyFor(row);
