@@ -1,13 +1,14 @@
 import ExcelJS from "exceljs";
 import { cellValue, parseReceiptDate } from "./parse-stock-receipts";
 
+// Project vs service isn't a column: it follows the sales person (the
+// Service Manager's lines are service billing, everyone else's project).
 export type RawProjectBillingRow = {
   rowNumber: number;
   date: Date;
   invoiceNo: string | null;
   customer: string;
   salesPerson: string;
-  type: "Project" | "Service" | null; // null: decided by the sales person
   description: string | null;
   value: number; // net, negative for a credit note
 };
@@ -19,12 +20,11 @@ const COLUMNS = {
   invoiceNo: ["invoice no", "invoice no.", "invoice number", "invoice #", "txn no", "doc no"],
   customer: ["customer", "customer name", "cust name"],
   salesPerson: ["sales person", "salesperson", "salesmen", "salesman"],
-  type: ["type", "project / service", "project/service"],
   description: ["description", "item name", "details", "item"],
   value: ["value", "amount", "net amt", "net amount"],
 };
 
-export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Type", "Description", "Value"];
+export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Description", "Value"];
 
 export async function parseProjectBillingBuffer(
   buffer: ArrayBuffer,
@@ -72,9 +72,6 @@ export async function parseProjectBillingBuffer(
     if (rawValue == null || rawValue === "" || Number.isNaN(value) || value === 0) {
       return void problems.push({ rowNumber, problem: `Value must be a number other than 0 (${customer})` });
     }
-    const rawType = str(idx.type)?.toLowerCase() ?? "";
-    const type = rawType.startsWith("serv") ? "Service" : rawType.startsWith("proj") ? "Project" : null;
-    if (rawType && !type) return void problems.push({ rowNumber, problem: `Type must be Project or Service (${customer})` });
 
     rows.push({
       rowNumber,
@@ -82,7 +79,6 @@ export async function parseProjectBillingBuffer(
       invoiceNo: str(idx.invoiceNo),
       customer,
       salesPerson,
-      type,
       description: str(idx.description),
       value,
     });

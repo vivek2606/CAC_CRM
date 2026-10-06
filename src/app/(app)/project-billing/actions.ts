@@ -22,6 +22,12 @@ async function billingOwners() {
   });
 }
 
+// Under the Service Manager it is service billing; under a sales person it
+// is project billing and counts toward their target and incentive.
+function typeFor(owner: { title: string | null }): "Project" | "Service" {
+  return owner.title === "Service Manager" ? "Service" : "Project";
+}
+
 function revalidate() {
   revalidatePath("/project-billing");
   revalidatePath("/service-billings");
@@ -44,7 +50,6 @@ const manualSchema = z.object({
   date: z.string().min(1, "Pick the billing date."),
   ownerId: z.string().min(1, "Pick the sales person."),
   customer: z.string().trim().min(1, "Enter the customer."),
-  type: z.enum(["Project", "Service"]),
   description: z.string().trim().max(200),
   invoiceNo: z.string().trim().max(60),
   value: z.coerce.number().refine((v) => Number.isFinite(v) && v !== 0, "Enter the amount (negative for a credit note)."),
@@ -56,7 +61,6 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
     date: formData.get("date"),
     ownerId: formData.get("ownerId"),
     customer: formData.get("customer"),
-    type: formData.get("type"),
     description: formData.get("description") ?? "",
     invoiceNo: formData.get("invoiceNo") ?? "",
     value: String(formData.get("value") ?? "").replace(/[₦,\s]/g, ""),
@@ -65,8 +69,9 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
   const d = parsed.data;
   const date = parseReceiptDate(d.date);
   if (!date) return { error: "Couldn't read the date." };
-  const owners = await billingOwners();
-  if (!owners.some((o) => o.id === d.ownerId)) return { error: "Pick a valid sales person." };
+  const owner = (await billingOwners()).find((o) => o.id === d.ownerId);
+  if (!owner) return { error: "Pick a valid sales person." };
+  const type = typeFor(owner);
 
   await prisma.projectBilling.create({
     data: {
@@ -76,14 +81,14 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
       docDate: date,
       month: firstOfMonth(date),
       custName: d.customer,
-      itemCode: d.type.toUpperCase(),
-      itemName: d.description || d.type,
+      itemCode: type.toUpperCase(),
+      itemName: d.description || type,
       value: d.value,
       ownerId: d.ownerId,
     },
   });
   revalidate();
-  return { ok: `Added ${d.type.toLowerCase()} billing for ${d.customer}.` };
+  return { ok: `Added ${type.toLowerCase()} billing for ${d.customer} under ${owner.name}.` };
 }
 
 // Only entries made in the CRM can be deleted here - register lines are
@@ -145,7 +150,7 @@ export async function importProjectBilling(
       problems.push({ rowNumber: r.rowNumber, problem: `No sales person login matches "${r.salesPerson}"` });
       continue;
     }
-    const type = r.type ?? (owner.title === "Service Manager" ? "Service" : "Project");
+    const type = typeFor(owner);
     // Same row uploaded again = same key, so a re-upload doesn't double it.
     const base = [r.date.toISOString().slice(0, 10), r.invoiceNo ?? "", norm(r.customer), owner.id, type, r.value].join("|");
     const n = occurrence.get(base) ?? 0;

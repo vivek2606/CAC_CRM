@@ -18,7 +18,7 @@ export function AddBillingForm({ owners, today }: { owners: { id: string; name: 
   const [state, action, isPending] = useActionState<FormState, FormData>(addProjectBilling, {});
   return (
     <form action={action} className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div>
           <label className={labelClass}>Date</label>
           <input type="date" name="date" defaultValue={today} required className={inputClass} />
@@ -32,23 +32,16 @@ export function AddBillingForm({ owners, today }: { owners: { id: string; name: 
             {owners.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
-                {o.service ? " (Service)" : ""}
+                {o.service ? " - service billing" : ""}
               </option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>Type</label>
-          <select name="type" defaultValue="Project" className={inputClass}>
-            <option value="Project">Project</option>
-            <option value="Service">Service</option>
           </select>
         </div>
         <div>
           <label className={labelClass}>Invoice no. (optional)</label>
           <input name="invoiceNo" className={inputClass} />
         </div>
-        <div className="sm:col-span-2">
+        <div>
           <label className={labelClass}>Customer</label>
           <input name="customer" required className={inputClass} />
         </div>

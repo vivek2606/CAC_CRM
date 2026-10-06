@@ -42,10 +42,10 @@ export default async function ProjectBillingPage({
     include: { owner: { select: { name: true } } },
   });
 
-  // Register lines carry the ERP item code; those under the Service Manager count as service.
+  // Under the Service Manager = service billing; under a sales person =
+  // project billing (counted toward their target and incentive).
   const serviceIds = new Set(owners.filter((o) => o.title === "Service Manager").map((o) => o.id));
-  const isService = (l: { itemCode: string; ownerId: string; sourceKey: string }) =>
-    l.itemCode === "SERVICE" || (l.itemCode !== "PROJECT" && serviceIds.has(l.ownerId));
+  const isService = (l: { ownerId: string }) => serviceIds.has(l.ownerId);
   const byOwner = new Map<string, { name: string; project: number; service: number }>();
   for (const l of lines) {
     const e = byOwner.get(l.ownerId) ?? { name: l.owner.name, project: 0, service: 0 };
@@ -62,7 +62,7 @@ export default async function ProjectBillingPage({
     <div>
       <PageHeader
         title="Project & Service Billing"
-        description="Counts toward each sales person's target and incentive; the Service Manager's shows under Service Billings"
+        description="Under a sales person it is project billing and counts toward their target and incentive; under the Service Manager it is service billing"
       />
       <div className="p-6 space-y-6">
         <Card className="p-5">
@@ -73,9 +73,9 @@ export default async function ProjectBillingPage({
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Upload from Excel</h2>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Columns: Date, Invoice No, Customer, Sales Person, Type (Project / Service), Description, Value. Sales Person is
-            matched to the login by name; a blank Type is Service for the Service Manager and Project for everyone else.
-            Uploading the same sheet again doesn&apos;t double it.
+            Columns: Date, Invoice No, Customer, Sales Person, Description, Value. Sales Person is matched to the login by
+            name - lines under the Service Manager are service billing, everyone else&apos;s project billing. Uploading the
+            same sheet again doesn&apos;t double it.
           </p>
           <UploadBillingForm />
         </Card>
@@ -140,7 +140,7 @@ export default async function ProjectBillingPage({
             </h2>
             <ExportCsvButton
               filename={`project-service-billing-${monthValue(month)}.csv`}
-              headers={["Date", "Invoice No", "Customer", "Sales Person", "Type", "Description", "Value", "Source"]}
+              headers={["Date", "Invoice No", "Customer", "Sales Person", "Billing", "Description", "Value", "Source"]}
               rows={lines.map((l) => [
                 l.docDate.toISOString().slice(0, 10),
                 l.docKey.includes("/") ? String(l.txnNo) : l.docKey,
