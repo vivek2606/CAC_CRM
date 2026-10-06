@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag } from "lucide-react";
+import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag, Receipt } from "lucide-react";
 
 const IMPORTS = [
   {
@@ -9,6 +9,12 @@ const IMPORTS = [
     icon: FileSpreadsheet,
     title: "Sales Register",
     description: "Orion ERP historical sales export — accounts, products, price history, and Won deals.",
+  },
+  {
+    href: "/project-billing",
+    icon: Receipt,
+    title: "Project & Service Billing",
+    description: "Project and service invoices not in the Sales Register (e.g. from Sep 2026) - upload a sheet or add by hand.",
   },
   {
     href: "/admin/import/leads",

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { parseSalesRegisterBuffer } from "@/lib/import/parse-sales-register";
 import { transformSalesRegister } from "@/lib/import/sales-register";
+import { MANUAL_PREFIX, UPLOAD_PREFIX } from "@/lib/project-billing";
 
 const DEMO_EMAILS = [
   "priya@caccrm.com",
@@ -434,7 +435,13 @@ export async function importSalesRegister(
   // product sales) and counted toward incentives. A Replace rebuilds it for
   // the file's months like everything else.
   if (replace) {
-    await prisma.projectBilling.deleteMany({ where: { month: { gte: rangeStart, lt: rangeEnd } } });
+    // Register lines only - billing entered in the CRM is left alone.
+    await prisma.projectBilling.deleteMany({
+      where: {
+        month: { gte: rangeStart, lt: rangeEnd },
+        NOT: [{ sourceKey: { startsWith: MANUAL_PREFIX } }, { sourceKey: { startsWith: UPLOAD_PREFIX } }],
+      },
+    });
   }
   const projectResult = await prisma.projectBilling.createMany({
     data: result.projectBillings.map((pb) => ({

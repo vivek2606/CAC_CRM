@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
+// sourceKey prefixes for billing entered in the CRM (by hand / from the
+// Project & Service upload). Register-imported lines have none, and a
+// register Replace only rebuilds those.
+export const MANUAL_PREFIX = "manual:";
+export const UPLOAD_PREFIX = "upload:";
+export const isCrmEntered = (sourceKey: string) => sourceKey.startsWith(MANUAL_PREFIX) || sourceKey.startsWith(UPLOAD_PREFIX);
+
 // Project & Service billing (from the Sales Register) counts toward target
 // achievement and incentives alongside Won product sales. Returned as raw
 // rows so callers can bucket by owner, month or day as they need.

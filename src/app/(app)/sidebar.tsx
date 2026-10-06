@@ -22,6 +22,7 @@ import {
   ClipboardList,
   BadgePercent,
   Wrench,
+  Receipt,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -87,6 +88,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
 // Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
 const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; headOnly?: boolean }[] = [
   { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
+  { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal" },
   { href: "/service-billings", label: "Service Billings", icon: Wrench, color: "orange", headOnly: true },
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
