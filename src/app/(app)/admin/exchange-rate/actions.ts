@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { requireHead } from "@/lib/rbac";
 
 export type RateState = { error?: string; success?: boolean };
 
@@ -23,7 +23,7 @@ const rateSchema = z.object({
 // product pricing or stock costing (those are Naira-only everywhere else
 // in the app now).
 export async function setExchangeRate(_prevState: RateState | undefined, formData: FormData): Promise<RateState> {
-  await requireBackOffice();
+  await requireHead();
 
   const parsed = rateSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) {

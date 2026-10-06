@@ -3,7 +3,8 @@ import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag, Receipt } from "lucide-react";
 
-const IMPORTS = [
+// headOnly: the Head only (price uploads stay with the Head of Sales).
+const IMPORTS: { href: string; icon: typeof FileSpreadsheet; title: string; description: string; headOnly?: boolean }[] = [
   {
     href: "/admin/import/sales-register",
     icon: FileSpreadsheet,
@@ -30,12 +31,14 @@ const IMPORTS = [
   },
   {
     href: "/admin/import/pricelist",
+    headOnly: true,
     icon: Boxes,
     title: "Stock & Price List",
     description: "Upload current available stock with quantity and dealer price.",
   },
   {
     href: "/admin/import/tentative-pricelist",
+    headOnly: true,
     icon: Tag,
     title: "Tentative Price List",
     description: "Quotable prices for items not currently held in stock.",
@@ -43,13 +46,13 @@ const IMPORTS = [
 ];
 
 export default async function ImportHubPage() {
-  await requireBackOffice();
+  const user = await requireBackOffice();
 
   return (
     <div>
       <PageHeader title="Import Data" description="Bring in data from your existing spreadsheets" />
       <div className="p-6 space-y-3 max-w-2xl">
-        {IMPORTS.map((item) => {
+        {IMPORTS.filter((item) => !item.headOnly || user.role === "HEAD").map((item) => {
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href}>

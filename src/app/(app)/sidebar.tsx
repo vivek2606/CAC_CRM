@@ -92,7 +92,7 @@ const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDa
   { href: "/service-billings", label: "Service Billings", icon: Wrench, color: "orange", headOnly: true },
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
-  { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow" },
+  { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
   { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink", headOnly: true },
 ];
 

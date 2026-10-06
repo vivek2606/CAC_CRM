@@ -20,8 +20,9 @@ export async function requireUser(): Promise<SessionUser> {
 /**
  * Back office = the Head of Sales or the Sales Coordinator: both see every
  * record, can enter leads/deals for any sales person, do the data entry
- * (imports, stock, targets, prices...) and see team reports. Head-only areas
- * (team logins, incentives, discount approval) use requireHead() /
+ * (imports, stock receipts, targets...) and see team reports. Head-only
+ * areas (team logins, incentives, discount approval, exchange rate, stock &
+ * price list and tentative price list uploads) use requireHead() /
  * role === "HEAD" instead.
  */
 export function isBackOffice(user: Pick<SessionUser, "role">): boolean {

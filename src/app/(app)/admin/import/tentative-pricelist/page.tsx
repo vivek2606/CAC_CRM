@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { requireHead } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { ImportForm } from "./import-form";
@@ -10,7 +10,7 @@ import { Trash2 } from "lucide-react";
 export const maxDuration = 60;
 
 export default async function TentativePricelistPage() {
-  await requireBackOffice();
+  await requireHead();
 
   const entries = await prisma.tentativePrice.findMany({ orderBy: { model: "asc" } });
 
