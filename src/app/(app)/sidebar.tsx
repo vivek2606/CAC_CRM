@@ -20,6 +20,7 @@ import {
   KeyRound,
   Boxes,
   ClipboardList,
+  BadgePercent,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -46,7 +47,8 @@ type NavColor =
   | "yellow"
   | "pink"
   | "red"
-  | "blue";
+  | "blue"
+  | "purple";
 
 const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   indigo: { text: "text-indigo-500", bar: "bg-indigo-500" },
@@ -64,6 +66,7 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   pink: { text: "text-pink-500", bar: "bg-pink-500" },
   red: { text: "text-red-500", bar: "bg-red-500" },
   blue: { text: "text-blue-500", bar: "bg-blue-500" },
+  purple: { text: "text-purple-500", bar: "bg-purple-500" },
 };
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
@@ -71,6 +74,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/leads", label: "Leads", icon: Target, color: "sky" },
   { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
   { href: "/targets", label: "Targets", icon: TrendingUp, color: "emerald" },
+  { href: "/incentives", label: "Incentives", icon: BadgePercent, color: "purple" },
   { href: "/accounts", label: "Accounts", icon: Building2, color: "amber" },
   { href: "/contacts", label: "Contacts", icon: Contact, color: "rose" },
   { href: "/activities", label: "Activities", icon: CheckSquare, color: "teal" },
