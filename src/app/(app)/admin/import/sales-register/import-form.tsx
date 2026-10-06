@@ -101,7 +101,9 @@ export function ImportForm() {
               </div>
             </dl>
             <p className="text-xs text-slate-400 mt-4">
-              Excluded {state.summary.excludedServiceRows} installation/service billing rows. Netted{" "}
+              Kept {state.summary.excludedServiceRows} Project &amp; Service billing rows out of product sales - they&apos;re saved
+              as project billing ({formatCompactCurrency(state.summary.projectBillingValue)}, {state.summary.projectBillingsAdded} new) and count
+              toward incentives. Netted{" "}
               {state.summary.creditNoteRowsNetted} return/credit-note rows into quantities, values, and pricing
               instead of dropping them.
               {state.summary.skippedFileRows > 0 && ` Skipped ${state.summary.skippedFileRows} blank rows in the file.`}

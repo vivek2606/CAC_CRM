@@ -157,6 +157,7 @@ model User {
   notes         Note[]    @relation("NoteAuthor")
   targets       Target[]  @relation("SalesTarget")
   saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
+  projectBillings ProjectBilling[] @relation("ProjectBillingOwner")
   approvedDealDiscounts Deal[] @relation("DiscountApprover")
   stockReceipts StockReceipt[] @relation("StockReceiptCreator")
   inTransitOrders InTransitOrder[] @relation("InTransitCreator")
@@ -657,4 +658,27 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// "Project & Service" lines from the Sales Register - kept out of deals,
+// stock and product reports (they aren't product sales), but counted in a
+// sales person's incentive. Rebuilt with the register like SaleLineItem.
+model ProjectBilling {
+  id        String   @id @default(cuid())
+  sourceKey String   @unique // document + item + occurrence, like SaleLineItem
+  docKey    String
+  txnNo     Int
+  docDate   DateTime
+  month     DateTime // first-of-month
+  custName  String
+  itemCode  String
+  itemName  String
+  value     Float    // net, so returns come off
+
+  ownerId   String
+  owner     User     @relation("ProjectBillingOwner", fields: [ownerId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, month])
 }

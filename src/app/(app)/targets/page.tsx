@@ -11,6 +11,7 @@ import { CategoryChart } from "../reports/category-chart";
 import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { GaugeChart } from "@/components/gauge-chart";
 import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
+import { getProjectBillings } from "@/lib/project-billing";
 import { YtdRepChart, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
 
 const TREND_MONTHS = 12;
@@ -133,9 +134,15 @@ export default async function TargetsPage({
     // Summary cards: follow the Sales Person filter (department or one rep).
     getYtdSummary(selectedRepId ? { kind: "rep", userId: selectedRepId } : { kind: "department" }, month),
   ]);
+  // Project & Service billing counts toward achievement alongside Won deals.
+  const [monthProjects, trendProjects, ytdProjects] = await Promise.all([
+    getProjectBillings({ in: repIds }, month, nextMonth),
+    getProjectBillings({ in: repIds }, trendStart, trendEnd),
+    getProjectBillings(user.role === "HEAD" ? { notIn: serviceUserIds } : user.id, ytdStart, nextMonth),
+  ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const actualByUserId = new Map<string, number>();
-  for (const d of wonDeals) {
+  for (const d of [...wonDeals, ...monthProjects]) {
     actualByUserId.set(d.ownerId, (actualByUserId.get(d.ownerId) ?? 0) + d.value);
   }
 
@@ -157,6 +164,10 @@ export default async function TargetsPage({
     if (!d.closedAt) continue;
     const key = monthValue(new Date(Date.UTC(d.closedAt.getUTCFullYear(), d.closedAt.getUTCMonth(), 1)));
     trendActualByMonth.set(key, (trendActualByMonth.get(key) ?? 0) + d.value);
+  }
+  for (const p of trendProjects) {
+    const key = monthValue(new Date(Date.UTC(p.docDate.getUTCFullYear(), p.docDate.getUTCMonth(), 1)));
+    trendActualByMonth.set(key, (trendActualByMonth.get(key) ?? 0) + p.value);
   }
   const trendRows: TargetTrendRow[] = trendMonths.map((m) => {
     const key = monthValue(m);
@@ -190,6 +201,9 @@ export default async function TargetsPage({
   for (const d of ytdDeals) {
     if (!d.closedAt) continue;
     ytdRowFor(d.ownerId).actual[d.closedAt.getUTCMonth()] += d.value;
+  }
+  for (const p of ytdProjects) {
+    ytdRowFor(p.ownerId).actual[p.docDate.getUTCMonth()] += p.value;
   }
   for (const t of ytdTargets) {
     ytdRowFor(t.userId).target[t.month.getUTCMonth()] += t.targetValue;

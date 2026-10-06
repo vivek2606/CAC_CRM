@@ -30,6 +30,7 @@ import { LeadSourceChart } from "./lead-source-chart";
 import { LostReasonChart } from "./lost-reason-chart";
 import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { getProjectBillings, sumByOwner } from "@/lib/project-billing";
 import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Phone, Swords, Zap } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
@@ -257,7 +258,7 @@ export default async function ReportsPage() {
   const targetMonth = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth(), 1));
   const targetMonthEnd = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() + 1, 1));
 
-  const [targets, newAccountsRaw] = await Promise.all([
+  const [targets, newAccountsRaw, projectsForTargets] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: salesReps.map((r) => r.id) }, month: targetMonth } }),
     // No date filter - filtered in JS below for both the quarter stat and
     // the 6-month heatmap, so one query covers both instead of fetching
@@ -269,13 +270,20 @@ export default async function ReportsPage() {
         deals: { select: { stage: true, closedAt: true } },
       },
     }),
+    // Project & Service billing counts toward target achievement too.
+    getProjectBillings({ in: salesReps.map((r) => r.id) }, targetMonth, targetMonthEnd),
   ]);
+  const projectByUserId = sumByOwner(projectsForTargets);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const targetRows: TargetChartRow[] = salesReps.map((rep) => {
     const wonThisMonth = rep.deals
       .filter((d) => d.stage === "WON" && d.closedAt && d.closedAt >= targetMonth && d.closedAt < targetMonthEnd)
       .reduce((s, d) => s + d.value, 0);
-    return { name: rep.name.split(" ")[0], target: targetByUserId.get(rep.id) ?? 0, actual: wonThisMonth };
+    return {
+      name: rep.name.split(" ")[0],
+      target: targetByUserId.get(rep.id) ?? 0,
+      actual: wonThisMonth + (projectByUserId.get(rep.id) ?? 0),
+    };
   });
   const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
   const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);

@@ -16,6 +16,11 @@ import { prisma } from "@/lib/prisma";
 //   incentive on top, paid by the company - not out of the support pool.
 
 export const incentiveSettingsSchema = z.object({
+  // First month the scheme applies ("YYYY-MM"); earlier months show nothing.
+  startMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Pick the month incentives start from.")
+    .default("2026-08"),
   tiers: z
     .array(
       z.object({
@@ -52,6 +57,7 @@ export const incentiveSettingsSchema = z.object({
 export type IncentiveSettings = z.infer<typeof incentiveSettingsSchema>;
 
 export const DEFAULT_INCENTIVE_SETTINGS: IncentiveSettings = {
+  startMonth: "2026-08",
   tiers: [
     { minAchievementPct: 100, ratePct: 0.5 },
     { minAchievementPct: 90, ratePct: 0.4 },
@@ -92,7 +98,9 @@ export type SalesIncentive = {
   userId: string;
   name: string;
   target: number;
-  sales: number;
+  sales: number; // product sales + project billing
+  productSales: number;
+  projectSales: number;
   achievement: number | null; // fraction, e.g. 0.95; null when no target
   rate: number; // fraction, 0 when not eligible
   incentive: number; // sales x rate
@@ -114,10 +122,13 @@ export function rateFor(achievement: number | null, settings: IncentiveSettings)
   return tier ? tier.ratePct / 100 : 0;
 }
 
+// Sales for incentive = Won product sales + Project & Service billing.
 export function calculateSalesIncentive(
-  p: { userId: string; name: string; target: number; sales: number },
+  input: { userId: string; name: string; target: number; productSales: number; projectSales?: number },
   settings: IncentiveSettings,
 ): SalesIncentive {
+  const projectSales = input.projectSales ?? 0;
+  const p = { ...input, projectSales, sales: input.productSales + projectSales };
   const achievement = p.target > 0 ? p.sales / p.target : null;
   const rate = rateFor(achievement, settings);
   const incentive = Math.max(0, p.sales) * rate;

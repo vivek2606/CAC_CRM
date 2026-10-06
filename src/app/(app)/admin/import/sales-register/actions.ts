@@ -42,6 +42,8 @@ export type ImportSummary = {
   replacedRange: string | null;
   exchangeRatesSet: number;
   excludedServiceRows: number;
+  projectBillingsAdded: number;
+  projectBillingValue: number;
   creditNoteRowsNetted: number;
   demoAccountsRemoved: string[];
   totalDealValue: number;
@@ -410,6 +412,28 @@ export async function importSalesRegister(
     }));
   const lineItemsResult = await prisma.saleLineItem.createMany({ data: lineItemCreateData, skipDuplicates: true });
 
+  // Project & Service billing - kept apart from deals/line items (it isn't
+  // product sales) and counted toward incentives. A Replace rebuilds it for
+  // the file's months like everything else.
+  if (replace) {
+    await prisma.projectBilling.deleteMany({ where: { month: { gte: rangeStart, lt: rangeEnd } } });
+  }
+  const projectResult = await prisma.projectBilling.createMany({
+    data: result.projectBillings.map((pb) => ({
+      sourceKey: pb.sourceKey,
+      docKey: pb.docKey,
+      txnNo: pb.txnNo,
+      docDate: pb.docDate,
+      month: pb.month,
+      custName: pb.custName,
+      itemCode: pb.itemCode,
+      itemName: pb.itemName,
+      value: pb.value,
+      ownerId: userIdByKey.get(pb.ownerKey) ?? head.id,
+    })),
+    skipDuplicates: true,
+  });
+
   // Deliberately no Pricelist writes here - dealer pricing only ever comes
   // from a Stock & Price List upload or a manually-added price entry, never
   // from historical sales figures.
@@ -444,6 +468,8 @@ export async function importSalesRegister(
       replacedRange: replace ? `${monthLabel(rangeStart)} – ${monthLabel(new Date(rangeEnd.getTime() - 1))}` : null,
       exchangeRatesSet,
       excludedServiceRows: result.summary.excludedServiceRows,
+      projectBillingsAdded: projectResult.count,
+      projectBillingValue: result.projectBillings.reduce((s, pb) => s + pb.value, 0),
       creditNoteRowsNetted: result.summary.creditNoteRowsNetted,
       demoAccountsRemoved,
       totalDealValue,

@@ -22,6 +22,7 @@ import { ShareStackedBar, type ShareBarRow } from "@/components/share-stacked-ba
 import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
 import { Target, TrendingUp, Wallet, Trophy, ArrowRight, AlertTriangle, CalendarRange, Gauge } from "lucide-react";
 import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
+import { getProjectBillings } from "@/lib/project-billing";
 
 const SPARKLINE_MONTHS = 6;
 
@@ -247,16 +248,18 @@ export default async function DashboardPage() {
   ];
 
   const targetRepIds = targetReps.map((r) => r.id);
-  const [targets, wonForTargets] = await Promise.all([
+  const [targets, wonForTargets, projectsForTargets] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: targetRepIds }, month: targetMonth } }),
     prisma.deal.findMany({
       where: { ownerId: { in: targetRepIds }, stage: "WON", closedAt: { gte: targetMonth, lt: targetMonthEnd } },
       select: { ownerId: true, value: true },
     }),
+    // Project & Service billing counts toward target achievement too.
+    getProjectBillings({ in: targetRepIds }, targetMonth, targetMonthEnd),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const actualByUserIdForTarget = new Map<string, number>();
-  for (const d of wonForTargets) {
+  for (const d of [...wonForTargets, ...projectsForTargets]) {
     actualByUserIdForTarget.set(d.ownerId, (actualByUserIdForTarget.get(d.ownerId) ?? 0) + d.value);
   }
   const targetRows = targetReps.map((r) => ({

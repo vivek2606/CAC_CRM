@@ -43,6 +43,12 @@ export function IncentiveSettingsForm({
       }}
     >
       <section>
+        <label className="block text-sm font-semibold text-slate-900 mb-1">Incentives start from</label>
+        <p className="text-xs text-slate-500 mb-2">Months before this show no incentive.</p>
+        <input type="month" value={s.startMonth} onChange={(e) => setS({ ...s, startMonth: e.target.value })} className={`${input} w-48`} />
+      </section>
+
+      <section>
         <h2 className="text-sm font-semibold text-slate-900 mb-1">Rate tiers</h2>
         <p className="text-xs text-slate-500 mb-3">The highest tier whose achievement threshold is met sets the rate. Below every tier isn&apos;t eligible.</p>
         <div className="space-y-2">

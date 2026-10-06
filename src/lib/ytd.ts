@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 // Year-to-date sales vs. target, shared by the Dashboard and Targets page so
 // both always show the same numbers.
 //
+// Sales = Won deals + Project & Service billing.
 // "department": every Won deal except the Service Manager's (Service is
 //   left out of sales tracking - it has no individual target), against the
 //   combined targets of the core sales team. Same total as the "Department
@@ -53,7 +54,7 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
     targetUserIds = coreReps.map((u) => u.id);
   }
 
-  const [targetAgg, actualAgg, lyAgg] = await Promise.all([
+  const [targetAgg, actualAgg, lyAgg, projectAgg, lyProjectAgg] = await Promise.all([
     prisma.target.aggregate({
       where: { userId: { in: targetUserIds }, month: { in: months } },
       _sum: { targetValue: true },
@@ -66,6 +67,15 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
       where: { ownerId: ownerFilter, stage: "WON", closedAt: { gte: lyStart, lt: lyEnd } },
       _sum: { value: true },
     }),
+    // Project & Service billing counts toward achievement too.
+    prisma.projectBilling.aggregate({
+      where: { ownerId: ownerFilter, docDate: { gte: start, lt: end } },
+      _sum: { value: true },
+    }),
+    prisma.projectBilling.aggregate({
+      where: { ownerId: ownerFilter, docDate: { gte: lyStart, lt: lyEnd } },
+      _sum: { value: true },
+    }),
   ]);
 
   return {
@@ -74,8 +84,8 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
     lastYearStart: lyStart,
     lastYearEnd: lyEnd,
     target: targetAgg._sum.targetValue ?? 0,
-    actual: actualAgg._sum.value ?? 0,
-    lastYearActual: lyAgg._sum.value ?? 0,
+    actual: (actualAgg._sum.value ?? 0) + (projectAgg._sum.value ?? 0),
+    lastYearActual: (lyAgg._sum.value ?? 0) + (lyProjectAgg._sum.value ?? 0),
   };
 }
 

@@ -58,6 +58,18 @@ export type TransformedLineItem = {
   ownerKey: string;
 };
 export type TransformedExchangeRate = { month: Date; rate: number };
+export type TransformedProjectBilling = {
+  sourceKey: string;
+  docKey: string;
+  txnNo: number;
+  docDate: Date;
+  month: Date;
+  custName: string;
+  itemCode: string;
+  itemName: string;
+  value: number;
+  ownerKey: string;
+};
 
 export type TransformResult = {
   accounts: TransformedAccount[];
@@ -66,6 +78,7 @@ export type TransformResult = {
   deals: TransformedDeal[];
   lineItems: TransformedLineItem[];
   exchangeRates: TransformedExchangeRate[];
+  projectBillings: TransformedProjectBilling[];
   summary: {
     totalRowsIn: number;
     excludedServiceRows: number;
@@ -149,9 +162,11 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     });
   }
 
-  // Users: every distinct salesman resolved against the roster.
+  // Users: every distinct salesman resolved against the roster - including
+  // anyone who only has Project & Service lines, so their project billing
+  // has an owner.
   const userMap = new Map<string, TransformedUser>();
-  for (const row of kept) {
+  for (const row of rows) {
     const key = normalizeSalesmanName(row.salesman);
     if (userMap.has(key)) continue;
     const roster = lookupRosterEntry(row.salesman);
@@ -262,6 +277,29 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     rate: g.total / g.count,
   }));
 
+  // Project & Service lines: not product sales (no deal, stock or category
+  // effect), but kept for incentive - one per row, net of returns, keyed
+  // the same way as line items so a re-upload doesn't double them.
+  const projectOccurrence = new Map<string, number>();
+  const projectBillings: TransformedProjectBilling[] = excludedService.map((row) => {
+    const docKey = docKeyFor(row);
+    const pairKey = `${docKey}::${row.itemCode}`;
+    const occurrence = projectOccurrence.get(pairKey) ?? 0;
+    projectOccurrence.set(pairKey, occurrence + 1);
+    return {
+      sourceKey: `${docKey}-${row.itemCode}-${occurrence}`,
+      docKey,
+      txnNo: row.txnNo,
+      docDate: row.docDate,
+      month: firstOfMonth(row.docDate),
+      custName: row.custName,
+      itemCode: row.itemCode,
+      itemName: row.itemName,
+      value: row.netAmt,
+      ownerKey: normalizeSalesmanName(row.salesman),
+    };
+  });
+
   return {
     accounts: Array.from(accountMap.values()),
     products: Array.from(productMap.values()),
@@ -269,6 +307,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     deals,
     lineItems,
     exchangeRates,
+    projectBillings,
     summary: {
       totalRowsIn,
       excludedServiceRows: excludedService.length,

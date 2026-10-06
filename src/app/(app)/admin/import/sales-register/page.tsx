@@ -44,7 +44,10 @@ export default async function ImportPage() {
               if it varies row to row) — this is now the only place exchange rate comes from for months covered
               by a Sales Register file.
             </li>
-            <li>Installation/service billing lines are excluded automatically.</li>
+            <li>
+              Project &amp; Service billing lines are kept out of product sales, stock and the category report, but saved as
+              project billing and counted toward each sales person&apos;s incentive.
+            </li>
             <li>
               Return/credit-note lines (negative Qty and Net Amt) are netted into the affected product&apos;s
               quantity and value, rather than dropped. A return raised as its own invoice is recorded as a

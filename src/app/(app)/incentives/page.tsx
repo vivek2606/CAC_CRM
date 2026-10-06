@@ -42,18 +42,34 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
     prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   const repIds = reps.map((r) => r.id);
-  const [targets, sales] = await Promise.all([
+  const [targets, sales, projects] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month }, select: { userId: true, targetValue: true } }),
     prisma.deal.groupBy({
       by: ["ownerId"],
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
       _sum: { value: true },
     }),
+    // Project & Service billing counts toward incentive too.
+    prisma.projectBilling.groupBy({
+      by: ["ownerId"],
+      where: { ownerId: { in: repIds }, month },
+      _sum: { value: true },
+    }),
   ]);
+  const projectBy = new Map(projects.map((p) => [p.ownerId, p._sum.value ?? 0]));
   const targetBy = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const salesBy = new Map(sales.map((s) => [s.ownerId, s._sum.value ?? 0]));
   const rows = reps.map((r) =>
-    calculateSalesIncentive({ userId: r.id, name: r.name, target: targetBy.get(r.id) ?? 0, sales: salesBy.get(r.id) ?? 0 }, settings),
+    calculateSalesIncentive(
+      {
+        userId: r.id,
+        name: r.name,
+        target: targetBy.get(r.id) ?? 0,
+        productSales: salesBy.get(r.id) ?? 0,
+        projectSales: projectBy.get(r.id) ?? 0,
+      },
+      settings,
+    ),
   );
   const pool = rows.reduce((s, r) => s + r.toPool, 0);
   const support = distributeSupportPool(pool, settings);
@@ -76,6 +92,26 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
     </form>
   );
   const period = `${monthLabel(month)}${inProgress ? " (month still running - provisional)" : ""}`;
+
+  // Nothing is calculated before the scheme's start month.
+  const [sy, sm] = settings.startMonth.split("-").map(Number);
+  const startMonth = new Date(Date.UTC(sy, sm - 1, 1));
+  if (month < startMonth) {
+    return (
+      <div>
+        <PageHeader title={isHead ? "Incentives" : "My Incentive"} description={monthLabel(month)} />
+        <div className="p-6 space-y-4">
+          {monthPicker}
+          <Card className="p-6">
+            <EmptyState
+              title={`Incentives start from ${monthLabel(startMonth)}`}
+              description="Pick that month or a later one to see the calculation."
+            />
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Sales manager / support staff: only their own money ----
   if (!isHead) {
@@ -117,6 +153,11 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
                 <div>
                   <dt className="text-slate-500">Your sales</dt>
                   <dd className="font-medium text-slate-800">{formatCurrency(mine.sales)}</dd>
+                  {mine.projectSales !== 0 && (
+                    <dd className="text-xs text-slate-500">
+                      {formatCurrency(mine.productSales)} products + {formatCurrency(mine.projectSales)} projects
+                    </dd>
+                  )}
                 </div>
                 <div>
                   <dt className="text-slate-500">Achievement</dt>
@@ -152,6 +193,8 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
       "Sales",
       r.name,
       Math.round(r.target),
+      Math.round(r.productSales),
+      Math.round(r.projectSales),
       Math.round(r.sales),
       r.achievement == null ? "" : Math.round(r.achievement * 1000) / 10,
       Math.round(r.rate * 100000) / 1000,
@@ -161,7 +204,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
       Math.round(r.salarySupport * 100) / 100,
       Math.round(r.totalToReceive * 100) / 100,
     ]),
-    ...support.map((s) => ["Support", `${s.name} (${s.role})`, "", "", "", "", "", "", "", "", Math.round(s.amount * 100) / 100]),
+    ...support.map((s) => ["Support", `${s.name} (${s.role})`, "", "", "", "", "", "", "", "", "", "", Math.round(s.amount * 100) / 100]),
   ];
 
   return (
@@ -180,7 +223,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
 
         <Card className="p-4 text-xs text-slate-600 leading-relaxed">
           <span className="font-semibold text-slate-800">How it&apos;s calculated: </span>
-          achievement = the month&apos;s Won sales ÷ target. {scheme.tiers} of the month&apos;s sales; below {scheme.lowest}% (or no
+          achievement = the month&apos;s sales (Won product sales + Project &amp; Service billing) ÷ target. {scheme.tiers} of the month&apos;s sales; below {scheme.lowest}% (or no
           target) isn&apos;t eligible. Each eligible sales person keeps {keepPct}% and shares {100 - keepPct}% with support staff
           {coordinator
             ? `: ${coordinator.name} (${coordinator.role}) gets the first ${formatCurrency(settings.coordinatorFirstShare)}, and the balance is split equally among the others.`
@@ -221,7 +264,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
             <h2 className="text-sm font-semibold text-slate-900">Sales team</h2>
             <ExportCsvButton
               filename={`incentives-${monthValue(month)}.csv`}
-              headers={["Type", "Name", "Target", "Sales", "Achievement %", "Rate %", "Incentive", "Payout", "To support pool", "Salary support", "Total to receive"]}
+              headers={["Type", "Name", "Target", "Product sales", "Project billing", "Sales", "Achievement %", "Rate %", "Incentive", "Payout", "To support pool", "Salary support", "Total to receive"]}
               rows={csvRows}
             />
           </div>
@@ -251,6 +294,9 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
                       <td className="px-4 py-3 font-medium text-slate-800 whitespace-normal min-w-[150px]">{r.name}</td>
                       <td className="px-2.5 py-3 text-right tabular-nums text-slate-700" title={formatCurrency(r.sales)}>
                         {formatCompactCurrency(r.sales)}
+                        {r.projectSales !== 0 && (
+                          <div className="text-[11px] text-indigo-600">incl. {formatCompactCurrency(r.projectSales)} projects</div>
+                        )}
                         <div className="text-[11px] text-slate-400">
                           {r.target > 0 ? `of ${formatCompactCurrency(r.target)}` : "No target"}
                         </div>
