@@ -73,11 +73,6 @@ export default async function SalesBreakdownPage({
   const registerCustomers = new Set(
     deals.filter((d) => d.sourceTxnNo != null).map((d) => (d.account?.name ?? "").trim().toLowerCase()),
   );
-  // The same invoice number appearing twice (e.g. once as a deal, once as
-  // project billing) is worth a look too.
-  const docCount = new Map<number, number>();
-  for (const d of deals) if (d.sourceTxnNo != null) docCount.set(d.sourceTxnNo, (docCount.get(d.sourceTxnNo) ?? 0) + 1);
-  const projectDocs = new Set(projects.map((p) => p.txnNo));
 
   const lines: Line[] = [
     ...deals.map((d): Line => {
@@ -86,10 +81,6 @@ export default async function SalesBreakdownPage({
       let flag: string | undefined;
       if (!imported && registerCustomers.has(customer.trim().toLowerCase())) {
         flag = "Same customer also has a register invoice this month - possible double count";
-      } else if (imported && (docCount.get(d.sourceTxnNo!) ?? 0) > 1) {
-        flag = "Invoice number appears more than once";
-      } else if (imported && projectDocs.has(d.sourceTxnNo!)) {
-        flag = "Same invoice also has Project & Service lines";
       }
       return {
         key: d.id,

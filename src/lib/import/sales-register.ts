@@ -189,10 +189,29 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     }
   }
 
-  // Deals: one per document (Txn Code + Txn No), summing line item values.
+  // Orion reuses a Txn Code + Txn No for unrelated invoices (different
+  // customer, date and salesman - e.g. a product invoice and a later
+  // project invoice). Merged, the whole lot went to the first row's
+  // salesman, so such a number is split into one document per date +
+  // customer + salesman. Numbers used once keep their plain key.
+  const docSignature = (r: RawSalesRow) =>
+    `${r.docDate.toISOString().slice(0, 10)}~${(r.custCode || r.custName).trim()}~${normalizeSalesmanName(r.salesman)}`;
+  const signaturesByBase = new Map<string, Set<string>>();
+  for (const row of kept) {
+    const base = docKeyFor(row);
+    const set = signaturesByBase.get(base);
+    if (set) set.add(docSignature(row));
+    else signaturesByBase.set(base, new Set([docSignature(row)]));
+  }
+  const docKeyOf = (row: RawSalesRow) => {
+    const base = docKeyFor(row);
+    return (signaturesByBase.get(base)?.size ?? 1) > 1 ? `${base}~${docSignature(row)}` : base;
+  };
+
+  // Deals: one per document, summing line item values.
   const dealGroups = new Map<string, RawSalesRow[]>();
   for (const row of kept) {
-    const key = docKeyFor(row);
+    const key = docKeyOf(row);
     const group = dealGroups.get(key);
     if (group) group.push(row);
     else dealGroups.set(key, [row]);
@@ -239,7 +258,7 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   // items instead of being recognized as already-imported.
   const pairOccurrence = new Map<string, number>();
   const lineItems: TransformedLineItem[] = kept.map((row) => {
-    const docKey = docKeyFor(row);
+    const docKey = docKeyOf(row);
     const pairKey = `${docKey}::${row.itemCode}`;
     const occurrence = pairOccurrence.get(pairKey) ?? 0;
     pairOccurrence.set(pairKey, occurrence + 1);
