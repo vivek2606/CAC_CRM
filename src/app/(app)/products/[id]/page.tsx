@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { VAT_RATE } from "@/lib/constants";
@@ -54,7 +54,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         title={product.code}
         description={`${product.brand} · ${product.model}`}
         action={
-          user.role === "HEAD" ? (
+          isBackOffice(user) ? (
             <div className="flex items-center gap-2">
               <Link
                 href={`/products/${product.id}/edit`}
@@ -114,7 +114,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <Card className="p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-slate-900">Current pricing</h2>
-              {user.role === "HEAD" && (
+              {isBackOffice(user) && (
                 <Link
                   href={`/pricelist/new?productId=${product.id}`}
                   className="text-xs text-indigo-600 hover:text-indigo-700"

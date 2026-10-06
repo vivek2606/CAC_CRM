@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { parsePricelistBuffer } from "@/lib/import/parse-pricelist";
 import { transformPricelistStock } from "@/lib/import/pricelist-stock";
 
@@ -21,7 +21,7 @@ export type ImportState = { error?: string; summary?: ImportSummary };
 const stockDateSchema = z.string().min(1, "Please pick the opening stock date.");
 
 export async function importPricelistStock(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
-  await requireHead();
+  await requireBackOffice();
 
   const stockDateRaw = stockDateSchema.safeParse(formData.get("stockAsOfDate"));
   if (!stockDateRaw.success) {

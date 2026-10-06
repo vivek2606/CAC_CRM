@@ -1,11 +1,11 @@
 import ExcelJS from "exceljs";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { STOCK_RECEIPT_TEMPLATE_HEADERS } from "@/lib/import/parse-stock-receipts";
 
 // Blank sheet for the bulk "fresh units received" upload, with one example
 // row showing the expected formats.
 export async function GET() {
-  await requireHead();
+  await requireBackOffice();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Stock received");
   ws.addRow(STOCK_RECEIPT_TEMPLATE_HEADERS);

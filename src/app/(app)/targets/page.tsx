@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { TargetChart } from "@/components/target-chart";
@@ -51,7 +51,7 @@ export default async function TargetsPage({
   // the filter below. reps: the same list, narrowed to one person when
   // Head picks an individual instead of leaving it on "Whole department".
   const allReps =
-    user.role === "HEAD"
+    isBackOffice(user)
       ? await prisma.user.findMany({
           where: { isActive: true, title: "Sales Manager" },
           orderBy: { name: "asc" },
@@ -59,7 +59,7 @@ export default async function TargetsPage({
         })
       : [{ id: user.id, name: user.name ?? "Me" }];
 
-  const selectedRepId = user.role === "HEAD" ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
+  const selectedRepId = isBackOffice(user) ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
   const reps = selectedRepId ? allReps.filter((r) => r.id === selectedRepId) : allReps;
   const repIds = reps.map((r) => r.id);
 
@@ -85,7 +85,7 @@ export default async function TargetsPage({
   const ytdStart = ytdMonths[0];
   const allRepIds = allReps.map((r) => r.id);
   const serviceUsers =
-    user.role === "HEAD"
+    isBackOffice(user)
       ? await prisma.user.findMany({ where: { isActive: true, title: "Service Manager" }, select: { id: true } })
       : [];
   const serviceUserIds = serviceUsers.map((u) => u.id);
@@ -125,7 +125,7 @@ export default async function TargetsPage({
     }),
     prisma.deal.findMany({
       where: {
-        ownerId: user.role === "HEAD" ? { notIn: serviceUserIds } : user.id,
+        ownerId: isBackOffice(user) ? { notIn: serviceUserIds } : user.id,
         stage: "WON",
         closedAt: { gte: ytdStart, lt: nextMonth },
       },
@@ -138,7 +138,7 @@ export default async function TargetsPage({
   const [monthProjects, trendProjects, ytdProjects] = await Promise.all([
     getProjectBillings({ in: repIds }, month, nextMonth),
     getProjectBillings({ in: repIds }, trendStart, trendEnd),
-    getProjectBillings(user.role === "HEAD" ? { notIn: serviceUserIds } : user.id, ytdStart, nextMonth),
+    getProjectBillings(isBackOffice(user) ? { notIn: serviceUserIds } : user.id, ytdStart, nextMonth),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
   const actualByUserId = new Map<string, number>();
@@ -235,7 +235,7 @@ export default async function TargetsPage({
   ).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
   const pctLabel = (actual: number, target: number) => (target > 0 ? `${Math.round((actual / target) * 100)}%` : "—");
 
-  const scopeLabel = user.role === "HEAD" ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
+  const scopeLabel = isBackOffice(user) ? (selectedRepId ? reps[0]?.name : "whole department") : "your own sales";
 
   return (
     <div>
@@ -243,7 +243,7 @@ export default async function TargetsPage({
         title="Targets"
         description={`Target vs. actual sales for ${monthLabel(month)} - ${scopeLabel}`}
         action={
-          user.role === "HEAD" ? (
+          isBackOffice(user) ? (
             <Link href="/admin/import/targets" className="text-sm text-indigo-600 hover:text-indigo-700">
               Bulk upload targets →
             </Link>
@@ -261,7 +261,7 @@ export default async function TargetsPage({
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          {user.role === "HEAD" && (
+          {isBackOffice(user) && (
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Sales Person</label>
               <select
@@ -406,7 +406,7 @@ export default async function TargetsPage({
         <Card className="p-5">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-semibold text-slate-900">
-              {user.role === "HEAD" ? "Department sales YTD, by sales person" : "Your sales YTD"}
+              {isBackOffice(user) ? "Department sales YTD, by sales person" : "Your sales YTD"}
             </h2>
             <span className="text-xs text-slate-400">{ytdRangeLabel}</span>
           </div>
@@ -510,7 +510,7 @@ export default async function TargetsPage({
           </div>
         </Card>
 
-        {user.role === "HEAD" && (
+        {isBackOffice(user) && (
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-1">Set a target</h2>
             <p className="text-xs text-slate-500 mb-4">

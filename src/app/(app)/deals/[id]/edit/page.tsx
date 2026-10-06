@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds, canAccessOwner } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../../deal-form";
 import { updateDeal } from "../../actions";
@@ -15,7 +15,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
 
   const [owners, accounts, contacts] = await Promise.all([
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -34,7 +34,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
         <Card className="p-6">
           <DealForm
             action={action}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({

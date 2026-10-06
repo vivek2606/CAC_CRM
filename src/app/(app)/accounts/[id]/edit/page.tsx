@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { AccountForm } from "../../account-form";
 import { updateAccount } from "../../actions";
@@ -14,7 +14,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
   if (!canAccessOwner(user, account.ownerId)) redirect("/accounts");
 
   const owners =
-    user.role === "HEAD"
+    isBackOffice(user)
       ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : [];
   const accounts = await prisma.account.findMany({ select: { id: true, name: true, code: true } });
@@ -34,7 +34,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
         <Card className="p-6">
           <AccountForm
             action={action}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts}
             contacts={contacts.map((c) => ({

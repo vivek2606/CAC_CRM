@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ImportForm } from "./import-form";
 
 export const maxDuration = 60;
 
 export default async function ImportPriceMasterPage() {
-  await requireHead();
+  await requireBackOffice();
 
   return (
     <div>

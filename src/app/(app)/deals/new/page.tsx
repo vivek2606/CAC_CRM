@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../deal-form";
@@ -11,7 +11,7 @@ export default async function NewDealPage() {
 
   const [owners, accounts, contacts, products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, wonDealsForCycle] =
     await Promise.all([
-      user.role === "HEAD"
+      isBackOffice(user)
         ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
         : Promise.resolve([]),
       prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -63,7 +63,7 @@ export default async function NewDealPage() {
         <Card className="p-6">
           <DealForm
             action={createDeal}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({
@@ -74,7 +74,7 @@ export default async function NewDealPage() {
             }))}
             products={productOptions}
             defaultValues={{
-              ownerId: user.role === "HEAD" ? owners[0]?.id : user.id,
+              ownerId: isBackOffice(user) ? owners[0]?.id : user.id,
               expectedCloseDate: smartCloseDate,
             }}
             submitLabel="Create Deal"

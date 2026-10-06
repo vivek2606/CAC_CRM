@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds, canAccessOwner } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { LeadForm } from "../../lead-form";
 import { updateLead } from "../../actions";
@@ -15,7 +15,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
   if (!canAccessOwner(user, lead.ownerId)) redirect("/leads");
 
   const [owners, accounts, contacts] = await Promise.all([
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -34,7 +34,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
         <Card className="p-6">
           <LeadForm
             action={action}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar, StatCard } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { SortableLinkTh } from "@/components/sortable-link-th";
@@ -89,7 +89,7 @@ export default async function ClosedDealsPage({
     prisma.deal.aggregate({ where, _sum: { value: true } }),
     // The current 6 active core sales reps, plus Sikiru (Service Manager) -
     // same roster the Kanban page's own owner filter offers.
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({
           where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
           orderBy: { name: "asc" },
@@ -273,7 +273,7 @@ export default async function ClosedDealsPage({
               )}
             </Card>
 
-            {user.role === "HEAD" && !params.owner ? (
+            {isBackOffice(user) && !params.owner ? (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">Won vs. Lost, sales-person-wise</h3>
                 <p className="text-xs text-slate-400 mb-3">Deal value by owner.</p>
@@ -329,7 +329,7 @@ export default async function ClosedDealsPage({
               )}
             </Card>
 
-            {user.role === "HEAD" && !params.owner && (
+            {isBackOffice(user) && !params.owner && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">Why we lose</h3>
                 <p className="text-xs text-slate-400 mb-3">Reasons given when a deal is marked Lost.</p>
@@ -375,7 +375,7 @@ export default async function ClosedDealsPage({
               <option value="LOST">Lost only</option>
             </select>
           </div>
-          {user.role === "HEAD" && owners.length > 0 && (
+          {isBackOffice(user) && owners.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Sales Person</label>
               <select

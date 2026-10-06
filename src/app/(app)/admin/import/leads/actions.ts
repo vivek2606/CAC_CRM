@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { parseLeadsRegisterBuffer } from "@/lib/import/parse-leads-register";
 import { transformLeadsRegister } from "@/lib/import/leads-register";
@@ -41,7 +41,7 @@ export async function importLeadsRegister(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -197,7 +197,7 @@ export type ClearLeadsState = { error?: string; summary?: { leadsRemoved: number
 // one has replaced it yet - runs the same cleanup a fresh import's own
 // "replace my previous run" step would do, without waiting for a new file.
 export async function clearLeadsWithoutNewFile(): Promise<ClearLeadsState> {
-  await requireHead();
+  await requireBackOffice();
   const summary = await clearPreviousLeadsImport();
   revalidatePath("/leads");
   revalidatePath("/contacts");

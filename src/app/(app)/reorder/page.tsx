@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing";
 import { formatDate } from "@/lib/format";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
@@ -27,7 +27,7 @@ export default async function ReorderPage({
 }: {
   searchParams: Promise<{ window?: string; cover?: string; category?: string }>;
 }) {
-  await requireHead();
+  await requireBackOffice();
   const params = await searchParams;
   const windowMonths = pick(params.window, WINDOW_OPTIONS, 6);
   const coverMonths = pick(params.cover, COVER_OPTIONS, 4);

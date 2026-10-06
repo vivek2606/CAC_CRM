@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { CategoryChart } from "../category-chart";
@@ -45,16 +45,16 @@ export default async function CategoryReportPage({
   // company-wide total (which intentionally includes historical/inactive
   // reps' sales too, not just the current 6).
   const reps =
-    user.role === "HEAD"
+    isBackOffice(user)
       ? await prisma.user.findMany({
           where: { isActive: true, title: "Sales Manager" },
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         })
       : [];
-  const selectedRepId = user.role === "HEAD" ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
+  const selectedRepId = isBackOffice(user) ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
   const selectedRepName =
-    user.role === "HEAD" ? reps.find((r) => r.id === selectedRepId)?.name : (user.name ?? "Me");
+    isBackOffice(user) ? reps.find((r) => r.id === selectedRepId)?.name : (user.name ?? "Me");
 
   const ownerWhere = selectedRepId ? { ownerId: selectedRepId } : {};
 
@@ -377,7 +377,7 @@ function CategoryReportShell({
   trendColors: Record<string, string>;
   children: ReactNode;
 }) {
-  const scopeLabel = user.role === "HEAD" ? (selectedRepId ? `for ${selectedRepName}` : "company-wide") : "for your own sales";
+  const scopeLabel = isBackOffice(user) ? (selectedRepId ? `for ${selectedRepName}` : "company-wide") : "for your own sales";
 
   return (
     <div>
@@ -385,7 +385,7 @@ function CategoryReportShell({
         title="Sales by Category"
         description={`Sales value by product category, ${scopeLabel}`}
         action={
-          user.role === "HEAD" ? (
+          isBackOffice(user) ? (
             <Link href="/reports" className="text-sm text-indigo-600 hover:text-indigo-700">
               ← Team Reports
             </Link>
@@ -393,7 +393,7 @@ function CategoryReportShell({
         }
       />
       <div className="p-6 space-y-4">
-        {user.role === "HEAD" && (
+        {isBackOffice(user) && (
           <div className="flex justify-end">
             <ResyncCategoryButton />
           </div>
@@ -460,7 +460,7 @@ function CategoryReportShell({
               </div>
             </>
           )}
-          {user.role === "HEAD" && (
+          {isBackOffice(user) && (
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Sales Person</label>
               <select

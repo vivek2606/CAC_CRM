@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { getAvailableStockByProduct, getInTransitByProduct, getPendingShortfalls } from "@/lib/pricing";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -26,7 +26,7 @@ const UNPAID_BADGE = { bg: "bg-slate-100", text: "text-slate-600" };
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const user = await requireUser();
-  const isHead = user.role === "HEAD";
+  const isHead = isBackOffice(user);
   const showAll = (await searchParams).show === "all";
   const ownerIds = await visibleOwnerIds(user);
 

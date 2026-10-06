@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds, canAccessOwner } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ContactForm } from "../../contact-form";
 import { updateContact } from "../../actions";
@@ -15,7 +15,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
   if (!canAccessOwner(user, contact.ownerId)) redirect("/contacts");
 
   const [owners, accounts] = await Promise.all([
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -30,7 +30,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
         <Card className="p-6">
           <ContactForm
             action={action}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             defaultValues={{

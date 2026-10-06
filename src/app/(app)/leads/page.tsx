@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton, Card } from "@/components/ui";
 import { LeadsTable } from "./leads-table";
 
@@ -15,7 +15,7 @@ export default async function LeadsPage() {
       orderBy: { createdAt: "desc" },
       include: { owner: { select: { id: true, name: true, avatarColor: true } } },
     }),
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
   ]);
@@ -30,7 +30,7 @@ export default async function LeadsPage() {
 
       <div className="p-6 space-y-4">
         <Card>
-          <LeadsTable leads={leads} owners={owners} isHead={user.role === "HEAD"} />
+          <LeadsTable leads={leads} owners={owners} isHead={isBackOffice(user)} />
         </Card>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency, formatDuration } from "@/lib/format";
 import {
@@ -44,7 +44,7 @@ function startOfQuarter(date: Date): Date {
 const CAC_SALES_TITLE = "Sales Manager";
 
 export default async function ReportsPage() {
-  await requireHead();
+  await requireBackOffice();
 
   const qStart = startOfQuarter(new Date());
 

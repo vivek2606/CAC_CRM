@@ -10,6 +10,9 @@ datasource db {
 enum Role {
   HEAD // Head of Sales - sees everything across the team
   SALES_MANAGER // Individual sales rep reporting to the Head
+  COORDINATOR // Sales Coordinator - back office: sees all records and does
+              // the data entry (imports, stock, targets...), but not team
+              // logins, incentives, discount approval or team reports
 }
 
 enum LeadStatus {

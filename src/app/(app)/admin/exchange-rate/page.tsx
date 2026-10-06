@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
 import { RateForm } from "./rate-form";
 
 export default async function ExchangeRatePage() {
-  await requireHead();
+  await requireBackOffice();
 
   const recentRates = await prisma.monthlyExchangeRate.findMany({
     orderBy: { month: "desc" },

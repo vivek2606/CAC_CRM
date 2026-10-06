@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { parseTargetsBuffer } from "@/lib/import/parse-targets";
 import { transformTargets } from "@/lib/import/targets";
 import { normalizeSalesmanName } from "@/lib/import/roster";
@@ -21,7 +21,7 @@ export async function importTargets(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
-  await requireHead();
+  await requireBackOffice();
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {

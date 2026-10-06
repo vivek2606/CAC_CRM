@@ -53,7 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "HEAD" | "SALES_MANAGER";
+        session.user.role = token.role as "HEAD" | "SALES_MANAGER" | "COORDINATOR";
         session.user.avatarColor = token.avatarColor as string;
       }
       return session;

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { computeCapacityKw, isCapacityCategory } from "@/lib/capacity";
 import { productSchema } from "@/lib/schemas";
 import { assignProductCode } from "@/lib/product-match";
@@ -13,7 +13,7 @@ function blankToNull(value: FormDataEntryValue | undefined) {
 }
 
 export async function updateProduct(productId: string, formData: FormData) {
-  await requireHead();
+  await requireBackOffice();
   const raw = Object.fromEntries(formData.entries());
   const parsed = productSchema.parse({ ...raw, capacityKw: blankToNull(formData.get("capacityKw") ?? undefined) });
 
@@ -38,7 +38,7 @@ export async function updateProduct(productId: string, formData: FormData) {
 }
 
 export async function deleteProduct(productId: string) {
-  await requireHead();
+  await requireBackOffice();
   await prisma.product.delete({ where: { id: productId } });
   revalidatePath("/products");
   redirect("/products");
@@ -52,7 +52,7 @@ export type RecomputeCapacityState = { summary?: { updated: number; unchanged: n
 // model doesn't contain a recognizable capacity code (e.g. spare parts,
 // controllers), are left untouched.
 export async function recomputeCapacities(): Promise<RecomputeCapacityState> {
-  await requireHead();
+  await requireBackOffice();
 
   const products = await prisma.product.findMany({
     where: { category: { in: ["Atom Mini VRF", "VRF", "Rooftop", "Floorstanding"] } },

@@ -83,13 +83,18 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/reports/category", label: "Sales by Category", icon: PieChart, color: "fuchsia" },
 ];
 
-const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
+// Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
+const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; headOnly?: boolean }[] = [
   { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
   { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow" },
-  { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink" },
+  { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink", headOnly: true },
 ];
+
+function roleLabel(role: string): string {
+  return role === "HEAD" ? "Head of Sales" : role === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager";
+}
 
 export function Sidebar({
   user,
@@ -144,12 +149,12 @@ export function Sidebar({
           );
         })}
 
-        {user.role === "HEAD" && (
+        {(user.role === "HEAD" || user.role === "COORDINATOR") && (
           <>
             <div className="pt-4 pb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Management
             </div>
-            {MANAGEMENT_NAV_ITEMS.map((item) => {
+            {MANAGEMENT_NAV_ITEMS.filter((item) => !item.headOnly || user.role === "HEAD").map((item) => {
               const active = pathname.startsWith(item.href);
               const Icon = item.icon;
               const colors = NAV_COLOR_CLASSES[item.color];
@@ -183,7 +188,7 @@ export function Sidebar({
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
             <p className="text-xs text-slate-500 truncate">
-              {user.role === "HEAD" ? "Head of Sales" : "Sales Manager"}
+              {roleLabel(user.role)}
             </p>
           </div>
         </div>

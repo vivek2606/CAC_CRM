@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
@@ -91,7 +91,7 @@ async function syncSaleLineItemsForDeal(dealId: string) {
 // past, before it was made non-fatal and transactional) gets picked up
 // without needing direct database access.
 export async function resyncCategoryData(): Promise<{ checked: number; repaired: number }> {
-  await requireHead();
+  await requireBackOffice();
   const deals = await prisma.deal.findMany({
     where: { stage: "WON", items: { some: {} } },
     select: { id: true },
@@ -179,7 +179,7 @@ export async function createDeal(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : user.id;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
   const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
 
   const deal = await prisma.deal.create({
@@ -216,7 +216,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : existing.ownerId;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
 
   // A Won/Lost deal can only change stage through the dedicated Mark
   // Won/Lost flow on the Kanban board or the deal's own page - there's no
@@ -358,6 +358,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
 }
 
 export async function approveDealDiscount(dealId: string) {
+  // Approving a discount stays with the Head of Sales only.
   const head = await requireHead();
 
   await prisma.deal.update({

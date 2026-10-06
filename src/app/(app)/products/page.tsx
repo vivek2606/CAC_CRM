@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { getAvailableStockByProduct } from "@/lib/pricing";
 import { PageHeader, NewButton } from "@/components/ui";
 import { deletePricelistEntry } from "../pricelist/actions";
@@ -44,7 +44,7 @@ export default async function ProductsPage() {
               <Tag className="h-4 w-4" />
               Tentative Prices for Unavailable Items
             </Link>
-            {user.role === "HEAD" && (
+            {isBackOffice(user) && (
               <>
                 <RecomputeCapacityButton />
                 <NewButton href="/pricelist/new" label="New Product / Price" />
@@ -54,7 +54,7 @@ export default async function ProductsPage() {
         }
       />
       <div className="p-6 space-y-4">
-        <ProductsTable entries={tableEntries} isHead={user.role === "HEAD"} deleteAction={deletePricelistEntry} />
+        <ProductsTable entries={tableEntries} isHead={isBackOffice(user)} deleteAction={deletePricelistEntry} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag } from "lucide-react";
 
@@ -37,7 +37,7 @@ const IMPORTS = [
 ];
 
 export default async function ImportHubPage() {
-  await requireHead();
+  await requireBackOffice();
 
   return (
     <div>

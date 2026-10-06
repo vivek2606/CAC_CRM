@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { parseTentativePricelistBuffer } from "@/lib/import/parse-tentative-pricelist";
 import { transformTentativePricelist } from "@/lib/import/tentative-pricelist";
 
@@ -18,7 +18,7 @@ export async function importTentativePricelist(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
-  await requireHead();
+  await requireBackOffice();
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -68,7 +68,7 @@ export async function importTentativePricelist(
 }
 
 export async function deleteTentativePrice(id: string) {
-  await requireHead();
+  await requireBackOffice();
   await prisma.tentativePrice.delete({ where: { id } });
   revalidatePath("/products");
   revalidatePath("/products/tentative");

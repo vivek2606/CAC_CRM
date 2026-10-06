@@ -1,10 +1,10 @@
 import ExcelJS from "exceljs";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { IN_TRANSIT_TEMPLATE_HEADERS } from "@/lib/import/parse-in-transit";
 
 // Blank sheet for the bulk in-transit upload, with one example row.
 export async function GET() {
-  await requireHead();
+  await requireBackOffice();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("In transit");
   ws.addRow(IN_TRANSIT_TEMPLATE_HEADERS);

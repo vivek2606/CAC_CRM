@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, Badge, StatCard, EmptyState, Avatar } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency, relativeDueLabel } from "@/lib/format";
 import {
@@ -136,7 +136,7 @@ export default async function DashboardPage() {
       where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: startOfYear }, value: { gt: 0 } },
     }),
     // YTD achievement vs. target - same figures as the Targets page cards.
-    getYtdSummary(user.role === "HEAD" ? { kind: "department" } : { kind: "rep", userId: user.id }, targetMonth),
+    getYtdSummary(isBackOffice(user) ? { kind: "department" } : { kind: "rep", userId: user.id }, targetMonth),
     prisma.lead.count({
       where: { ownerId: { in: ownerIds }, status: { notIn: CLOSED_LEAD_STATUSES } },
     }),
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
     }),
     // Only the core CAC sales team, not historical/other-division reps
     // carrying the same SALES_MANAGER role.
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({
           where: { role: "SALES_MANAGER", isActive: true, title: "Sales Manager" },
           include: {
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
       : Promise.resolve([]),
     // Same "core active sales team" definition /targets uses, so target
     // achievement here matches that page exactly.
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({
           where: { isActive: true, title: "Sales Manager" },
           orderBy: { name: "asc" },
@@ -358,9 +358,9 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title={user.role === "HEAD" ? "Team Dashboard" : "My Dashboard"}
+        title={isBackOffice(user) ? "Team Dashboard" : "My Dashboard"}
         description={
-          user.role === "HEAD"
+          isBackOffice(user)
             ? "Full visibility across your 6 sales managers"
             : "Your personal sales cycle overview"
         }
@@ -451,13 +451,13 @@ export default async function DashboardPage() {
         <Card className="p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-slate-900">
-              {user.role === "HEAD" ? "Team target this month" : "My target this month"}
+              {isBackOffice(user) ? "Team target this month" : "My target this month"}
             </h2>
             <Link href="/targets" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
               View targets <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          {user.role === "HEAD" ? (
+          {isBackOffice(user) ? (
             targetRows.length === 0 ? (
               <EmptyState title="No active reps found" />
             ) : totalTarget === 0 && totalActualForTarget === 0 ? (
@@ -604,8 +604,8 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <div className={user.role === "HEAD" ? "grid grid-cols-1 lg:grid-cols-3 gap-6" : ""}>
-          <Card className={`p-5 ${user.role === "HEAD" ? "lg:col-span-2" : ""}`}>
+        <div className={isBackOffice(user) ? "grid grid-cols-1 lg:grid-cols-3 gap-6" : ""}>
+          <Card className={`p-5 ${isBackOffice(user) ? "lg:col-span-2" : ""}`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-900">Recently updated deals</h2>
               <Link href="/deals" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
@@ -643,7 +643,7 @@ export default async function DashboardPage() {
             )}
           </Card>
 
-          {user.role === "HEAD" && (
+          {isBackOffice(user) && (
             <Card className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-900">Team leaderboard</h2>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
 
@@ -27,7 +27,7 @@ export default async function ReconcilePage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireHead();
+  await requireBackOffice();
   const params = await searchParams;
   const now = new Date();
   const from = parseMonth(params.from, new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1)));

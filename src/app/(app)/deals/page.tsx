@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton } from "@/components/ui";
 import { OPEN_DEAL_STAGES } from "@/lib/constants";
 import { KanbanBoard } from "./kanban-board";
@@ -31,7 +31,7 @@ export default async function DealsPage({
 
   // The current 6 active core sales reps, plus Sikiru (Service Manager) -
   // not the full historical SALES_MANAGER-role roster.
-  const owners = user.role === "HEAD"
+  const owners = isBackOffice(user)
     ? await prisma.user.findMany({
         where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
         orderBy: { name: "asc" },
@@ -58,7 +58,7 @@ export default async function DealsPage({
         }
       />
       <div className="p-6">
-        {user.role === "HEAD" && owners.length > 0 && (
+        {isBackOffice(user) && owners.length > 0 && (
           <OwnerFilter owners={owners} value={params.owner ?? ""} />
         )}
         <KanbanBoard deals={deals} />

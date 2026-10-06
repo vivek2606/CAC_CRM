@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
 import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe } from "@prisma/client";
@@ -73,7 +73,7 @@ export async function createLead(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
 
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : user.id;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
 
   const lead = await prisma.lead.create({
     data: {
@@ -113,7 +113,7 @@ export async function updateLead(leadId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : existing.ownerId;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
 
   await prisma.lead.update({
     where: { id: leadId },

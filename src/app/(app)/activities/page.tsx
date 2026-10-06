@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ListChecks } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { addActivity } from "../shared-actions";
 import { ActivitiesList } from "./activities-list";
@@ -23,7 +23,7 @@ export default async function ActivitiesPage() {
         account: { select: { id: true, name: true } },
       },
     }),
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -66,7 +66,7 @@ export default async function ActivitiesPage() {
         <Card className="p-4">
           <QuickAddActivity
             action={addStandaloneActivity}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({ id: c.id, label: `${c.firstName} ${c.lastName}`, accountId: c.accountId }))}
@@ -75,7 +75,7 @@ export default async function ActivitiesPage() {
           />
         </Card>
 
-        <ActivitiesList activities={activities} owners={owners} isHead={user.role === "HEAD"} />
+        <ActivitiesList activities={activities} owners={owners} isHead={isBackOffice(user)} />
       </div>
     </div>
   );

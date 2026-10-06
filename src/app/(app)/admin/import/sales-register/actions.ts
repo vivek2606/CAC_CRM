@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { parseSalesRegisterBuffer } from "@/lib/import/parse-sales-register";
 import { transformSalesRegister } from "@/lib/import/sales-register";
 
@@ -56,7 +56,7 @@ export async function importSalesRegister(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const replace = formData.get("replace") === "on";
 
   const file = formData.get("file");

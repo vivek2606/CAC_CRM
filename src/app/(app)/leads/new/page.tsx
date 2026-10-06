@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { LeadForm } from "../lead-form";
 import { createLead } from "../actions";
@@ -9,7 +9,7 @@ export default async function NewLeadPage() {
   const ownerIds = await visibleOwnerIds(user);
 
   const [owners, accounts, contacts] = await Promise.all([
-    user.role === "HEAD"
+    isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
     prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
@@ -26,7 +26,7 @@ export default async function NewLeadPage() {
         <Card className="p-6">
           <LeadForm
             action={createLead}
-            isHead={user.role === "HEAD"}
+            isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({
@@ -36,7 +36,7 @@ export default async function NewLeadPage() {
               phone: c.phone,
               email: c.email,
             }))}
-            defaultValues={{ ownerId: user.role === "HEAD" ? owners[0]?.id : user.id }}
+            defaultValues={{ ownerId: isBackOffice(user) ? owners[0]?.id : user.id }}
             submitLabel="Create Lead"
           />
         </Card>

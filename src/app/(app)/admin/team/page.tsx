@@ -2,9 +2,14 @@ import { requireHead } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Avatar } from "@/components/ui";
 import { ResetPasswordButton } from "./reset-password-button";
+import { AddLoginForm, RoleSelect } from "./add-login-form";
+
+function roleLabel(role: string): string {
+  return role === "HEAD" ? "Head of Sales" : role === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager";
+}
 
 export default async function TeamPage() {
-  await requireHead();
+  const head = await requireHead();
 
   const users = await prisma.user.findMany({
     where: { isActive: true },
@@ -15,7 +20,8 @@ export default async function TeamPage() {
   return (
     <div>
       <PageHeader title="Team & Logins" description="Everyone with access to this CRM" />
-      <div className="p-6">
+      <div className="p-6 space-y-6">
+        <AddLoginForm />
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -38,7 +44,12 @@ export default async function TeamPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      {u.title ?? (u.role === "HEAD" ? "Head of Sales" : "Sales Manager")}
+                      <div>{u.title ?? roleLabel(u.role)}</div>
+                      {u.role === "HEAD" || u.id === head.id ? (
+                        <div className="text-xs text-slate-400">Access: {roleLabel(u.role)}</div>
+                      ) : (
+                        <RoleSelect userId={u.id} role={u.role} />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <ResetPasswordButton userId={u.id} name={u.name} />

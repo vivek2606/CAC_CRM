@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { PricelistForm } from "../../pricelist-form";
 import { updatePricelistEntry } from "../../actions";
 
 export default async function EditPricelistEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireHead();
+  await requireBackOffice();
 
   const [entry, products] = await Promise.all([
     prisma.pricelist.findUnique({ where: { id } }),

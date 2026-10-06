@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ImportForm } from "./import-form";
 import { ClearLeadsButton } from "./clear-leads-button";
@@ -7,7 +7,7 @@ import { ClearLeadsButton } from "./clear-leads-button";
 export const maxDuration = 60;
 
 export default async function ImportLeadsPage() {
-  await requireHead();
+  await requireBackOffice();
 
   return (
     <div>

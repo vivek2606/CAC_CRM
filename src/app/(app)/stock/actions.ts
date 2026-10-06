@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, requireHead, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, requireBackOffice, isBackOffice } from "@/lib/rbac";
 import { parseStockReceiptsBuffer, type StockReceiptRowProblem } from "@/lib/import/parse-stock-receipts";
 import { parseInTransitBuffer } from "@/lib/import/parse-in-transit";
 import { matchProductsByCodeOrModel, assignProductCode, isTempCode, type ProductMatch } from "@/lib/product-match";
@@ -44,7 +44,7 @@ export async function addPendingOrder(_prev: FormState | undefined, formData: Fo
   // logs their own.
   let ownerId = user.id;
   const onBehalfOf = String(formData.get("ownerId") ?? "");
-  if (user.role === "HEAD" && onBehalfOf) {
+  if (isBackOffice(user) && onBehalfOf) {
     const owner = await prisma.user.findUnique({ where: { id: onBehalfOf }, select: { id: true } });
     if (!owner) return { error: "Pick a valid sales person." };
     ownerId = owner.id;
@@ -94,7 +94,7 @@ const stockReceiptSchema = z.object({
 });
 
 export async function addStockReceipt(_prev: FormState | undefined, formData: FormData): Promise<FormState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const parsed = stockReceiptSchema.safeParse({
     productId: formData.get("productId"),
     quantity: formData.get("quantity"),
@@ -137,7 +137,7 @@ export async function addStockReceipt(_prev: FormState | undefined, formData: Fo
 }
 
 export async function deleteStockReceipt(id: string) {
-  await requireHead();
+  await requireBackOffice();
   await prisma.stockReceipt.delete({ where: { id } });
   revalidateStock();
 }
@@ -194,7 +194,7 @@ export type BulkReceiptState = {
 // a receipt already on file (same item, date and quantity) is skipped, so
 // re-uploading the same sheet can't double-count stock.
 export async function importStockReceipts(_prev: BulkReceiptState | undefined, formData: FormData): Promise<BulkReceiptState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Please choose a file to upload." };
   const defaultRaw = String(formData.get("defaultDate") ?? "");
@@ -286,7 +286,7 @@ const inTransitSchema = z.object({
 });
 
 export async function addInTransit(_prev: FormState | undefined, formData: FormData): Promise<FormState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const parsed = inTransitSchema.safeParse({
     productId: formData.get("productId"),
     quantity: formData.get("quantity"),
@@ -333,7 +333,7 @@ export type BulkInTransitState = {
 // (same item, quantity, ETA and reference) is skipped, so re-uploading the
 // same sheet doesn't double it.
 export async function importInTransit(_prev: BulkInTransitState | undefined, formData: FormData): Promise<BulkInTransitState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Please choose a file to upload." };
 
@@ -391,7 +391,7 @@ export async function importInTransit(_prev: BulkInTransitState | undefined, for
 // quantity and date given. Receiving less than what's in transit leaves the
 // rest in transit.
 export async function receiveInTransit(_prev: FormState | undefined, formData: FormData): Promise<FormState> {
-  const head = await requireHead();
+  const head = await requireBackOffice();
   const id = String(formData.get("id") ?? "");
   const quantity = Number(formData.get("quantity"));
   const receivedAt = utcDate(String(formData.get("receivedAt") ?? ""));
@@ -434,7 +434,7 @@ export async function receiveInTransit(_prev: FormState | undefined, formData: F
 }
 
 export async function cancelInTransit(id: string) {
-  await requireHead();
+  await requireBackOffice();
   await prisma.inTransitOrder.update({ where: { id }, data: { status: "CANCELLED" } });
   revalidateStock();
 }

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { parseTagsInput } from "@/lib/tags";
 import { Prisma, type AccountType } from "@prisma/client";
 
@@ -78,7 +78,7 @@ export async function createAccount(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = accountSchema.parse(raw);
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : user.id;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
 
   const account = await prisma.account
     .create({
@@ -114,7 +114,7 @@ export async function updateAccount(accountId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = accountSchema.parse(raw);
-  const ownerId = user.role === "HEAD" ? parsed.ownerId : existing.ownerId;
+  const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
 
   await prisma.account
     .update({

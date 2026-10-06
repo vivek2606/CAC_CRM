@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 
 export type SetTargetState = { error?: string; success?: boolean };
 
@@ -14,7 +14,7 @@ const setTargetSchema = z.object({
 });
 
 export async function setTarget(_prevState: SetTargetState | undefined, formData: FormData): Promise<SetTargetState> {
-  await requireHead();
+  await requireBackOffice();
 
   const parsed = setTargetSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) {

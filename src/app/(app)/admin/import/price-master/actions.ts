@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { parsePriceMasterBuffer } from "@/lib/import/parse-price-master";
 import { transformPriceMaster } from "@/lib/import/price-master";
 
@@ -24,7 +24,7 @@ export type ImportSummary = {
 export type ImportState = { error?: string; summary?: ImportSummary };
 
 export async function importPriceMaster(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
-  await requireHead();
+  await requireBackOffice();
 
   const monthRaw = formData.get("month");
   if (typeof monthRaw !== "string" || monthRaw.trim() === "") {

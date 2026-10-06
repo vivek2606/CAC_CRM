@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { getProductCategoryOptions } from "@/lib/product-options";
 import { PageHeader, Card } from "@/components/ui";
 import { ProductPriceForm } from "../product-price-form";
 import { createProductAndPricelistEntry } from "../actions";
 
 export default async function NewPricelistEntryPage({ searchParams }: { searchParams: Promise<{ productId?: string }> }) {
-  await requireHead();
+  await requireBackOffice();
   const { productId } = await searchParams;
   const [products, { categories, subCategories }] = await Promise.all([
     prisma.product.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, model: true, brand: true } }),

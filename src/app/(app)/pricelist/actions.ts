@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireBackOffice } from "@/lib/rbac";
 import { productSchema, pricelistEntrySchema } from "@/lib/schemas";
 
 const pricelistSchema = pricelistEntrySchema.extend({
@@ -20,7 +20,7 @@ function blankToNull(value: FormDataEntryValue | null | undefined) {
 }
 
 export async function createPricelistEntry(formData: FormData) {
-  await requireHead();
+  await requireBackOffice();
   const raw = Object.fromEntries(formData.entries());
   const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
   const month = parseMonth(parsed.month);
@@ -40,7 +40,7 @@ export async function createPricelistEntry(formData: FormData) {
 }
 
 export async function updatePricelistEntry(entryId: string, formData: FormData) {
-  await requireHead();
+  await requireBackOffice();
   const raw = Object.fromEntries(formData.entries());
   const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
 
@@ -59,7 +59,7 @@ export async function updatePricelistEntry(entryId: string, formData: FormData) 
 }
 
 export async function deletePricelistEntry(entryId: string) {
-  await requireHead();
+  await requireBackOffice();
   await prisma.pricelist.delete({ where: { id: entryId } });
   revalidatePath("/products");
   redirect("/products");
@@ -69,7 +69,7 @@ export async function deletePricelistEntry(entryId: string) {
 // step, instead of a separate trip through a product-creation page first.
 // When mode is "existing" this behaves exactly like createPricelistEntry.
 export async function createProductAndPricelistEntry(formData: FormData) {
-  await requireHead();
+  await requireBackOffice();
   const raw = Object.fromEntries(formData.entries());
   const entryParsed = pricelistEntrySchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
 
