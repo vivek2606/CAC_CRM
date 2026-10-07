@@ -68,23 +68,41 @@ export async function deletePricelistEntry(entryId: string) {
 // Lets Head create a brand-new product and its first price entry in one
 // step, instead of a separate trip through a product-creation page first.
 // When mode is "existing" this behaves exactly like createPricelistEntry.
-export async function createProductAndPricelistEntry(formData: FormData) {
+// Problems (a product code already in the catalog, a missing field) come
+// back as a message for the form instead of an error page.
+export async function createProductAndPricelistEntry(formData: FormData): Promise<{ error: string } | void> {
   await requireBackOffice();
   const raw = Object.fromEntries(formData.entries());
-  const entryParsed = pricelistEntrySchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
+  const entry = pricelistEntrySchema.safeParse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
+  if (!entry.success) return { error: entry.error.issues[0]?.message ?? "Check the month and prices." };
+  const entryParsed = entry.data;
 
   const mode = String(formData.get("mode") ?? "existing");
   let productId: string;
   if (mode === "new") {
-    const productParsed = productSchema.parse({
-      ...raw,
+    const text = (k: string) => String(formData.get(k) ?? "").trim();
+    const product = productSchema.safeParse({
+      code: text("code"),
+      brand: text("brand"),
+      category: text("category"),
+      subCategory: text("subCategory"),
+      model: text("model"),
       capacityKw: blankToNull(formData.get("capacityKw") ?? undefined),
     });
-    const product = await prisma.product.create({ data: productParsed });
-    productId = product.id;
+    if (!product.success) return { error: product.error.issues[0]?.message ?? "Fill in all the product details." };
+    const existing = await prisma.product.findFirst({
+      where: { code: { equals: product.data.code, mode: "insensitive" } },
+      select: { code: true, brand: true, model: true },
+    });
+    if (existing) {
+      return {
+        error: `Product code ${existing.code} is already in the catalog (${existing.brand} ${existing.model}). Choose "Existing product" and pick it to add this price.`,
+      };
+    }
+    productId = (await prisma.product.create({ data: product.data })).id;
   } else {
     productId = String(formData.get("productId") ?? "").trim();
-    if (!productId) throw new Error("Product is required");
+    if (!productId) return { error: "Pick the product." };
   }
 
   const month = parseMonth(entryParsed.month);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { CreatableTextSelect } from "@/components/creatable-text-select";
 
@@ -20,7 +20,7 @@ export function ProductPriceForm({
   defaultValues,
   submitLabel,
 }: {
-  action: (formData: FormData) => void;
+  action: (formData: FormData) => Promise<{ error: string } | void>;
   products: ProductOption[];
   categories: string[];
   subCategories: string[];
@@ -35,10 +35,25 @@ export function ProductPriceForm({
   const [mode, setMode] = useState<ProductMode>(products.length === 0 ? "new" : "existing");
   const [productId, setProductId] = useState(defaultValues?.productId ?? products[0]?.id ?? "");
   const selectedProduct = products.find((p) => p.id === productId);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
   const productOptions = products.map((p) => ({ id: p.id, label: `${p.code} — ${p.brand} ${p.model}` }));
 
   return (
-    <form action={action} className="space-y-5 max-w-2xl">
+    <form
+      // Submitted by hand (not as a form action) so a problem reported back
+      // keeps everything typed in the form.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        setError(null);
+        startSaving(async () => {
+          const res = await action(fd);
+          if (res?.error) setError(res.error);
+        });
+      }}
+      className="space-y-5 max-w-2xl"
+    >
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">Product</label>
         <div className="flex flex-wrap gap-2 mb-3">
@@ -174,13 +189,15 @@ export function ProductPriceForm({
         </div>
       </div>
 
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={mode === "existing" && products.length === 0}
+          disabled={saving || (mode === "existing" && products.length === 0)}
           className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 transition-colors"
         >
-          {submitLabel}
+          {saving ? "Saving…" : submitLabel}
         </button>
       </div>
     </form>
