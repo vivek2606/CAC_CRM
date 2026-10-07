@@ -103,7 +103,7 @@ export async function resyncCategoryData(): Promise<{ checked: number; repaired:
     const after = await prisma.saleLineItem.count({ where: { dealId: deal.id } });
     if (after !== before) repaired++;
   }
-  revalidatePath("/reports/category");
+  revalidatePath("/reports/sales-register");
   revalidatePath("/targets");
   return { checked: deals.length, repaired };
 }

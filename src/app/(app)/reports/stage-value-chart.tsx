@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, formatAxisCurrency } from "@/lib/format";
 import { DEAL_STAGES, DEAL_STAGE_LABELS } from "@/lib/constants";
 import type { DealStage } from "@prisma/client";
 
@@ -16,7 +16,7 @@ export function StageValueChart({ data }: { data: StageValueRow[] }) {
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={(v) => formatAxisCurrency(Number(v))}
           width={64}
         />
         <Tooltip

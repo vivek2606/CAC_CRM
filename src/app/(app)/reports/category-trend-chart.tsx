@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { formatAxisCurrency, formatCurrency } from "@/lib/format";
 
 export type CategoryTrendRow = { month: string } & Record<string, number | string>;
 
@@ -26,7 +26,7 @@ export function CategoryTrendChart({
           tick={{ fontSize: 12, fill: "#64748b" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => formatCompactCurrency(Number(v))}
+          tickFormatter={(v) => formatAxisCurrency(Number(v))}
           width={56}
         />
         <Tooltip

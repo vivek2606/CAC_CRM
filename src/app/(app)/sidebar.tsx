@@ -15,7 +15,6 @@ import {
   Users,
   DollarSign,
   TrendingUp,
-  PieChart,
   X,
   KeyRound,
   Boxes,
@@ -86,7 +85,6 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
   { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
-  { href: "/reports/category", label: "Sales by Category", icon: PieChart, color: "fuchsia" },
   { href: "/reports/sales-register", label: "Sales Register", icon: TableProperties, color: "teal" },
 ];
 

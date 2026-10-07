@@ -28,6 +28,17 @@ export function formatCompactCurrency(value: number): string {
   return `${sign}₦${abs.toFixed(2)}`;
 }
 
+// Chart axis ticks: short so they fit the axis (e.g. ₦300M, ₦1.2B).
+export function formatAxisCurrency(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  const short = (n: number) => String(Math.round(n * 10) / 10);
+  if (abs >= 1e9) return `${sign}₦${short(abs / 1e9)}B`;
+  if (abs >= 1e6) return `${sign}₦${short(abs / 1e6)}M`;
+  if (abs >= 1e3) return `${sign}₦${short(abs / 1e3)}K`;
+  return `${sign}₦${short(abs)}`;
+}
+
 // For bar charts that label bars with bare numbers: one unit for the whole
 // chart, picked from its largest value, so the labels (e.g. "452") always
 // read in the same unit as the Y axis ("₦400M").

@@ -410,7 +410,7 @@ export default async function DashboardPage() {
             sub={
               <>
                 {wonYTDCount} won since Jan 1 ·{" "}
-                <Link href="/reports/category" className="text-indigo-600 hover:text-indigo-700">
+                <Link href="/reports/sales-register?view=category" className="text-indigo-600 hover:text-indigo-700">
                   compare years
                 </Link>
               </>

@@ -33,7 +33,7 @@ export function DealItemsSection({
     <div>
       {items.length === 0 ? (
         <p className="text-sm text-slate-400 mb-4">
-          No products itemized yet. Add what&apos;s being quoted so it feeds Sales by Category once this deal is won.
+          No products itemized yet. Add what&apos;s being quoted so it feeds the Sales Register once this deal is won.
         </p>
       ) : (
         <div className="mb-4 overflow-x-auto">

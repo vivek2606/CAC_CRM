@@ -180,7 +180,7 @@ export default async function DealDetailPage({
             ) : (
               <>
                 <p className="text-xs text-slate-400 mb-3">
-                  What&apos;s being quoted on this deal. Feeds Sales by Category once it&apos;s won.
+                  What&apos;s being quoted on this deal. Feeds the Sales Register once it&apos;s won.
                 </p>
                 <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
                 {deal.stage === "NEGOTIATION" && (
