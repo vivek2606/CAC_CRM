@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { PerfTabs } from "@/components/perf-tabs";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import type { IncentiveSettings } from "@/lib/incentive";
@@ -70,8 +71,9 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
   if (month < startMonth && !referenceOnly) {
     return (
       <div>
-        <PageHeader title={canSeeAll ? "Incentives" : "My Incentive"} description={monthLabel(month)} />
+        <PageHeader title={canSeeAll ? "Incentives & Targets" : "My Incentive & Targets"} description={monthLabel(month)} />
         <div className="p-6 space-y-4">
+          <PerfTabs active="incentives" month={monthValue(month)} />
           {monthPicker}
           <Card className="p-6">
             <EmptyState
@@ -90,8 +92,9 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
     const myShare = support.find((s) => s.userId === user.id);
     return (
       <div>
-        <PageHeader title="My Incentive" description={period} />
+        <PageHeader title="My Incentive & Targets" description={period} />
         <div className="p-6 space-y-4">
+          <PerfTabs active="incentives" month={monthValue(month)} />
           {monthPicker}
           {!mine && !myShare && (
             <Card className="p-6">
@@ -194,7 +197,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
   return (
     <div>
       <PageHeader
-        title="Incentives"
+        title="Incentives & Targets"
         description={`Monthly incentive for every employee - ${period}${referenceOnly ? " (reference only)" : ""}`}
         action={
           isHead ? (
@@ -205,6 +208,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
         }
       />
       <div className="p-6 space-y-4">
+        <PerfTabs active="incentives" month={monthValue(month)} />
         {monthPicker}
 
         {!referenceOnly && (

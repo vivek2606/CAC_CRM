@@ -12,7 +12,6 @@ import {
   Upload,
   Users,
   DollarSign,
-  TrendingUp,
   X,
   KeyRound,
   Boxes,
@@ -75,8 +74,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
   { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky" },
   { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
-  { href: "/targets", label: "Targets", icon: TrendingUp, color: "emerald" },
-  { href: "/incentives", label: "Incentives", icon: BadgePercent, color: "purple" },
+  { href: "/incentives", label: "Incentives & Targets", icon: BadgePercent, color: "purple" },
   { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
@@ -112,9 +110,10 @@ export function Sidebar({
   const pathname = usePathname();
   // The most specific nav entry for this page - so /reports/sales-register
   // highlights "Sales Register", not "Team Reports" (/reports) as well.
-  // Contact pages sit under Accounts & Contacts, activity pages under Leads & Activities.
+  // Contact pages sit under Accounts & Contacts, activity pages under Leads &
+  // Activities, targets under Incentives & Targets.
   const under = (base: string) => pathname === base || pathname.startsWith(base + "/");
-  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : pathname;
+  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : under("/targets") ? "/incentives" : pathname;
   const activeHref =
     [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS]
       .map((n) => n.href)

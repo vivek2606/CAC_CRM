@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { PerfTabs } from "@/components/perf-tabs";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { TargetChart } from "@/components/target-chart";
 import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
@@ -240,7 +241,7 @@ export default async function TargetsPage({
   return (
     <div>
       <PageHeader
-        title="Targets"
+        title="Incentives & Targets"
         description={`Target vs. actual sales for ${monthLabel(month)} - ${scopeLabel}`}
         action={
           isBackOffice(user) ? (
@@ -251,6 +252,7 @@ export default async function TargetsPage({
         }
       />
       <div className="p-6 space-y-4">
+        <PerfTabs active="targets" month={monthStr} />
         <form className="flex flex-wrap items-end gap-3" action="/targets">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Month</label>
