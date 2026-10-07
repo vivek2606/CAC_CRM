@@ -107,8 +107,13 @@ export default async function DealDetailPage({
             <StageActions
               dealId={deal.id}
               stage={deal.stage}
-              blockWonReason={stageActionsBlockReason}
+              blockWonReason={deal.stage === "WON" ? null : stageActionsBlockReason}
               openWon={sp.markWon === "1"}
+              wonInvoice={
+                deal.stage === "WON" && deal.sourceTxnNo == null
+                  ? { invoiceNo: deal.invoiceNo ?? "", closedAt: deal.closedAt ? deal.closedAt.toISOString().slice(0, 10) : "" }
+                  : undefined
+              }
               existingItems={deal.items.map((i) => ({ productId: i.productId, label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
               quotedValue={deal.value}
               products={[

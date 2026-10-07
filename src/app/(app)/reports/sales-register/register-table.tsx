@@ -153,7 +153,11 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
                     {/* Long text stays on one line; the full text shows on hover. */}
                     <div className={c.width ? "truncate" : ""} title={c.width ? display(r, c.key) : undefined}>
                       {c.key === "accountName" && r.dealId ? (
-                        <Link href={`/deals/${r.dealId}`} className="text-indigo-700 hover:underline">
+                        <Link
+                          // A won deal with no products opens straight on its invoices & products.
+                          href={r.category === "No products listed" ? `/deals/${r.dealId}?markWon=1` : `/deals/${r.dealId}`}
+                          className="text-indigo-700 hover:underline"
+                        >
                           {r.accountName}
                         </Link>
                       ) : (

@@ -526,8 +526,12 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
-  if (deal.stage === "WON" || deal.stage === "LOST") throw new Error("This deal is already closed.");
-  if (!deal.accountId) throw new Error("Link this deal to an account before marking it Won.");
+  if (deal.stage === "LOST") throw new Error("This deal is already closed.");
+  if (deal.sourceTxnNo != null) throw new Error("This deal comes from the Sales Register - its lines can't be changed here.");
+  // A deal already Won (e.g. won before products were required) can have its
+  // invoices and products recorded the same way, split included.
+  const alreadyWon = deal.stage === "WON";
+  if (!deal.accountId && !alreadyWon) throw new Error("Link this deal to an account before marking it Won.");
 
   // ---- validate everything first
   if (invoices.length === 0) throw new Error("Add the invoice.");
@@ -553,7 +557,7 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   const firstUnchanged = norm(invoices[0].items) === norm(deal.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })));
   const approvedAt = deal.discountApprovedAt;
   const prices = await getLatestPriceByProduct();
-  for (const [n, inv] of invoices.entries()) {
+  for (const [n, inv] of alreadyWon ? [] : invoices.entries()) {
     const approval = n === 0 ? (firstUnchanged ? approvedAt : null) : approvedAt && firstUnchanged ? approvedAt : null;
     const d = computeDealDiscount(inv.items, prices, approval);
     if (d?.needsApproval) {
@@ -571,7 +575,8 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
     await prisma.deal.update({ where: { id: dealId }, data: { discountApprovedAt: null, discountApprovedById: null } });
   }
   await syncDealValueFromItems(dealId);
-  await updateDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim());
+  if (alreadyWon) await recordWonInvoice(dealId, first.closedAt, first.invoiceNo);
+  else await updateDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim());
 
   // ---- each further invoice: its own Won deal, a copy of this one
   for (const inv of rest) {
@@ -600,7 +605,8 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
         items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
       },
     });
-    await updateDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim());
+    if (alreadyWon) await recordWonInvoice(copy.id, inv.closedAt, inv.invoiceNo);
+    else await updateDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim());
   }
   if (rest.length > 0) {
     // The lead behind the order is worth the whole order - every invoice.
@@ -608,7 +614,20 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
     await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value: total } });
   }
   revalidatePath("/deals");
+  revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");
+  revalidatePath("/");
+}
+
+// Sets the invoice no. and date on a deal that is already Won and refreshes
+// its Sales Register lines. Not exported - only markDealWon calls it, after
+// validating the invoices.
+async function recordWonInvoice(dealId: string, closedAt: string, invoiceNo: string) {
+  await prisma.deal.update({
+    where: { id: dealId },
+    data: { stage: "WON", probability: STAGE_DEFAULT_PROBABILITY.WON, closedAt: parseDateInput(closedAt), invoiceNo: invoiceNo.trim().slice(0, 60) },
+  });
+  await syncSaleLineItemsForDeal(dealId);
 }
 
 export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number };

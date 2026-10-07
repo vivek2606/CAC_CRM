@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, ReceiptText, XCircle } from "lucide-react";
 import { updateDealStage, markDealWon } from "./actions";
 import { MarkLostDialog } from "./mark-lost-dialog";
 import { MarkWonDialog, type WonExistingItem, type WonInvoiceInput, type WonProductOption } from "./mark-won-dialog";
@@ -16,6 +16,7 @@ export function StageActions({
   quotedValue,
   products,
   openWon = false,
+  wonInvoice,
 }: {
   dealId: string;
   stage: DealStage;
@@ -29,6 +30,9 @@ export function StageActions({
   // discount) - disables the button and shows why, instead of letting the
   // click round-trip to the server just to fail.
   blockWonReason?: string | null;
+  // A Won deal entered in the CRM: its invoice no. and date, so its invoices
+  // and products can be recorded or split from here.
+  wonInvoice?: { invoiceNo: string; closedAt: string };
 }) {
   const [isPending, startTransition] = useTransition();
   const [showLostDialog, setShowLostDialog] = useState(false);
@@ -36,6 +40,31 @@ export function StageActions({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  if (stage === "WON" && wonInvoice) {
+    return (
+      <div className="flex flex-col items-end gap-1.5">
+        <button
+          onClick={() => setShowWonDialog(true)}
+          disabled={isPending}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60 text-emerald-800 text-sm font-medium px-3.5 py-2 transition-colors"
+        >
+          <ReceiptText className="h-4 w-4" />
+          {isPending ? "Saving…" : "Invoices & products"}
+        </button>
+        {showWonDialog && (
+          <MarkWonDialog
+            existingItems={existingItems}
+            quotedValue={quotedValue}
+            products={products}
+            wonInvoice={wonInvoice}
+            onConfirm={markWon}
+            onCancel={() => setShowWonDialog(false)}
+          />
+        )}
+        {error && <p className="text-xs text-red-600 max-w-xs text-right">{error}</p>}
+      </div>
+    );
+  }
   if (stage === "WON" || stage === "LOST") return null;
 
   function markWon(invoices: WonInvoiceInput[]) {

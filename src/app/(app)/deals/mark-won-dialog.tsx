@@ -30,20 +30,24 @@ export function MarkWonDialog({
   products,
   onConfirm,
   onCancel,
+  wonInvoice,
 }: {
   existingItems: WonExistingItem[];
   quotedValue: number;
   products: WonProductOption[];
   onConfirm: (invoices: WonInvoiceInput[]) => void;
   onCancel: () => void;
+  // Set for a deal that is already Won: its current invoice no. and date,
+  // so its invoices and products can be recorded (or split) after the fact.
+  wonInvoice?: { invoiceNo: string; closedAt: string };
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const priceById = new Map(products.map((p) => [p.id, p.defaultPrice]));
   const [blocks, setBlocks] = useState<Block[]>(() => [
     {
       key: newKey(),
-      invoiceNo: "",
-      closedAt: today,
+      invoiceNo: wonInvoice?.invoiceNo ?? "",
+      closedAt: wonInvoice?.closedAt || today,
       rows: existingItems.length
         ? existingItems.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) }))
         : [blankRow()],
@@ -107,7 +111,7 @@ export function MarkWonDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-sm font-semibold text-slate-900 mb-1">Mark this deal Won</h2>
+        <h2 className="text-sm font-semibold text-slate-900 mb-1">{wonInvoice ? "Invoices & products billed" : "Mark this deal Won"}</h2>
         <p className="text-xs text-slate-500 mb-4">
           Record the invoice and what was billed on it. If the order was billed on more than one invoice, add each invoice - the first stays on this deal and
           each other one becomes its own won deal with the same customer and details. The invoice date is when the sale counts toward targets and incentives.
@@ -224,7 +228,13 @@ export function MarkWonDialog({
             Cancel
           </button>
           <button type="button" onClick={confirm} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-3.5 py-2">
-            {blocks.length > 1 ? `Mark Won (${blocks.length} invoices)` : "Mark Won"}
+            {wonInvoice
+              ? blocks.length > 1
+                ? `Save ${blocks.length} invoices`
+                : "Save"
+              : blocks.length > 1
+                ? `Mark Won (${blocks.length} invoices)`
+                : "Mark Won"}
           </button>
         </div>
       </div>
