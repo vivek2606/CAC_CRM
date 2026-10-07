@@ -23,6 +23,8 @@ import {
   BadgePercent,
   Wrench,
   Receipt,
+  Landmark,
+  FileText,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
@@ -82,6 +84,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/activities", label: "Activities", icon: CheckSquare, color: "teal" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
+  { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
   { href: "/reports/category", label: "Sales by Category", icon: PieChart, color: "fuchsia" },
 ];
 
@@ -93,6 +96,7 @@ const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDa
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
   { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
+  { href: "/admin/company", label: "Company Details", icon: Landmark, color: "violet", headOnly: true },
   { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink", headOnly: true },
 ];
 

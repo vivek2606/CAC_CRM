@@ -104,7 +104,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
                 >
                   <FileText className="h-4 w-4" />
-                  View Quote
+                  Quote / Proforma
                 </button>
               </form>
             )}

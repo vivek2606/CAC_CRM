@@ -392,7 +392,7 @@ export async function viewQuote(dealId: string) {
     }
   }
 
-  redirect(`/quote/${dealId}`);
+  redirect(`/quotations?deal=${dealId}`);
 }
 
 // Additional stakeholders on a deal (Economic Buyer, Champion, Influencer,
