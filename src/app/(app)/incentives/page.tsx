@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { calculateSalesIncentive, distributeSupportPool, getIncentiveSettings, type IncentiveSettings } from "@/lib/incentive";
+import type { IncentiveSettings } from "@/lib/incentive";
+import { computeMonthIncentives } from "@/lib/incentive-month";
+import { getIncentiveApproval, snapshotOf, totalPayable } from "@/lib/incentive-approval";
+import { ApprovalPanel, type ApprovalView } from "./approval/approval-panel";
 
 function parseMonth(raw: string | undefined): Date {
   const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
@@ -31,48 +33,15 @@ function schemeText(settings: IncentiveSettings) {
 export default async function IncentivesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const user = await requireUser();
   const isHead = user.role === "HEAD";
+  // The Sales Coordinator prepares the month for the Head's approval, so she
+  // sees the whole team too (scheme settings stay with the Head).
+  const canSeeAll = isHead || user.role === "COORDINATOR";
   const month = parseMonth((await searchParams).month);
   const nextMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
   const inProgress = nextMonth > new Date();
 
-  // The whole team is always calculated - the support pool depends on
-  // everyone's figures - but each person is only shown their own amount.
-  const [settings, reps] = await Promise.all([
-    getIncentiveSettings(),
-    prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-  ]);
-  const repIds = reps.map((r) => r.id);
-  const [targets, sales, projects] = await Promise.all([
-    prisma.target.findMany({ where: { userId: { in: repIds }, month }, select: { userId: true, targetValue: true } }),
-    prisma.deal.groupBy({
-      by: ["ownerId"],
-      where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
-      _sum: { value: true },
-    }),
-    // Project & Service billing counts toward incentive too.
-    prisma.projectBilling.groupBy({
-      by: ["ownerId"],
-      where: { ownerId: { in: repIds }, month },
-      _sum: { value: true },
-    }),
-  ]);
-  const projectBy = new Map(projects.map((p) => [p.ownerId, p._sum.value ?? 0]));
-  const targetBy = new Map(targets.map((t) => [t.userId, t.targetValue]));
-  const salesBy = new Map(sales.map((s) => [s.ownerId, s._sum.value ?? 0]));
-  const rows = reps.map((r) =>
-    calculateSalesIncentive(
-      {
-        userId: r.id,
-        name: r.name,
-        target: targetBy.get(r.id) ?? 0,
-        productSales: salesBy.get(r.id) ?? 0,
-        projectSales: projectBy.get(r.id) ?? 0,
-      },
-      settings,
-    ),
-  );
+  const { settings, rows, support } = await computeMonthIncentives(month);
   const pool = rows.reduce((s, r) => s + r.toPool, 0);
-  const support = distributeSupportPool(pool, settings);
   const scheme = schemeText(settings);
 
   const monthPicker = (
@@ -102,7 +71,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
   if (month < startMonth && !referenceOnly) {
     return (
       <div>
-        <PageHeader title={isHead ? "Incentives" : "My Incentive"} description={monthLabel(month)} />
+        <PageHeader title={canSeeAll ? "Incentives" : "My Incentive"} description={monthLabel(month)} />
         <div className="p-6 space-y-4">
           {monthPicker}
           <Card className="p-6">
@@ -117,7 +86,7 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
   }
 
   // ---- Sales manager / support staff: only their own money ----
-  if (!isHead) {
+  if (!canSeeAll) {
     const mine = rows.find((r) => r.userId === user.id);
     const myShare = support.find((s) => s.userId === user.id);
     return (
@@ -182,7 +151,20 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
     );
   }
 
-  // ---- Head: the full calculation for every employee ----
+  // ---- Head / Sales Coordinator: the full calculation for every employee ----
+  const approvalRecord = referenceOnly ? null : await getIncentiveApproval(month);
+  const approvalView: ApprovalView = {
+    status: approvalRecord?.status ?? "NONE",
+    submittedBy: approvalRecord?.submittedBy?.name,
+    submittedAt: approvalRecord?.submittedAt,
+    approvedBy: approvalRecord?.approvedBy?.name,
+    approvedAt: approvalRecord?.approvedAt,
+    returnedBy: approvalRecord?.returnedBy?.name,
+    returnedAt: approvalRecord?.returnedAt,
+    note: approvalRecord?.note,
+    approvedTotal: approvalRecord?.snapshot ? totalPayable(approvalRecord.snapshot) : undefined,
+  };
+  const liveTotal = totalPayable(snapshotOf(rows, support, settings));
   const totalSales = rows.reduce((s, r) => s + r.sales, 0);
   const totalIncentive = rows.reduce((s, r) => s + r.incentive, 0);
   const totalPayout = rows.reduce((s, r) => s + r.payout, 0);
@@ -216,13 +198,27 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
         title="Incentives"
         description={`Monthly incentive for every employee - ${period}${referenceOnly ? " (reference only)" : ""}`}
         action={
-          <Link href="/incentives/settings" className="text-sm text-indigo-600 hover:text-indigo-700">
-            Scheme settings →
-          </Link>
+          isHead ? (
+            <Link href="/incentives/settings" className="text-sm text-indigo-600 hover:text-indigo-700">
+              Scheme settings →
+            </Link>
+          ) : undefined
         }
       />
       <div className="p-6 space-y-4">
         {monthPicker}
+
+        {!referenceOnly && (
+          <ApprovalPanel
+            month={monthValue(month)}
+            monthLabel={monthLabel(month)}
+            isHead={isHead}
+            payable={!inProgress}
+            notPayableReason="The month is still running - it can be submitted and approved once it has finished."
+            approval={approvalView}
+            liveTotal={liveTotal}
+          />
+        )}
 
         {referenceOnly && (
           <Card className="p-4 border-amber-200 bg-amber-50 text-sm text-amber-800">

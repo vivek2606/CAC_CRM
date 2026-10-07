@@ -1,11 +1,3 @@
-import Image from "next/image";
-
-// The official Sakuragi logo (public/brand/sakuragi-logo.png, 216 x 58).
-// Height is set by the className; width follows the logo's proportions.
-export function SakuragiLogo({ className = "h-8 w-auto" }: { className?: string }) {
-  return <Image src="/brand/sakuragi-logo.png" alt="Sakuragi" width={216} height={58} priority className={className} />;
-}
-
 export function SakuragiMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">

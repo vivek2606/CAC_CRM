@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
-import { SakuragiLogo } from "@/components/sakuragi-logo";
+import { SakuragiMark } from "@/components/sakuragi-logo";
 import { initials } from "@/lib/format";
 
 // Each item keeps one fixed color everywhere it appears (nav icon here,
@@ -122,9 +122,9 @@ export function Sidebar({
         lg:sticky lg:top-0 lg:translate-x-0
         ${open ? "translate-x-0" : "-translate-x-full"}`}
     >
-      <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-200 bg-white">
-        <SakuragiLogo className="h-8 w-auto shrink-0" />
-        <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-indigo-700">CRM</span>
+      <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/70 via-white to-white">
+        <SakuragiMark className="h-8 w-8 shrink-0" />
+        <span className="font-semibold text-slate-900 tracking-tight">SAKURAGI CRM Pro</span>
         <button
           onClick={onClose}
           className="ml-auto lg:hidden text-slate-400 hover:text-slate-700 p-1"
