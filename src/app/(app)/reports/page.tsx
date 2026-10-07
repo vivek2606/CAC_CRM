@@ -538,8 +538,8 @@ export default async function ReportsPage() {
         title="Team Reports"
         description={`Performance across your ${salesReps.length} CAC sales managers${othersStats ? " (everyone else rolled into Others)" : ""}`}
         action={
-          <Link href="/reports/sales-register?view=category" className="text-sm text-indigo-600 hover:text-indigo-700">
-            Sales by Category (Sales Register) →
+          <Link href="/reports/sales-register" className="text-sm text-indigo-600 hover:text-indigo-700">
+            Sales by category (Sales Register) →
           </Link>
         }
       />

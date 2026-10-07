@@ -5,7 +5,7 @@ import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-t
 import { InvoiceEntry } from "../../deals/invoice-entry";
 import { formatCurrency, formatDate } from "@/lib/format";
 import Link from "next/link";
-import { CategoryView, type CategoryViewParams } from "./category-view";
+import { ResyncCategoryButton } from "../resync-category-button";
 
 // Line-by-line sales register: every product line sold (from the Sales
 // Register import and deals won in the CRM) plus Project & Service billing,
@@ -34,24 +34,12 @@ function invoiceFromKey(sourceKey: string, itemCode: string): string | null {
 export default async function SalesRegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; rep?: string; category?: string; view?: string } & CategoryViewParams>;
+  searchParams: Promise<{ from?: string; to?: string; rep?: string; category?: string }>;
 }) {
   const user = await requireUser();
   const all = isBackOffice(user);
   const params = await searchParams;
   const description = all ? "Every invoice line - filter by period, sales person and product type" : "Your invoice lines - filter by period and product type";
-
-  if (params.view === "category") {
-    return (
-      <div>
-        <PageHeader title="Sales Register" description={description} />
-        <div className="p-4 space-y-3">
-          <RegisterTabs active="category" />
-          <CategoryView params={params} />
-        </div>
-      </div>
-    );
-  }
 
   // Default period: last month.
   const now = new Date();
@@ -182,7 +170,6 @@ export default async function SalesRegisterPage({
     <div>
       <PageHeader title="Sales Register" description={description} />
       <div className="p-4 space-y-3">
-        <RegisterTabs active="lines" />
         <form className="flex flex-wrap items-end gap-3" action="/reports/sales-register">
           <PeriodFields from={iso(from)} to={iso(to)} />
           {all && (
@@ -212,6 +199,11 @@ export default async function SalesRegisterPage({
           <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
             Show
           </button>
+          {all && (
+            <div className="ml-auto">
+              <ResyncCategoryButton />
+            </div>
+          )}
         </form>
         {missingInvoice.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50">
@@ -254,23 +246,6 @@ export default async function SalesRegisterPage({
         )}
         <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} />
       </div>
-    </div>
-  );
-}
-
-function RegisterTabs({ active }: { active: "lines" | "category" }) {
-  const tab = (key: "lines" | "category", href: string, label: string) => (
-    <Link
-      href={href}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium ${active === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
-    >
-      {label}
-    </Link>
-  );
-  return (
-    <div className="inline-flex rounded-lg bg-slate-100 p-1">
-      {tab("lines", "/reports/sales-register", "Register lines")}
-      {tab("category", "/reports/sales-register?view=category", "By category")}
     </div>
   );
 }

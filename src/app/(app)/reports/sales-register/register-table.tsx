@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { RegisterCharts } from "./register-charts";
 
 export type RegisterRow = {
   id: string;
@@ -54,6 +55,8 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
     const filtered = rows.filter((r) =>
       active.every(([k, v]) => {
         const q = v.trim().toLowerCase();
+        // "=Duct" matches exactly (so it doesn't also catch "Large Duct").
+        if (q.startsWith("=")) return String(r[k]).toLowerCase() === q.slice(1).trim();
         // Numbers: ">1000", "<5", or plain text match on the shown value.
         const col = COLUMNS.find((c) => c.key === k);
         if (col?.numeric && /^[<>]=?\s*-?[\d,.]+$/.test(q)) {
@@ -84,8 +87,22 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
     }
   };
   const anyFilter = Object.values(filters).some((v) => v && v.trim());
+  const [showCharts, setShowCharts] = useState(true);
+  const pick = (k: Key) => (value: string) => {
+    setFilters((f) => ({ ...f, [k]: `=${value}` }));
+    setShown(PAGE);
+  };
 
   return (
+    <div className="space-y-3">
+    <div className="flex justify-end">
+      <button type="button" onClick={() => setShowCharts(!showCharts)} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
+        {showCharts ? "Hide charts" : "Show charts"}
+      </button>
+    </div>
+    {showCharts && (
+      <RegisterCharts rows={visible} showSalesPerson={showSalesPerson} onPickCategory={pick("category")} onPickSalesPerson={pick("salesPerson")} />
+    )}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">
         <p className="text-sm text-slate-600">
@@ -131,6 +148,7 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
                       setShown(PAGE);
                     }}
                     placeholder={c.numeric ? ">1000" : "Filter…"}
+                    title={c.numeric ? "Type a value, or >1000 / <5" : "Type to match, or =Exact"}
                     aria-label={`Filter ${c.label}`}
                     className={`w-full min-w-[48px] rounded border border-slate-200 px-1.5 py-0.5 text-[11px] font-normal normal-case focus:outline-none focus:ring-1 focus:ring-indigo-500 ${c.numeric ? "text-right" : ""}`}
                   />
@@ -189,6 +207,7 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
           </button>
         </div>
       )}
+    </div>
     </div>
   );
 }

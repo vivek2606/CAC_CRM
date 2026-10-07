@@ -337,7 +337,7 @@ export default async function TargetsPage({
           <Card className="p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-slate-900">This month&apos;s sales by category</h2>
-              <Link href="/reports/sales-register?view=category" className="text-xs text-indigo-600 hover:text-indigo-700">
+              <Link href="/reports/sales-register" className="text-xs text-indigo-600 hover:text-indigo-700">
                 Full category report →
               </Link>
             </div>

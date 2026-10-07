@@ -5,7 +5,7 @@ import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
 export type CategoryChartRow = { category: string; value: number };
 
-export function CategoryChart({ data }: { data: CategoryChartRow[] }) {
+export function CategoryChart({ data, onSelect }: { data: CategoryChartRow[]; onSelect?: (category: string) => void }) {
   const height = Math.max(220, data.length * 40);
   // Bare whole numbers on the bars, in the same unit as the value axis.
   const { label, axisTick } = chartUnit(data.map((r) => r.value));
@@ -31,7 +31,15 @@ export function CategoryChart({ data }: { data: CategoryChartRow[] }) {
           formatter={(value) => formatCompactCurrency(Number(value))}
           contentStyle={{ borderRadius: 8, borderColor: "#e2e8f0", fontSize: 13 }}
         />
-        <Bar dataKey="value" name="Sales Value" fill="#6366f1" radius={[0, 4, 4, 0]} maxBarSize={22}>
+        <Bar
+          dataKey="value"
+          name="Sales Value"
+          fill="#6366f1"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={22}
+          cursor={onSelect ? "pointer" : undefined}
+          onClick={onSelect ? (entry: { payload?: CategoryChartRow }) => entry.payload && onSelect(entry.payload.category) : undefined}
+        >
           <LabelList
             dataKey="value"
             position="right"
