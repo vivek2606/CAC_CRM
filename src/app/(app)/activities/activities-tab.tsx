@@ -1,0 +1,76 @@
+import Link from "next/link";
+import { ListChecks } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
+import { Card } from "@/components/ui";
+import { addActivity } from "../shared-actions";
+import { ActivitiesList } from "./activities-list";
+import { QuickAddActivity } from "./quick-add-activity";
+
+// The Activities tab of Leads & Activities.
+export async function ActivitiesTab() {
+  const user = await requireUser();
+  const ownerIds = await visibleOwnerIds(user);
+
+  const [activities, owners, accounts, contacts, leads, deals] = await Promise.all([
+    prisma.activity.findMany({
+      where: { ownerId: { in: ownerIds } },
+      orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+      include: {
+        owner: { select: { name: true, avatarColor: true } },
+        lead: { select: { id: true, title: true } },
+        deal: { select: { id: true, title: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
+        account: { select: { id: true, name: true } },
+      },
+    }),
+    isBackOffice(user)
+      ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
+    prisma.contact.findMany({
+      where: { ownerId: { in: ownerIds } },
+      select: { id: true, firstName: true, lastName: true, accountId: true },
+    }),
+    prisma.lead.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, title: true } }),
+    // Excludes Won deals - once a deal's closed and won there's nothing left
+    // to log a new activity against. Lost deals stay selectable (e.g. a
+    // win-back call).
+    prisma.deal.findMany({
+      where: { ownerId: { in: ownerIds }, stage: { not: "WON" } },
+      select: { id: true, title: true },
+    }),
+  ]);
+
+  // No fixed owner/contact/account here (unlike Record Timeline's binding on
+  // a specific record) - the quick-add form below submits whichever ones
+  // were picked, or none.
+  const addStandaloneActivity = addActivity.bind(null, {});
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Link
+          href="/activities/queue"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
+        >
+          <ListChecks className="h-4 w-4" />
+          Work my queue
+        </Link>
+      </div>
+      <Card className="p-4">
+        <QuickAddActivity
+          action={addStandaloneActivity}
+          isHead={isBackOffice(user)}
+          owners={owners.map((o) => ({ id: o.id, label: o.name }))}
+          accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
+          contacts={contacts.map((c) => ({ id: c.id, label: `${c.firstName} ${c.lastName}`, accountId: c.accountId }))}
+          leads={leads.map((l) => ({ id: l.id, label: l.title }))}
+          deals={deals.map((d) => ({ id: d.id, label: d.title }))}
+        />
+      </Card>
+
+      <ActivitiesList activities={activities} owners={owners} isHead={isBackOffice(user)} />
+    </div>
+  );
+}

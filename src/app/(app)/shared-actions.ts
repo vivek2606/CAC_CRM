@@ -81,6 +81,7 @@ export async function addActivity(
   if (contactId) revalidatePath(`/contacts/${contactId}`);
   if (accountId) revalidatePath(`/accounts/${accountId}`);
   revalidatePath("/activities");
+  revalidatePath("/leads");
 }
 
 export async function toggleActivityStatus(activityId: string, path: string) {
@@ -94,6 +95,7 @@ export async function toggleActivityStatus(activityId: string, path: string) {
   });
   revalidatePath(path);
   revalidatePath("/activities");
+  revalidatePath("/leads");
   revalidatePath("/");
 }
 
@@ -119,6 +121,7 @@ export async function updateActivity(
   });
   revalidatePath(path);
   revalidatePath("/activities");
+  revalidatePath("/leads");
   revalidatePath("/");
 }
 
@@ -130,5 +133,6 @@ export async function deleteActivity(activityId: string, path: string) {
   await prisma.activity.delete({ where: { id: activityId } });
   revalidatePath(path);
   revalidatePath("/activities");
+  revalidatePath("/leads");
   revalidatePath("/");
 }

@@ -7,7 +7,6 @@ import {
   Target,
   KanbanSquare,
   Building2,
-  CheckSquare,
   BarChart3,
   Package,
   Upload,
@@ -74,12 +73,11 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
-  { href: "/leads", label: "Leads", icon: Target, color: "sky" },
+  { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky" },
   { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
   { href: "/targets", label: "Targets", icon: TrendingUp, color: "emerald" },
   { href: "/incentives", label: "Incentives", icon: BadgePercent, color: "purple" },
   { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
-  { href: "/activities", label: "Activities", icon: CheckSquare, color: "teal" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
   { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
@@ -114,8 +112,9 @@ export function Sidebar({
   const pathname = usePathname();
   // The most specific nav entry for this page - so /reports/sales-register
   // highlights "Sales Register", not "Team Reports" (/reports) as well.
-  // Contact pages sit under Accounts & Contacts.
-  const navPath = pathname === "/contacts" || pathname.startsWith("/contacts/") ? "/accounts" : pathname;
+  // Contact pages sit under Accounts & Contacts, activity pages under Leads & Activities.
+  const under = (base: string) => pathname === base || pathname.startsWith(base + "/");
+  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : pathname;
   const activeHref =
     [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS]
       .map((n) => n.href)

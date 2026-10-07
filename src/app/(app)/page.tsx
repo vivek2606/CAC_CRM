@@ -557,7 +557,7 @@ export default async function DashboardPage() {
                   </Badge>
                 )}
               </div>
-              <Link href="/activities" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+              <Link href="/leads?tab=activities" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
                 View all <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
