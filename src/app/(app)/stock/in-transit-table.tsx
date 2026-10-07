@@ -155,17 +155,17 @@ export function InTransitTable({ rows, today, isHead }: { rows: InTransitRow[]; 
         <p className="px-4 py-8 text-center text-sm text-slate-500">No goods in transit match these filters.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                <SortableTh label="Tentative arrival" sortKey="eta" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap" />
-                <SortableTh label="Item" sortKey="model" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap" />
-                <SortableTh label="Category" sortKey="category" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap" />
-                <SortableTh label="Qty in transit" sortKey="quantity" activeKey={sortKey} direction={direction} onSort={onSort} className="text-right whitespace-nowrap" />
-                <SortableTh label="Reference" sortKey="reference" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap" />
-                <SortableTh label="Ordered" sortKey="orderedAt" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap" />
-                <SortableTh label="In stock now" sortKey="inStock" activeKey={sortKey} direction={direction} onSort={onSort} className="text-right whitespace-nowrap" />
-                {isHead && <th className="px-4 py-3 font-medium" />}
+                <SortableTh label="Tentative arrival" sortKey="eta" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="Item" sortKey="model" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="Category" sortKey="category" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="Qty in transit" sortKey="quantity" activeKey={sortKey} direction={direction} onSort={onSort} className="text-right whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="Reference" sortKey="reference" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="Ordered" sortKey="orderedAt" activeKey={sortKey} direction={direction} onSort={onSort} className="whitespace-nowrap px-3! py-2!" />
+                <SortableTh label="In stock now" sortKey="inStock" activeKey={sortKey} direction={direction} onSort={onSort} className="text-right whitespace-nowrap px-3! py-2!" />
+                {isHead && <th className="px-3 py-2 font-medium" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -173,7 +173,7 @@ export function InTransitTable({ rows, today, isHead }: { rows: InTransitRow[]; 
                 const overdue = o.eta != null && o.eta < today;
                 return (
                   <tr key={o.id}>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {o.eta ? (
                         <span className={overdue ? "text-rose-600 font-medium" : "text-slate-700"}>
                           {fmtDate(o.eta)}
@@ -183,9 +183,9 @@ export function InTransitTable({ rows, today, isHead }: { rows: InTransitRow[]; 
                         <span className="text-slate-400">Not set</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 min-w-[280px]">
+                    <td className="px-3 py-2 min-w-[240px]">
                       <div className="text-slate-800 font-medium">{o.model}</div>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-[11px] text-slate-400">
                         {o.code}
                         {o.tempCode && (
                           <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
@@ -193,18 +193,18 @@ export function InTransitTable({ rows, today, isHead }: { rows: InTransitRow[]; 
                           </span>
                         )}
                       </div>
-                      {o.note && <div className="text-xs text-slate-500 mt-0.5">{o.note}</div>}
+                      {o.note && <div className="text-[11px] text-slate-500 mt-0.5">{o.note}</div>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{o.category}</td>
-                    <td className="px-4 py-3 text-right font-medium text-slate-800 tabular-nums">
+                    <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{o.category}</td>
+                    <td className="px-3 py-2 text-right font-medium text-slate-800 tabular-nums">
                       {o.quantity}
-                      {o.receivedQty > 0 && <div className="text-xs font-normal text-slate-400">{o.receivedQty} already received</div>}
+                      {o.receivedQty > 0 && <div className="text-[11px] font-normal text-slate-400">{o.receivedQty} already received</div>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{o.reference ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{o.orderedAt ? fmtDate(o.orderedAt) : "—"}</td>
-                    <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{o.inStock ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{o.reference ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{o.orderedAt ? fmtDate(o.orderedAt) : "—"}</td>
+                    <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{o.inStock ?? "—"}</td>
                     {isHead && (
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <InTransitActions id={o.id} quantity={o.quantity} today={today} tempCode={o.tempCode} />
                       </td>
                     )}
