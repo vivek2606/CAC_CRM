@@ -72,7 +72,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   // Items
   r += 2;
   const headerRow = r;
-  ["S/N", "Description", "Unit", "Qty", "Rate (NGN)", "Amount (NGN)"].forEach((h, i) =>
+  ["#", "Description", "Unit", "Qty", "Rate (NGN)", "Amount (NGN)"].forEach((h, i) =>
     put(r, i + 1, h, {
       font: { bold: true, size: 9, color: { argb: "FF1E3A6E" } },
       fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EFF9" } },

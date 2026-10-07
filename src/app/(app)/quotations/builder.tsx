@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, defaultRef } from "@/lib/document-format";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
@@ -50,7 +50,7 @@ type Draft = {
   attention: string;
   title: string;
   rows: Row[];
-  terms: string;
+  terms: string[];
   validityDays: string;
   tin: string;
   bankName: string;
@@ -136,7 +136,7 @@ export function QuotationBuilder({
       rows: fromDeal
         ? fromDeal.rows.map((r, i) => ({ uid: `d${i}`, kind: "item" as const, custom: !r.productId, ...r, qty: String(r.qty), unitPrice: String(r.unitPrice) }))
         : [],
-      terms: (fromDeal?.terms ?? defaultTerms).join("\n"),
+      terms: [...(fromDeal?.terms ?? defaultTerms)],
       validityDays: String(validityDays),
       tin: co.tin,
       bankName: co.bankName,
@@ -183,13 +183,22 @@ export function QuotationBuilder({
     [rows[i], rows[j]] = [rows[j], rows[i]];
     update({ rows });
   };
+  const moveTerm = (i: number, by: number) => {
+    const terms = [...d.terms];
+    const j = i + by;
+    if (j < 0 || j >= terms.length) return;
+    [terms[i], terms[j]] = [terms[j], terms[i]];
+    update({ terms });
+  };
   const addRow = (row: Row) => update({ rows: [...d.rows, row] });
 
   const restoreDraft = () => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "null") as Draft | null;
       if (saved?.rows) {
-        setD({ ...fresh(), ...saved });
+        // Older drafts kept the terms as one block of text.
+        const terms = typeof saved.terms === "string" ? (saved.terms as string).split("\n") : saved.terms;
+        setD({ ...fresh(), ...saved, terms });
         setDirty(true);
       }
     } catch {
@@ -224,7 +233,7 @@ export function QuotationBuilder({
         ? { kind: "section", label: r.label }
         : { kind: "item", description: r.description, detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice) },
     ),
-    terms: d.terms.split("\n"),
+    terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
     tin: d.tin,
     bankName: d.bankName,
@@ -339,7 +348,7 @@ export function QuotationBuilder({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-                <th className="px-3 py-2 w-10">S/N</th>
+                <th className="px-3 py-2 w-10">#</th>
                 <th className="px-3 py-2 min-w-[320px]">Model / description</th>
                 <th className="px-3 py-2 w-24">Unit</th>
                 <th className="px-3 py-2 w-24 text-right">Qty</th>
@@ -505,8 +514,47 @@ export function QuotationBuilder({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Terms &amp; conditions</h2>
-          <textarea rows={8} value={d.terms} onChange={(e) => update({ terms: e.target.value })} className={`${input} text-xs leading-relaxed`} />
-          <p className="mt-1 text-[11px] text-slate-400">One per line. Defaults come from Company Details{isHead ? "" : " (set by the Head of Sales)"}.</p>
+          <ol className="space-y-2">
+            {d.terms.map((t, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="pt-2 text-xs text-slate-400 w-4 text-right">{i + 1}.</span>
+                <textarea
+                  rows={Math.max(1, Math.ceil(t.length / 52))}
+                  value={t}
+                  onChange={(e) => update({ terms: d.terms.map((x, j) => (j === i ? e.target.value : x)) })}
+                  placeholder="e.g. Warranty - One year from the date of Supply of Goods."
+                  className={`${input} text-xs py-1.5`}
+                />
+                <div className="flex shrink-0 pt-1">
+                  <button type="button" title="Move up" onClick={() => moveTerm(i, -1)} className="p-1 text-slate-400 hover:text-slate-700">
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" title="Move down" onClick={() => moveTerm(i, 1)} className="p-1 text-slate-400 hover:text-slate-700">
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" title="Remove" onClick={() => update({ terms: d.terms.filter((_, j) => j !== i) })} className="p-1 text-slate-400 hover:text-rose-600">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => update({ terms: [...d.terms, ""] })}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Plus className="h-4 w-4" />
+              Add term
+            </button>
+            <button type="button" onClick={() => update({ terms: [...defaultTerms] })} className="text-sm text-slate-500 hover:text-slate-800">
+              Reset to default terms
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            Changes apply to this document only. The default terms are set under Company Details{isHead ? "" : " by the Head of Sales"}.
+          </p>
         </div>
         <div className="space-y-5">
           <div className="rounded-xl border border-slate-200 bg-white p-5">

@@ -20,7 +20,7 @@ const muted = "#64748b";
 const rule = "#cbd5e1";
 const accent = "#1e4f9c"; // Sakuragi logo blue
 
-// Column widths (S/N, Unit, Qty, Rate, Amount fixed; Description flexes).
+// Column widths (#, Unit, Qty, Rate, Amount fixed; Description flexes).
 const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90 };
 
 const s = StyleSheet.create({
@@ -76,7 +76,7 @@ const col = {
 function TableHeader() {
   return (
     <View style={[s.row, s.th]}>
-      <Text style={[...col.no, s.thText]}>S/N</Text>
+      <Text style={[...col.no, s.thText]}>#</Text>
       <Text style={[...col.desc, s.thText]}>Description</Text>
       <Text style={[...col.unit, s.thText]}>Unit</Text>
       <Text style={[...col.qty, s.thText]}>Qty</Text>
