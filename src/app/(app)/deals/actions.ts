@@ -449,3 +449,23 @@ export async function setDealConsiderForReorder(dealId: string, considerForReord
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reorder");
 }
+
+// Add (or correct) the invoice on a deal already won in the CRM - for deals
+// marked Won before the invoice was asked for. The invoice date becomes the
+// date the sale counts (closedAt), so its line items move with it.
+export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, sourceTxnNo: true } });
+  if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+  if (deal.stage !== "WON") throw new Error("Only a won deal has an invoice.");
+  if (deal.sourceTxnNo != null) throw new Error("This sale came from the Sales Register - its invoice no. is the register's Txn No.");
+  const no = invoiceNo.trim();
+  if (!no) throw new Error("Enter the invoice no.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new Error("Enter the invoice date.");
+  await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate) } });
+  await syncSaleLineItemsForDeal(dealId);
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/deals");
+  revalidatePath("/");
+}

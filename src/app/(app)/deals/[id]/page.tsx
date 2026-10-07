@@ -18,6 +18,7 @@ import { RecordTimeline } from "../../record-timeline";
 import { TagChips } from "@/components/tag-chips";
 import { deleteDeal, viewQuote, approveDealDiscount } from "../actions";
 import { StageActions } from "../stage-actions";
+import { InvoiceEntry } from "../invoice-entry";
 import { DealItemsSection } from "../deal-items-section";
 import { SaleLineItemsTable } from "../sale-line-items-table";
 import { StakeholdersSection } from "../stakeholders-section";
@@ -129,6 +130,14 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
       />
 
       <div className="p-6 space-y-6">
+        {deal.stage === "WON" && !deal.invoiceNo && deal.sourceTxnNo == null && deal.closedAt && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-sm text-amber-800">
+              <span className="font-semibold">This won deal has no invoice no.</span> Add the invoice raised for it:
+            </p>
+            <InvoiceEntry dealId={deal.id} closedAt={deal.closedAt.toISOString().slice(0, 10)} />
+          </div>
+        )}
         {deal.tags.length > 0 && <TagChips tags={deal.tags} />}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

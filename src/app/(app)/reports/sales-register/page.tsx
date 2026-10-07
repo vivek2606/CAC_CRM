@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-table";
+import { InvoiceEntry } from "../../deals/invoice-entry";
+import { formatCurrency, formatDate } from "@/lib/format";
+import Link from "next/link";
 
 // Line-by-line sales register: every product line sold (from the Sales
 // Register import and deals won in the CRM) plus Project & Service billing,
@@ -56,7 +59,7 @@ export default async function SalesRegisterPage({
   const category = params.category || null;
 
   const [lines, billings, categories] = await Promise.all([
-    category === "Project & Service"
+    category === "Project & Service" || category === "No products listed"
       ? Promise.resolve([])
       : prisma.saleLineItem.findMany({
           where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...(category ? { product: { category } } : {}) },
@@ -84,6 +87,17 @@ export default async function SalesRegisterPage({
     prisma.product.findMany({ distinct: ["category"], select: { category: true }, orderBy: { category: "asc" } }),
   ]);
 
+  // Deals won in the CRM with no product lines still belong in the register -
+  // one line at the deal's value.
+  const bareDeals =
+    category && category !== "No products listed"
+      ? []
+      : await prisma.deal.findMany({
+          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere },
+          take: MAX_ROWS,
+          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, owner: { select: { name: true } }, account: { select: { name: true, code: true } } },
+        });
+
   // Account codes for project billing lines (they carry the customer name only).
   const custNames = [...new Set(billings.map((b) => b.custName))];
   const accounts = custNames.length
@@ -108,6 +122,21 @@ export default async function SalesRegisterPage({
       invoiceDate: iso(l.docDate),
       dealId: l.deal?.id ?? null,
     })),
+    ...bareDeals.map((d) => ({
+      id: d.id,
+      accountName: d.account?.name ?? d.title,
+      accountCode: d.account?.code ?? "",
+      salesPerson: d.owner.name,
+      productCode: "",
+      product: d.title,
+      category: "No products listed",
+      qty: 1,
+      rate: d.value,
+      amount: d.value,
+      invoiceNo: d.invoiceNo ?? "",
+      invoiceDate: iso(d.closedAt!),
+      dealId: d.id,
+    })),
     ...billings.map((b) => ({
       id: b.id,
       accountName: b.custName,
@@ -124,8 +153,16 @@ export default async function SalesRegisterPage({
       dealId: null,
     })),
   ];
+  // Deals won in the CRM before the invoice was asked for.
+  const missingInvoice = await prisma.deal.findMany({
+    where: { stage: "WON", sourceTxnNo: null, invoiceNo: null, ...(all ? {} : { ownerId: user.id }) },
+    orderBy: { closedAt: "desc" },
+    take: 200,
+    select: { id: true, title: true, value: true, closedAt: true, owner: { select: { name: true } }, account: { select: { name: true } } },
+  });
+
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
-  const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service"];
+  const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service", "No products listed"];
 
   return (
     <div>
@@ -164,6 +201,40 @@ export default async function SalesRegisterPage({
             Show
           </button>
         </form>
+        {missingInvoice.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50">
+            <div className="px-4 pt-3 pb-2">
+              <p className="text-sm font-semibold text-amber-900">
+                {missingInvoice.length} won deal{missingInvoice.length === 1 ? "" : "s"} missing an invoice no.
+              </p>
+              <p className="text-xs text-amber-800">
+                Marked Won in the CRM before the invoice was asked for. Add each one&apos;s invoice no. and date - the date is when the sale counts.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-amber-100">
+                  {missingInvoice.map((d) => (
+                    <tr key={d.id}>
+                      <td className="px-4 py-1.5">
+                        <Link href={`/deals/${d.id}`} className="font-medium text-indigo-700 hover:underline">
+                          {d.account?.name ?? d.title}
+                        </Link>
+                        <div className="text-[11px] text-slate-500">{d.title}</div>
+                      </td>
+                      {all && <td className="px-2 py-1.5 whitespace-nowrap text-slate-700">{d.owner.name}</td>}
+                      <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">Won {d.closedAt ? formatDate(d.closedAt) : ""}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-700">{formatCurrency(d.value)}</td>
+                      <td className="px-4 py-1.5">
+                        <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} compact />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {truncated && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
