@@ -80,7 +80,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     });
   }
 
-  function confirmWon(closedAt: string) {
+  function confirmWon(closedAt: string, invoiceNo: string) {
     const dealId = pendingWonDealId;
     setPendingWonDealId(null);
     if (!dealId) return;
@@ -89,7 +89,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     setItems((prev) => prev.filter((d) => d.id !== dealId));
     startTransition(async () => {
       try {
-        await updateDealStage(dealId, "WON", undefined, undefined, closedAt);
+        await updateDealStage(dealId, "WON", undefined, undefined, closedAt, invoiceNo);
       } catch (e) {
         if (deal) setItems((prev) => [...prev, deal]);
         alert(e instanceof Error ? e.message : "Could not update this deal.");

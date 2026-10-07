@@ -272,6 +272,12 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
                   <dd className="text-slate-700">{formatDate(deal.closedAt)}</dd>
                 </div>
               )}
+              {deal.stage === "WON" && (deal.invoiceNo || deal.sourceTxnNo != null) && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Invoice no.</dt>
+                  <dd className="text-slate-700">{deal.invoiceNo ?? deal.sourceTxnNo}</dd>
+                </div>
+              )}
               {deal.lostReasonCategory && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Lost reason</dt>

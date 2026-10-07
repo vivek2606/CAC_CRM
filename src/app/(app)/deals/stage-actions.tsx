@@ -28,12 +28,12 @@ export function StageActions({
 
   if (stage === "WON" || stage === "LOST") return null;
 
-  function markWon(closedAt: string) {
+  function markWon(closedAt: string, invoiceNo: string) {
     setShowWonDialog(false);
     setError(null);
     startTransition(async () => {
       try {
-        await updateDealStage(dealId, "WON", undefined, undefined, closedAt);
+        await updateDealStage(dealId, "WON", undefined, undefined, closedAt, invoiceNo);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not mark this deal Won.");

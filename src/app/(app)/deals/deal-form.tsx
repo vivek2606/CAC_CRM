@@ -64,6 +64,7 @@ export function DealForm({
     competitorBrand?: string | null;
     paymentTerms?: PaymentTerms | null;
     expectedDeliveryDate?: string | null;
+    invoiceNo?: string | null;
     createdAt?: string;
     tags?: string[];
   };
@@ -254,6 +255,17 @@ export function DealForm({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
+
+        {defaultValues?.stage === "WON" && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Invoice no.</label>
+            <input
+              name="invoiceNo"
+              defaultValue={defaultValues?.invoiceNo ?? ""}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Expected delivery date</label>

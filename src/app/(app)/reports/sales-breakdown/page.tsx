@@ -58,6 +58,7 @@ export default async function SalesBreakdownPage({
             closedAt: true,
             sourceTxnNo: true,
             sourceDocKey: true,
+            invoiceNo: true,
             account: { select: { name: true } },
           },
         }),
@@ -85,7 +86,7 @@ export default async function SalesBreakdownPage({
       return {
         key: d.id,
         source: !imported ? "Entered in CRM" : d.value < 0 ? "Register return" : "Register invoice",
-        docNo: imported ? String(d.sourceTxnNo) : "—",
+        docNo: imported ? String(d.sourceTxnNo) : (d.invoiceNo ?? "—"),
         date: d.closedAt!,
         customer,
         detail: d.title,

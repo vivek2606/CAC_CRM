@@ -340,6 +340,9 @@ model Deal {
   // Assigned once, the first time a quote is generated for this deal - kept
   // stable across re-prints even if line items change afterward.
   quoteNumber   Int?        @unique
+  // Entered when a deal is marked Won in the CRM (the register's Txn No for
+  // imported deals is sourceTxnNo).
+  invoiceNo     String?
   // Set when a Head approves a deal whose itemized total is discounted past
   // DISCOUNT_APPROVAL_THRESHOLD_PCT below catalog price - required before
   // the deal can be marked Won. Cleared whenever line items change, so a

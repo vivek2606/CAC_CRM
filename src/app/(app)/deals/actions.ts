@@ -244,6 +244,11 @@ export async function updateDeal(dealId: string, formData: FormData) {
       contactId: toNullable(parsed.contactId),
       ownerId,
       closedAt: isClosed ? existing.closedAt : null,
+      // A won deal's invoice no. can be corrected here (blank keeps it).
+      invoiceNo:
+        existing.stage === "WON" && typeof formData.get("invoiceNo") === "string" && String(formData.get("invoiceNo")).trim()
+          ? String(formData.get("invoiceNo")).trim().slice(0, 60)
+          : existing.invoiceNo,
       lostReasonCategory: isClosed ? existing.lostReasonCategory : null,
       lostReason: isClosed ? existing.lostReason : null,
       equipmentType: toEquipmentType(parsed.equipmentType),
@@ -281,13 +286,17 @@ export async function updateDealStage(
   // deal they're only now getting around to updating in the CRM. Defaults
   // to today from the Mark Won/Lost dialogs, same as the entry-date field
   // on the forms above.
-  closedAtOverride?: string
+  closedAtOverride?: string,
+  // Required when marking Won - the invoice raised for the deal.
+  invoiceNo?: string
 ) {
   const user = await requireUser();
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
   if (stage === "WON") {
+    if (!invoiceNo?.trim()) throw new Error("Enter the invoice no. to mark this deal Won.");
+    if (!closedAtOverride) throw new Error("Enter the invoice date to mark this deal Won.");
     if (!existing.accountId) {
       throw new Error("Link this deal to an account before marking it Won.");
     }
@@ -310,6 +319,7 @@ export async function updateDealStage(
       closedAt: isClosed ? parseDateInput(closedAtOverride) : null,
       lostReasonCategory: stage === "LOST" ? (lostReasonCategory ?? existing.lostReasonCategory ?? "OTHER") : null,
       lostReason: stage === "LOST" ? (lostReasonNote ?? null) : null,
+      invoiceNo: stage === "WON" ? invoiceNo!.trim().slice(0, 60) : existing.invoiceNo,
     },
   });
   await syncSaleLineItemsForDeal(dealId);

@@ -60,6 +60,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               endUseSegment: deal.endUseSegment,
               competitorBrand: deal.competitorBrand,
               paymentTerms: deal.paymentTerms,
+              invoiceNo: deal.invoiceNo ?? (deal.sourceTxnNo != null ? String(deal.sourceTxnNo) : null),
               expectedDeliveryDate: deal.expectedDeliveryDate
                 ? deal.expectedDeliveryDate.toISOString().slice(0, 10)
                 : null,

@@ -70,7 +70,7 @@ export default async function SalesRegisterPage({
             sourceKey: true,
             owner: { select: { name: true } },
             product: { select: { code: true, model: true, category: true } },
-            deal: { select: { id: true, sourceTxnNo: true, title: true, account: { select: { name: true, code: true } } } },
+            deal: { select: { id: true, sourceTxnNo: true, invoiceNo: true, title: true, account: { select: { name: true, code: true } } } },
           },
         }),
     category && category !== "Project & Service"
@@ -103,7 +103,8 @@ export default async function SalesRegisterPage({
       qty: l.qty,
       rate: l.qty ? Math.round((l.value / l.qty) * 100) / 100 : l.value,
       amount: l.value,
-      invoiceNo: l.deal?.sourceTxnNo != null ? String(l.deal.sourceTxnNo) : (invoiceFromKey(l.sourceKey, l.product.code) ?? ""),
+      invoiceNo:
+        l.deal?.sourceTxnNo != null ? String(l.deal.sourceTxnNo) : (l.deal?.invoiceNo ?? invoiceFromKey(l.sourceKey, l.product.code) ?? ""),
       invoiceDate: iso(l.docDate),
       dealId: l.deal?.id ?? null,
     })),
