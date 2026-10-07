@@ -5,7 +5,8 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { parseSalesRegisterBuffer } from "@/lib/import/parse-sales-register";
-import { transformSalesRegister } from "@/lib/import/sales-register";
+import { transformSalesRegister, custNameMatchKey } from "@/lib/import/sales-register";
+import { getAccountAliases } from "@/lib/account-duplicates";
 import { MANUAL_PREFIX, UPLOAD_PREFIX } from "@/lib/project-billing";
 
 const DEMO_EMAILS = [
@@ -98,6 +99,17 @@ export async function importSalesRegister(
     if (rows.length === 0) return { error: `The file has no rows up to ${upToLabel}.` };
   }
 
+  // Accounts merged away (Duplicate accounts): their names and codes are
+  // billed to the account they were merged into.
+  const aliases = await getAccountAliases();
+  const aliasIds = [...new Set([...Object.values(aliases.names), ...Object.values(aliases.codes)])];
+  if (aliasIds.length) {
+    const targets = new Map((await prisma.account.findMany({ where: { id: { in: aliasIds } }, select: { id: true, name: true, code: true } })).map((a) => [a.id, a]));
+    rows = rows.map((r) => {
+      const t = targets.get(aliases.codes[r.custCode.trim()] ?? aliases.names[custNameMatchKey(r.custName)] ?? "");
+      return t ? { ...r, custName: t.name, custCode: t.code ?? r.custCode } : r;
+    });
+  }
   const knownAccounts = await prisma.account.findMany({ where: { code: { not: null } }, select: { name: true, code: true } });
   const result = transformSalesRegister(
     rows,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { PerfTabs } from "@/components/perf-tabs";
+import { ForecastTable, type ForecastRow } from "./forecast-table";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { TargetChart } from "@/components/target-chart";
 import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
@@ -146,6 +147,30 @@ export default async function TargetsPage({
   for (const d of [...wonDeals, ...monthProjects]) {
     actualByUserId.set(d.ownerId, (actualByUserId.get(d.ownerId) ?? 0) + d.value);
   }
+
+  // Forecast: open deals expected to close this month (in the current month,
+  // also those already past their expected close date), by probability.
+  const isCurrentMonth = monthValue(month) === monthValue(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+  const openDeals = await prisma.deal.findMany({
+    where: {
+      ownerId: { in: repIds },
+      stage: { notIn: ["WON", "LOST"] },
+      expectedCloseDate: isCurrentMonth ? { lt: nextMonth } : { gte: month, lt: nextMonth },
+    },
+    select: { ownerId: true, value: true, probability: true },
+  });
+  const forecastRows: ForecastRow[] = reps.map((r) => {
+    const mine = openDeals.filter((d) => d.ownerId === r.id);
+    return {
+      userId: r.id,
+      name: r.name,
+      target: targetByUserId.get(r.id) ?? 0,
+      won: actualByUserId.get(r.id) ?? 0,
+      openCount: mine.length,
+      openValue: mine.reduce((t, d) => t + d.value, 0),
+      weighted: Math.round(mine.reduce((t, d) => t + (d.value * (d.probability ?? 0)) / 100, 0) * 100) / 100,
+    };
+  });
 
   const rows = reps.map((r) => ({
     name: r.name.split(" ")[0],
@@ -320,6 +345,12 @@ export default async function TargetsPage({
             />
           </Card>
         </div>
+
+        {(isCurrentMonth || month > now) && (
+          <Card className="p-5">
+            <ForecastTable rows={forecastRows} monthLabel={monthLabel(month)} isCurrent={isCurrentMonth} monthParam={monthStr} />
+          </Card>
+        )}
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Target vs. Actual, per sales rep</h2>

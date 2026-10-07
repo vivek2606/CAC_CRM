@@ -8,6 +8,7 @@ import { Sidebar, sectionFor } from "./sidebar";
 import { SearchBox } from "./search-box";
 import { SakuragiMark } from "@/components/sakuragi-logo";
 import { CalculatorButton } from "@/components/calculator";
+import { NotificationBell } from "@/components/notification-bell";
 
 // In-app tabs: the installed app has no browser tab strip, so each menu
 // section opens in a tab of its own here. The first tab is the normal page;
@@ -89,7 +90,8 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
             <SakuragiMark className="lg:hidden h-7 w-7 shrink-0" />
             <span className="lg:hidden font-semibold text-slate-900 text-sm shrink-0">SAKURAGI</span>
             <SearchBox />
-            <div className="ml-auto shrink-0">
+            <div className="ml-auto shrink-0 flex items-center gap-2">
+              <NotificationBell onNavigate={() => setActive("main")} />
               <CalculatorButton />
             </div>
           </div>
