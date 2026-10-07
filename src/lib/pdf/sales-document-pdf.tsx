@@ -73,15 +73,15 @@ const col = {
   amt: [s.cell, s.last, { width: W.amt, textAlign: "right" as const }],
 };
 
-function TableHeader() {
+function TableHeader({ vatInclusive }: { vatInclusive: boolean }) {
   return (
     <View style={[s.row, s.th]}>
       <Text style={[...col.no, s.thText]}>#</Text>
       <Text style={[...col.desc, s.thText]}>Description</Text>
       <Text style={[...col.unit, s.thText]}>Unit</Text>
       <Text style={[...col.qty, s.thText]}>Qty</Text>
-      <Text style={[...col.rate, s.thText]}>Rate (NGN)</Text>
-      <Text style={[...col.amt, s.thText]}>Amount (NGN)</Text>
+      <Text style={[...col.rate, s.thText]}>{vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)"}</Text>
+      <Text style={[...col.amt, s.thText]}>{vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
     </View>
   );
 }
@@ -124,7 +124,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
                     {doc.ref ? ` ${doc.ref}` : ""} (continued)
                   </Text>
                 </View>
-                <TableHeader />
+                <TableHeader vatInclusive={doc.vatInclusive} />
               </View>
             ) : null
           }
@@ -190,7 +190,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
         ) : null}
 
         <View style={s.body}>
-          <TableHeader />
+          <TableHeader vatInclusive={doc.vatInclusive} />
           {doc.rows.map((r, i) =>
             r.kind === "section" ? (
               <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
@@ -221,18 +221,27 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
 
           <View style={s.bottom} wrap={false}>
             <EmptyRows />
-            <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
-              <Text style={s.totalLabel}>Subtotal (excl. VAT)</Text>
-              <Text style={s.totalValue}>{money(doc.subtotal)}</Text>
-            </View>
-            <View style={s.totalRow}>
-              <Text style={s.totalLabel}>VAT @ {doc.vatRatePct}%</Text>
-              <Text style={s.totalValue}>{money(doc.vat)}</Text>
-            </View>
-            <View style={[s.totalRow, { backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
-              <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
-              <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
-            </View>
+            {doc.vatInclusive ? (
+              <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
+                <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total inclusive of VAT (@{doc.vatRatePct}%) (NGN)</Text>
+                <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
+                  <Text style={s.totalLabel}>Subtotal (excl. VAT)</Text>
+                  <Text style={s.totalValue}>{money(doc.subtotal)}</Text>
+                </View>
+                <View style={s.totalRow}>
+                  <Text style={s.totalLabel}>VAT @ {doc.vatRatePct}%</Text>
+                  <Text style={s.totalValue}>{money(doc.vat)}</Text>
+                </View>
+                <View style={[s.totalRow, { backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
+                  <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
+                  <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
+                </View>
+              </>
+            )}
             <Text style={s.words}>
               <Text style={s.strong}>Amount in words: </Text>
               {doc.totalInWords}

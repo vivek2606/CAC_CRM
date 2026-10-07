@@ -72,7 +72,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   // Items
   r += 2;
   const headerRow = r;
-  ["#", "Description", "Unit", "Qty", "Rate (NGN)", "Amount (NGN)"].forEach((h, i) =>
+  ["#", "Description", "Unit", "Qty", doc.vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)", doc.vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"].forEach((h, i) =>
     put(r, i + 1, h, {
       font: { bold: true, size: 9, color: { argb: "FF1E3A6E" } },
       fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EFF9" } },
@@ -115,11 +115,17 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     return put(r, 6, value, { numFmt: MONEY, font: { bold } });
   };
   r++;
-  total("Subtotal (excl. VAT)", { formula: `SUM(F${first}:F${last})`, result: doc.subtotal });
-  const subRow = r;
-  total(`VAT @ ${doc.vatRatePct}%`, { formula: `ROUND(F${subRow}*${doc.vatRatePct / 100},2)`, result: doc.vat });
-  const vatRow = r;
-  const grand = total("Total incl. VAT (NGN)", { formula: `F${subRow}+F${vatRow}`, result: doc.total }, true);
+  let grand: ExcelJS.Cell;
+  if (doc.vatInclusive) {
+    // Rates already include VAT - just the total, no separate VAT line.
+    grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `SUM(F${first}:F${last})`, result: doc.total }, true);
+  } else {
+    total("Subtotal (excl. VAT)", { formula: `SUM(F${first}:F${last})`, result: doc.subtotal });
+    const subRow = r;
+    total(`VAT @ ${doc.vatRatePct}%`, { formula: `ROUND(F${subRow}*${doc.vatRatePct / 100},2)`, result: doc.vat });
+    const vatRow = r;
+    grand = total("Total incl. VAT (NGN)", { formula: `F${subRow}+F${vatRow}`, result: doc.total }, true);
+  }
   grand.border = { top: { style: "medium" } };
   ws.getCell(r, 5).border = { top: { style: "medium" } };
 

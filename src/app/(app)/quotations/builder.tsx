@@ -52,6 +52,7 @@ type Draft = {
   rows: Row[];
   terms: string[];
   validityDays: string;
+  vatMode: "separate" | "inclusive";
   tin: string;
   bankName: string;
   accountName: string;
@@ -138,6 +139,7 @@ export function QuotationBuilder({
         : [],
       terms: [...(fromDeal?.terms ?? defaultTerms)],
       validityDays: String(validityDays),
+      vatMode: "separate",
       tin: co.tin,
       bankName: co.bankName,
       accountName: co.accountName,
@@ -216,8 +218,13 @@ export function QuotationBuilder({
   };
 
   const sns = serialNumbers(d.rows);
+  const inclusive = d.vatMode === "inclusive";
+  const vatFactor = 1 + vatRatePct / 100;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  // The suggested dealer rate is ex-VAT; in inclusive mode it's shown with VAT.
+  const suggested = (rate: number) => (inclusive ? round2(rate * vatFactor) : rate);
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.unitPrice) * 100) / 100 : 0), 0);
-  const vat = Math.round(subtotal * vatRatePct) / 100;
+  const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
 
   const payload = (): DocumentInput => ({
@@ -235,6 +242,7 @@ export function QuotationBuilder({
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
+    vatMode: d.vatMode,
     tin: d.tin,
     bankName: d.bankName,
     accountName: d.accountName,
@@ -342,7 +350,34 @@ export function QuotationBuilder({
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 p-4 pb-2">
           <h2 className="text-sm font-semibold text-slate-900">Items</h2>
-          <p className="text-xs text-slate-500">Rates are excluding VAT. VAT @ {vatRatePct}% is added on the total.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">VAT @ {vatRatePct}%:</span>
+            <div className="inline-flex rounded-lg bg-slate-100 p-1">
+              {(
+                [
+                  ["separate", "Show VAT separately"],
+                  ["inclusive", "Rates inclusive of VAT"],
+                ] as const
+              ).map(([mode, text]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    if (mode === d.vatMode) return;
+                    // Convert the rates already entered so the totals stay the same.
+                    const f = mode === "inclusive" ? vatFactor : 1 / vatFactor;
+                    update({
+                      vatMode: mode,
+                      rows: d.rows.map((r) => (r.kind === "item" && r.unitPrice.trim() !== "" ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r)),
+                    });
+                  }}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${d.vatMode === mode ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -352,7 +387,7 @@ export function QuotationBuilder({
                 <th className="px-3 py-2 min-w-[320px]">Model / description</th>
                 <th className="px-3 py-2 w-24">Unit</th>
                 <th className="px-3 py-2 w-24 text-right">Qty</th>
-                <th className="px-3 py-2 w-40 text-right">Rate excl. VAT (₦)</th>
+                <th className="px-3 py-2 w-40 text-right">{inclusive ? "Rate incl. VAT (₦)" : "Rate excl. VAT (₦)"}</th>
                 <th className="px-3 py-2 w-36 text-right">Amount (₦)</th>
                 <th className="px-2 py-2 w-24" />
               </tr>
@@ -409,7 +444,7 @@ export function QuotationBuilder({
                           onSelect={(o) => {
                             const m = o ? optionById.get(o.id) : undefined;
                             setRow(r.uid, m
-                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(m.rate) : r.unitPrice }
+                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(suggested(m.rate)) : r.unitPrice }
                               : { productId: null });
                           }}
                         />
@@ -432,7 +467,7 @@ export function QuotationBuilder({
                           {opt.code && `${opt.code} · `}In stock {opt.stock}
                           {opt.inTransit > 0 && ` · ${opt.inTransit} in transit`}
                           {opt.rate != null
-                            ? ` · Suggested ${naira(opt.rate)} excl. VAT${opt.tentative ? " (tentative)" : ""}`
+                            ? ` · Suggested ${naira(suggested(opt.rate))} ${inclusive ? "incl." : "excl."} VAT${opt.tentative ? " (tentative)" : ""}`
                             : " · No dealer price on file"}
                         </p>
                       )}
@@ -446,9 +481,10 @@ export function QuotationBuilder({
                     </td>
                     <td className="px-3 py-2 align-top">
                       <input inputMode="decimal" value={r.unitPrice} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${input} text-right`} />
-                      {opt?.rate != null && num(r.unitPrice) !== opt.rate && (
+                      {opt?.rate != null && Math.abs(num(r.unitPrice) - suggested(opt.rate)) >= 0.01 && (
                         <p className="mt-1 text-right text-[11px] text-amber-700">
-                          {num(r.unitPrice) < opt.rate ? "Below" : "Above"} suggested by {Math.abs(((num(r.unitPrice) - opt.rate) / opt.rate) * 100).toFixed(1)}%
+                          {num(r.unitPrice) < suggested(opt.rate) ? "Below" : "Above"} suggested by{" "}
+                          {Math.abs(((num(r.unitPrice) - suggested(opt.rate)) / suggested(opt.rate)) * 100).toFixed(1)}%
                         </p>
                       )}
                     </td>
@@ -493,16 +529,20 @@ export function QuotationBuilder({
         </div>
         <div className="border-t border-slate-100 p-4">
           <div className="ml-auto w-full max-w-sm space-y-1 text-sm">
-            <div className="flex justify-between text-slate-600">
-              <span>Subtotal (excl. VAT)</span>
-              <span className="tabular-nums">{naira(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-slate-600">
-              <span>VAT @ {vatRatePct}%</span>
-              <span className="tabular-nums">{naira(vat)}</span>
-            </div>
+            {!inclusive && (
+              <>
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal (excl. VAT)</span>
+                  <span className="tabular-nums">{naira(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>VAT @ {vatRatePct}%</span>
+                  <span className="tabular-nums">{naira(vat)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold text-slate-900">
-              <span>Total incl. VAT</span>
+              <span>{inclusive ? `Total inclusive of VAT (@${vatRatePct}%)` : "Total incl. VAT"}</span>
               <span className="tabular-nums">{naira(total)}</span>
             </div>
             <p className="pt-1 text-xs text-slate-500">{nairaInWords(total)}</p>

@@ -35,6 +35,9 @@ export const documentInputSchema = z.object({
   rows: z.array(rowSchema).max(300),
   terms: z.array(z.string()).max(40).default([]),
   validityDays: z.number().int().min(0).max(365).default(7),
+  // "separate": rates excl. VAT, VAT added below. "inclusive": the rates
+  // entered already include VAT and no VAT line is shown.
+  vatMode: z.enum(["separate", "inclusive"]).default("separate"),
   // Pre-filled from Company Details, editable per document.
   tin: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(120).default(""),
@@ -65,6 +68,7 @@ export type SalesDocument = {
   bank: { bankName: string; accountName: string; accountNumber: string };
   signatory: { name: string; designation: string; phone: string };
   rows: DocRow[];
+  vatInclusive: boolean;
   subtotal: number;
   vatRatePct: number;
   vat: number;
@@ -83,8 +87,9 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
       return { ...r, sn: sns[i], amount: round2(r.qty * r.unitPrice) };
     })
     .filter((r): r is DocRow => r != null);
+  const vatInclusive = input.vatMode === "inclusive";
   const subtotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.amount : 0), 0));
-  const vat = round2((subtotal * settings.vatRatePct) / 100);
+  const vat = vatInclusive ? 0 : round2((subtotal * settings.vatRatePct) / 100);
   const total = round2(subtotal + vat);
   return {
     type: input.type,
@@ -100,6 +105,7 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     bank: { bankName: input.bankName, accountName: input.accountName, accountNumber: input.accountNumber },
     signatory: { name: input.signatoryName, designation: input.signatoryDesignation, phone: input.signatoryPhone },
     rows,
+    vatInclusive,
     subtotal,
     vatRatePct: settings.vatRatePct,
     vat,
