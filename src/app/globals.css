@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* Tailwind v4 dropped the pointer cursor on buttons - bring it back
+   everywhere (disabled buttons keep the default arrow). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  select:not(:disabled),
+  input[type="file"]::file-selector-button,
+  label:has(> input[type="checkbox"]) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
