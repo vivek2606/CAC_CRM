@@ -24,6 +24,7 @@ import {
   Wrench,
   Receipt,
   Landmark,
+  TableProperties,
   FileText,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
@@ -86,6 +87,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
   { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
   { href: "/reports/category", label: "Sales by Category", icon: PieChart, color: "fuchsia" },
+  { href: "/reports/sales-register", label: "Sales Register", icon: TableProperties, color: "teal" },
 ];
 
 // Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
@@ -114,6 +116,13 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  // The most specific nav entry for this page - so /reports/sales-register
+  // highlights "Sales Register", not "Team Reports" (/reports) as well.
+  const activeHref =
+    [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS]
+      .map((n) => n.href)
+      .filter((h) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(h + "/")))
+      .sort((a, b) => b.length - a.length)[0] ?? null;
 
   return (
     <aside
@@ -136,7 +145,7 @@ export function Sidebar({
 
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {NAV_ITEMS.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active = item.href === activeHref;
           const Icon = item.icon;
           const colors = NAV_COLOR_CLASSES[item.color];
           return (
@@ -163,7 +172,7 @@ export function Sidebar({
               Management
             </div>
             {MANAGEMENT_NAV_ITEMS.filter((item) => !item.headOnly || user.role === "HEAD").map((item) => {
-              const active = pathname.startsWith(item.href);
+              const active = item.href === activeHref;
               const Icon = item.icon;
               const colors = NAV_COLOR_CLASSES[item.color];
               return (
