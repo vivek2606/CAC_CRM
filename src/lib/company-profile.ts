@@ -102,8 +102,14 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 // earlier save may still hold.
 function sakuragiOnly(settings: CompanySettings): CompanySettings {
   const saved = settings.companies.find((c) => c.key === "SAKURAGI") ?? DEFAULT_COMPANY_SETTINGS.companies[0];
-  // No logo uploaded (or it was removed) -> the built-in Sakuragi logo.
-  const sakuragi = { ...saved, logo: saved.logo || SAKURAGI_LOGO };
+  // No logo uploaded (or it was removed) -> the built-in Sakuragi logo. An
+  // address saved before it was corrected ("Kudirat Obiola St.") is replaced.
+  const oldAddress = saved.addressLines.some((l) => /obiola/i.test(l));
+  const sakuragi = {
+    ...saved,
+    logo: saved.logo || SAKURAGI_LOGO,
+    addressLines: oldAddress ? DEFAULT_COMPANY_SETTINGS.companies[0].addressLines : saved.addressLines,
+  };
   return { ...settings, companies: [sakuragi], defaultCompany: sakuragi.key };
 }
 
