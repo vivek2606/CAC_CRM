@@ -109,8 +109,15 @@ export default async function DealDetailPage({
               stage={deal.stage}
               blockWonReason={stageActionsBlockReason}
               openWon={sp.markWon === "1"}
-              existingItems={deal.items.map((i) => ({ label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
-              products={productOptions.map((p) => ({ id: p.id, label: p.label, defaultPrice: p.defaultPrice }))}
+              existingItems={deal.items.map((i) => ({ productId: i.productId, label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
+              quotedValue={deal.value}
+              products={[
+                ...productOptions.map((p) => ({ id: p.id, label: p.label, defaultPrice: p.defaultPrice })),
+                // The deal's own products, even ones with no dealer price on file.
+                ...deal.items
+                  .filter((i, n, all) => !productOptions.some((p) => p.id === i.productId) && all.findIndex((x) => x.productId === i.productId) === n)
+                  .map((i) => ({ id: i.productId, label: `${i.product.model} (${i.product.code})`, defaultPrice: null })),
+              ]}
             />
             {deal.items.length > 0 && (
               <form action={viewQuoteAction}>

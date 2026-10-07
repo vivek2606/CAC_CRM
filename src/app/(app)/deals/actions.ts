@@ -500,32 +500,101 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   revalidatePath("/");
 }
 
-// Mark Won from the dialog: records the products billed first (when the
-// deal has none yet), then marks it Won with the invoice no. and date.
-export async function markDealWon(
-  dealId: string,
-  closedAt: string,
-  invoiceNo: string,
-  newItems: { productId: string; qty: number; unitPrice: number }[],
-) {
+export type WonInvoice = { invoiceNo: string; closedAt: string; items: { productId: string; qty: number; unitPrice: number }[] };
+
+// Mark Won from the dialog, with the products billed on each invoice. One
+// invoice: this deal is won with those products. Several (the order was
+// billed on two or more invoices): the first stays on this deal and each
+// other invoice becomes its own Won deal - same account, contact, customer,
+// owner and details - with its products, value, invoice no. and date.
+// Everything is checked before anything is saved.
+export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   const user = await requireUser();
-  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, _count: { select: { items: true } } } });
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   if (deal.stage === "WON" || deal.stage === "LOST") throw new Error("This deal is already closed.");
-  if (deal._count.items === 0) {
-    const rows = newItems.filter((i) => i.productId && i.qty > 0 && i.unitPrice > 0);
-    if (rows.length === 0) throw new Error("Add the products billed (quantity and basic rate) to mark this deal Won.");
-    if (rows.length !== newItems.length) throw new Error("Every product billed needs a quantity and a basic rate above 0.");
-    const found = await prisma.product.count({ where: { id: { in: rows.map((r) => r.productId) } } });
-    if (found !== new Set(rows.map((r) => r.productId)).size) throw new Error("A product picked no longer exists - pick it again.");
-    await prisma.dealLineItem.createMany({
-      data: rows.map((r) => ({ dealId, productId: r.productId, qty: r.qty, unitPrice: Math.round(r.unitPrice * 100) / 100 })),
-    });
-    // The deal's value follows the products billed.
-    const value = rows.reduce((s, r) => s + r.qty * r.unitPrice, 0);
-    await prisma.deal.update({ where: { id: dealId }, data: { value: Math.round(value * 100) / 100, discountApprovedAt: null, discountApprovedById: null } });
+  if (!deal.accountId) throw new Error("Link this deal to an account before marking it Won.");
+
+  // ---- validate everything first
+  if (invoices.length === 0) throw new Error("Add the invoice.");
+  const nos = invoices.map((i) => i.invoiceNo.trim());
+  if (nos.some((n) => !n)) throw new Error("Enter the invoice no. for every invoice.");
+  if (new Set(nos.map((n) => n.toLowerCase())).size !== nos.length) throw new Error("Each invoice needs a different invoice no.");
+  if (invoices.some((i) => !/^\d{4}-\d{2}-\d{2}$/.test(i.closedAt))) throw new Error("Enter the invoice date for every invoice.");
+  for (const [n, inv] of invoices.entries()) {
+    const label = invoices.length > 1 ? ` on invoice ${inv.invoiceNo.trim() || n + 1}` : "";
+    if (inv.items.length === 0) throw new Error(`Add the products billed${label}.`);
+    if (inv.items.some((i) => !i.productId || !(i.qty > 0) || !(i.unitPrice > 0))) {
+      throw new Error(`Every product${label} needs a model, a quantity and a basic rate above 0.`);
+    }
   }
-  await updateDealStage(dealId, "WON", undefined, undefined, closedAt, invoiceNo);
+  const productIds = [...new Set(invoices.flatMap((i) => i.items.map((x) => x.productId)))];
+  if ((await prisma.product.count({ where: { id: { in: productIds } } })) !== productIds.length) {
+    throw new Error("A product picked no longer exists - pick it again.");
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const norm = (items: WonInvoice["items"]) =>
+    items.map((i) => `${i.productId}|${i.qty}|${round2(i.unitPrice)}`).sort().join(",");
+  // Unchanged products keep a standing discount approval; any change needs a fresh one.
+  const firstUnchanged = norm(invoices[0].items) === norm(deal.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })));
+  const approvedAt = deal.discountApprovedAt;
+  const prices = await getLatestPriceByProduct();
+  for (const [n, inv] of invoices.entries()) {
+    const approval = n === 0 ? (firstUnchanged ? approvedAt : null) : approvedAt && firstUnchanged ? approvedAt : null;
+    const d = computeDealDiscount(inv.items, prices, approval);
+    if (d?.needsApproval) {
+      throw new Error(
+        `${invoices.length > 1 ? `Invoice ${inv.invoiceNo.trim()}: ` : ""}discounted ${d.discountPct.toFixed(1)}% below list price - needs Head approval before it can be marked Won.`,
+      );
+    }
+  }
+
+  // ---- this deal: the first invoice
+  const [first, ...rest] = invoices;
+  if (!firstUnchanged) {
+    await prisma.dealLineItem.deleteMany({ where: { dealId } });
+    await prisma.dealLineItem.createMany({ data: first.items.map((i) => ({ dealId, productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) });
+    await prisma.deal.update({ where: { id: dealId }, data: { discountApprovedAt: null, discountApprovedById: null } });
+  }
+  await syncDealValueFromItems(dealId);
+  await updateDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim());
+
+  // ---- each further invoice: its own Won deal, a copy of this one
+  for (const inv of rest) {
+    const value = round2(inv.items.reduce((t, i) => t + i.qty * i.unitPrice, 0));
+    const copy = await prisma.deal.create({
+      data: {
+        title: `${deal.title} - Inv ${inv.invoiceNo.trim()}`,
+        customerName: deal.customerName,
+        customerPhone: deal.customerPhone,
+        stage: deal.stage,
+        value,
+        probability: deal.probability,
+        expectedCloseDate: deal.expectedCloseDate,
+        equipmentType: deal.equipmentType,
+        endUseSegment: deal.endUseSegment,
+        competitorBrand: deal.competitorBrand,
+        paymentTerms: deal.paymentTerms,
+        expectedDeliveryDate: deal.expectedDeliveryDate,
+        tags: deal.tags,
+        ownerId: deal.ownerId,
+        accountId: deal.accountId,
+        contactId: deal.contactId,
+        createdAt: deal.createdAt,
+        discountApprovedAt: approvedAt && firstUnchanged ? approvedAt : null,
+        discountApprovedById: approvedAt && firstUnchanged ? deal.discountApprovedById : null,
+        items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
+      },
+    });
+    await updateDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim());
+  }
+  if (rest.length > 0) {
+    // The lead behind the order is worth the whole order - every invoice.
+    const total = round2(invoices.reduce((t, inv) => t + inv.items.reduce((u, i) => u + i.qty * i.unitPrice, 0), 0));
+    await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value: total } });
+  }
+  revalidatePath("/deals");
+  revalidatePath("/reports/sales-register");
 }
 
 export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number };

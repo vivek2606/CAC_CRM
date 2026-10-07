@@ -59,7 +59,7 @@ export function AddBillingForm({
           <input name="description" placeholder="e.g. Installation project" className={inputClass} />
         </div>
         <div>
-          <label className={labelClass}>Amount, ₦ net of VAT (negative for a credit note)</label>
+          <label className={labelClass}>Amount excl. VAT, ₦ (negative for a credit note)</label>
           <input name="value" inputMode="decimal" required className={inputClass} />
         </div>
       </div>

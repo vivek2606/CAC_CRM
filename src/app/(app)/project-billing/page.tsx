@@ -63,7 +63,7 @@ export default async function ProjectBillingPage({
     <div>
       <PageHeader
         title="Project & Service Billing"
-        description="Under a sales person it is project billing and counts toward their target and incentive; under the Service Manager it is service billing"
+        description="Amounts excl. VAT. Under a sales person it is project billing and counts toward their target and incentive; under the Service Manager it is service billing"
       />
       <div className="p-6 space-y-6">
         <Card className="p-5">
@@ -78,7 +78,7 @@ export default async function ProjectBillingPage({
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Upload from Excel</h2>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Columns: Date, Invoice No, Customer, Sales Person, Description, Value - Invoice No is required. Customer is matched to
+            Columns: Date, Invoice No, Customer, Sales Person, Description, Value (excl. VAT) - Invoice No is required. Customer is matched to
             the account by name or code. Sales Person is matched to the login by name - lines under the Service Manager are service billing, everyone else&apos;s project billing. Uploading the
             same sheet again doesn&apos;t double it.
           </p>
@@ -145,7 +145,7 @@ export default async function ProjectBillingPage({
             </h2>
             <ExportCsvButton
               filename={`project-service-billing-${monthValue(month)}.csv`}
-              headers={["Date", "Invoice No", "Customer", "Sales Person", "Billing", "Description", "Value", "Source"]}
+              headers={["Date", "Invoice No", "Customer", "Sales Person", "Billing", "Description", "Value (excl. VAT)", "Source"]}
               rows={lines.map((l) => [
                 l.docDate.toISOString().slice(0, 10),
                 l.docKey.includes("/") ? String(l.txnNo) : l.docKey,
@@ -171,7 +171,7 @@ export default async function ProjectBillingPage({
                     <th className="px-3 py-3 font-medium">Invoice #</th>
                     <th className="px-3 py-3 font-medium">Customer / detail</th>
                     <th className="px-3 py-3 font-medium">Sales person</th>
-                    <th className="px-3 py-3 font-medium text-right">Value</th>
+                    <th className="px-3 py-3 font-medium text-right">Value (excl. VAT)</th>
                     <th className="px-4 py-3 font-medium">Source</th>
                   </tr>
                 </thead>

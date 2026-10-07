@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { updateDealStage, markDealWon } from "./actions";
 import { MarkLostDialog } from "./mark-lost-dialog";
-import { MarkWonDialog, type WonExistingItem, type WonNewItem, type WonProductOption } from "./mark-won-dialog";
+import { MarkWonDialog, type WonExistingItem, type WonInvoiceInput, type WonProductOption } from "./mark-won-dialog";
 import type { DealStage, LostReason } from "@prisma/client";
 
 export function StageActions({
@@ -13,12 +13,14 @@ export function StageActions({
   stage,
   blockWonReason,
   existingItems,
+  quotedValue,
   products,
   openWon = false,
 }: {
   dealId: string;
   stage: DealStage;
   existingItems: WonExistingItem[];
+  quotedValue: number;
   products: WonProductOption[];
   // Open the Mark Won dialog straight away (e.g. after dropping the deal on
   // Won in the Pipeline board).
@@ -36,12 +38,12 @@ export function StageActions({
 
   if (stage === "WON" || stage === "LOST") return null;
 
-  function markWon(closedAt: string, invoiceNo: string, newItems: WonNewItem[]) {
+  function markWon(invoices: WonInvoiceInput[]) {
     setShowWonDialog(false);
     setError(null);
     startTransition(async () => {
       try {
-        await markDealWon(dealId, closedAt, invoiceNo, newItems);
+        await markDealWon(dealId, invoices);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not mark this deal Won.");
@@ -84,7 +86,7 @@ export function StageActions({
         </button>
         {showLostDialog && <MarkLostDialog onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
         {showWonDialog && (
-          <MarkWonDialog existingItems={existingItems} products={products} onConfirm={markWon} onCancel={() => setShowWonDialog(false)} />
+          <MarkWonDialog existingItems={existingItems} quotedValue={quotedValue} products={products} onConfirm={markWon} onCancel={() => setShowWonDialog(false)} />
         )}
       </div>
       {(blockWonReason || error) && (

@@ -155,7 +155,7 @@ export default async function ServiceBillingsPage({
                 <h2 className="text-sm font-semibold text-slate-900">Service billing lines ({lines.length})</h2>
                 <ExportCsvButton
                   filename={`service-billing-lines-${monthValue(from)}-to-${monthValue(to)}.csv`}
-                  headers={["Date", "Invoice #", "Customer", "Detail", "Value", "Source"]}
+                  headers={["Date", "Invoice #", "Customer", "Detail", "Value (excl. VAT)", "Source"]}
                   rows={lines.map((l) => [l.date.toISOString().slice(0, 10), l.invoice, l.customer, l.detail, l.value, l.source])}
                 />
               </div>
@@ -174,7 +174,7 @@ export default async function ServiceBillingsPage({
                         <th className="px-4 py-3 font-medium">Date</th>
                         <th className="px-3 py-3 font-medium">Invoice #</th>
                         <th className="px-3 py-3 font-medium">Customer / detail</th>
-                        <th className="px-3 py-3 font-medium text-right">Value</th>
+                        <th className="px-3 py-3 font-medium text-right">Value (excl. VAT)</th>
                         <th className="px-4 py-3 font-medium">Source</th>
                       </tr>
                     </thead>

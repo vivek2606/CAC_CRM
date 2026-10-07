@@ -21,10 +21,10 @@ const COLUMNS = {
   customer: ["customer", "customer name", "cust name"],
   salesPerson: ["sales person", "salesperson", "salesmen", "salesman"],
   description: ["description", "item name", "details", "item"],
-  value: ["value", "amount", "net amt", "net amount"],
+  value: ["value", "value (excl. vat)", "value excl. vat", "amount", "amount (excl. vat)", "net amt", "net amount"],
 };
 
-export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Description", "Value"];
+export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Description", "Value (excl. VAT)"];
 
 export async function parseProjectBillingBuffer(
   buffer: ArrayBuffer,
