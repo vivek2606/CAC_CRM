@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { SAKURAGI_LOGO } from "@/lib/brand/sakuragi-logo";
 
 // Letterhead and document settings for quotations and proforma invoices.
 // All quotations and proformas are issued by Sakuragi Industries Nigeria
@@ -50,7 +51,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
       key: "SAKURAGI",
       name: "Sakuragi Industries Nigeria Limited",
       refPrefix: "SNL",
-      addressLines: ["1, Olorunfunmi Street, Off. Kudirat Obiola St.,", "Ojota, Lagos."],
+      addressLines: ["1, Olorunfunmi Street, Off. Kudirat Abiola Ojota, Lagos."],
       phone: "",
       email: "",
       website: "www.mohinani.com",
@@ -59,7 +60,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
       bankName: "Zenith Bank",
       accountName: "Sakuragi Industries Nigeria Limited",
       accountNumber: "1312253223",
-      logo: "",
+      logo: SAKURAGI_LOGO,
     },
   ],
   defaultCompany: "SAKURAGI",
@@ -100,7 +101,9 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 // Documents only ever go out under Sakuragi - drop any other company that an
 // earlier save may still hold.
 function sakuragiOnly(settings: CompanySettings): CompanySettings {
-  const sakuragi = settings.companies.find((c) => c.key === "SAKURAGI") ?? DEFAULT_COMPANY_SETTINGS.companies[0];
+  const saved = settings.companies.find((c) => c.key === "SAKURAGI") ?? DEFAULT_COMPANY_SETTINGS.companies[0];
+  // No logo uploaded (or it was removed) -> the built-in Sakuragi logo.
+  const sakuragi = { ...saved, logo: saved.logo || SAKURAGI_LOGO };
   return { ...settings, companies: [sakuragi], defaultCompany: sakuragi.key };
 }
 

@@ -7,7 +7,7 @@ import type { SalesDocument } from "@/lib/sales-document";
 // left inside the table) recalculates everything.
 
 const MONEY = "#,##0.00";
-const ACCENT = "FF4338CA";
+const ACCENT = "FF1E4F9C"; // Sakuragi logo blue
 const muted = { color: { argb: "FF64748B" } };
 
 export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayBuffer> {
@@ -26,42 +26,44 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     return cell;
   };
 
-  // Letterhead: logo + company (left), document details (right)
-  let r = 1;
+  // Letterhead: logo (left), company name + address (right)
   const logo = c.logo.match(/^data:image\/(png|jpeg);base64,(.+)$/);
   if (logo) {
     const id = wb.addImage({ base64: logo[2], extension: logo[1] === "png" ? "png" : "jpeg" });
-    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 50 }, editAs: "oneCell" });
-    ws.getRow(1).height = 22;
-    ws.getRow(2).height = 22;
-    r = 3;
+    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 162, height: 44 }, editAs: "oneCell" });
   }
-  put(r, 1, c.name, { font: { bold: true, size: 13 } });
-  put(1, 6, doc.heading, { font: { bold: true, size: 14, color: { argb: ACCENT } }, alignment: { horizontal: "right" } });
+  const reg = [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`].filter(Boolean).join("  |  ");
+  const headLines = [...c.addressLines.filter(Boolean), [c.phone, c.email, c.website].filter(Boolean).join("  |  "), reg].filter(Boolean);
+  let r = 1;
+  put(r, 6, c.name, { font: { bold: true, size: 12 }, alignment: { horizontal: "right" } });
+  headLines.forEach((l) => put(++r, 6, l, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } }));
+  r = Math.max(r, 3);
+  for (let col = 1; col <= 6; col++) ws.getCell(r, col).border = { bottom: { style: "medium", color: { argb: ACCENT } } };
+
+  // To / kind attention (left), document title + details (right)
+  r += 2;
+  const top = r;
+  put(r, 1, doc.type === "proforma" ? "BILL TO" : "TO", { font: { size: 8, bold: true, ...muted } });
+  const toLines = doc.to.length ? doc.to : [""];
+  toLines.forEach((l, i) => put(r + 1 + i, 1, l, { font: { bold: i === 0, size: i === 0 ? 11 : 10 } }));
+  r += toLines.length;
+  if (doc.attention) {
+    r += 2;
+    put(r, 1, "KIND ATTENTION", { font: { size: 8, bold: true, ...muted } });
+    put(++r, 1, doc.attention, { font: { bold: true } });
+  }
+  put(top, 6, doc.heading, { font: { bold: true, size: 14, color: { argb: ACCENT } }, alignment: { horizontal: "right" } });
   const meta: [string, ExcelJS.CellValue, string?][] = [
     ...(doc.ref ? ([["Ref", doc.ref]] as [string, ExcelJS.CellValue][]) : []),
     ["Date", doc.date, "dd mmm yyyy"],
     ...(doc.validUntil ? ([["Valid until", doc.validUntil, "dd mmm yyyy"]] as [string, ExcelJS.CellValue, string][]) : []),
   ];
   meta.forEach(([label, value, fmt], i) => {
-    put(2 + i, 5, label, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } });
-    const cell = put(2 + i, 6, value, { font: { size: 9, bold: true }, alignment: { horizontal: "right" } });
+    put(top + 1 + i, 5, label, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } });
+    const cell = put(top + 1 + i, 6, value, { font: { size: 9, bold: true }, alignment: { horizontal: "right" } });
     if (fmt) cell.numFmt = fmt;
   });
-  const reg = [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`].filter(Boolean).join("  |  ");
-  const headLines = [...c.addressLines.filter(Boolean), [c.phone, c.email, c.website].filter(Boolean).join("  |  "), reg].filter(Boolean);
-  headLines.forEach((l) => put(++r, 1, l, { font: { size: 9, ...muted } }));
-  r = Math.max(r, 1 + meta.length) + 1;
-  for (let col = 1; col <= 6; col++) ws.getCell(r, col).border = { bottom: { style: "medium", color: { argb: ACCENT } } };
-
-  // To / kind attention
-  r += 2;
-  put(r, 1, doc.type === "proforma" ? "BILL TO" : "TO", { font: { size: 8, bold: true, ...muted } });
-  if (doc.attention) put(r, 5, "KIND ATTENTION", { font: { size: 8, bold: true, ...muted } });
-  const toLines = doc.to.length ? doc.to : [""];
-  toLines.forEach((l, i) => put(r + 1 + i, 1, l, { font: { bold: i === 0, size: i === 0 ? 11 : 10 } }));
-  if (doc.attention) put(r + 1, 5, doc.attention, { font: { bold: true } });
-  r += toLines.length;
+  r = Math.max(r, top + meta.length);
   if (doc.title) {
     r += 2;
     put(r, 1, `Re: ${doc.title}`, { font: { bold: true } });
@@ -72,10 +74,10 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   const headerRow = r;
   ["S/N", "Description", "Unit", "Qty", "Rate (NGN)", "Amount (NGN)"].forEach((h, i) =>
     put(r, i + 1, h, {
-      font: { bold: true, size: 9, color: { argb: "FF3730A3" } },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } },
+      font: { bold: true, size: 9, color: { argb: "FF1E3A6E" } },
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EFF9" } },
       alignment: { horizontal: i >= 2 ? (i === 2 ? "center" : "right") : "left", vertical: "middle" },
-      border: { top: { style: "thin", color: { argb: "FFC7D2FE" } }, bottom: { style: "thin", color: { argb: "FFC7D2FE" } } },
+      border: { top: { style: "thin", color: { argb: "FFB9CBE8" } }, bottom: { style: "thin", color: { argb: "FFB9CBE8" } } },
     }),
   );
   const rowBorder = { bottom: { style: "hair" as const, color: { argb: "FFE2E8F0" } } };

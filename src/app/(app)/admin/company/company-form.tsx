@@ -50,7 +50,7 @@ export function CompanyForm({ initial }: { initial: CompanySettings }) {
               </div>
             ))}
             <div className="sm:col-span-2 lg:col-span-3">
-              <label className={label}>Logo (PNG or JPG, under 500 KB)</label>
+              <label className={label}>Logo (PNG or JPG, under 500 KB) - the official Sakuragi logo is used unless you upload another</label>
               <div className="flex flex-wrap items-center gap-4">
                 {c.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -76,7 +76,7 @@ export function CompanyForm({ initial }: { initial: CompanySettings }) {
                 />
                 {c.logo && (
                   <button type="button" onClick={() => setCompany(i, { logo: "" })} className="text-sm text-rose-600 hover:text-rose-700">
-                    Remove logo
+                    Use the default logo
                   </button>
                 )}
               </div>

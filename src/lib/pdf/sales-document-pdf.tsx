@@ -18,7 +18,7 @@ const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", mon
 const ink = "#0f172a";
 const muted = "#64748b";
 const rule = "#cbd5e1";
-const accent = "#4338ca";
+const accent = "#1e4f9c"; // Sakuragi logo blue
 
 // Column widths (S/N, Unit, Qty, Rate, Amount fixed; Description flexes).
 const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90 };
@@ -28,10 +28,10 @@ const s = StyleSheet.create({
   page: { paddingTop: 52, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
   contHeader: { position: "absolute", top: 22, left: 38, right: 38 },
   contTitle: { flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: muted, marginBottom: 4 },
-  header: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 10, marginBottom: 12, marginTop: -20 },
-  logo: { maxHeight: 46, maxWidth: 170, objectFit: "contain", marginBottom: 5 },
-  company: { fontSize: 13, fontFamily: "Helvetica-Bold" },
-  small: { fontSize: 7.5, color: muted, marginTop: 1.5 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 12, marginTop: -20 },
+  logo: { height: 42, width: 156, objectFit: "contain", objectPosition: "left" },
+  company: { fontSize: 12, fontFamily: "Helvetica-Bold", textAlign: "right" },
+  small: { fontSize: 8, color: muted, marginTop: 1.5, textAlign: "right" },
   title: { fontSize: 15, fontFamily: "Helvetica-Bold", color: accent, textAlign: "right", letterSpacing: 1 },
   metaRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 2 },
   metaLabel: { fontSize: 8, color: muted, width: 60, textAlign: "right", marginRight: 6 },
@@ -43,8 +43,8 @@ const s = StyleSheet.create({
   // block lands at the foot of the last page.
   body: { flexGrow: 1, flexDirection: "column" },
   row: { flexDirection: "row", borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: ink },
-  th: { backgroundColor: "#eef2ff", borderTopWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink },
-  thText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#3730a3" },
+  th: { backgroundColor: "#e8eff9", borderTopWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink },
+  thText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#1e3a6e" },
   cell: { paddingVertical: 4.5, paddingHorizontal: 4, borderRightWidth: 0.5, borderRightColor: rule },
   last: { borderRightWidth: 0 },
   filler: { flexGrow: 1, minHeight: 10 },
@@ -130,10 +130,11 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
           }
         />
 
+        {/* Letterhead: logo left, company name and address right (as on the Sakuragi letterhead). */}
         <View style={s.header}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image, not an HTML img */}
-            {c.logo ? <Image src={c.logo} style={s.logo} /> : null}
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image, not an HTML img */}
+          {c.logo ? <Image src={c.logo} style={s.logo} /> : <View />}
+          <View style={{ alignItems: "flex-end", maxWidth: 330 }}>
             <Text style={s.company}>{c.name}</Text>
             {c.addressLines.filter(Boolean).map((l) => (
               <Text key={l} style={s.small}>
@@ -143,10 +144,27 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
             {contact ? <Text style={s.small}>{contact}</Text> : null}
             {reg ? <Text style={s.small}>{reg}</Text> : null}
           </View>
+        </View>
+
+        <View style={s.parties}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={s.label}>{doc.type === "proforma" ? "Bill to" : "To"}</Text>
+            {doc.to.map((l, i) => (
+              <Text key={i} style={i === 0 ? [s.strong, { fontSize: 10 }] : { color: muted }}>
+                {l}
+              </Text>
+            ))}
+            {doc.attention ? (
+              <View style={{ marginTop: 6 }}>
+                <Text style={s.label}>Kind attention</Text>
+                <Text style={s.strong}>{doc.attention}</Text>
+              </View>
+            ) : null}
+          </View>
           <View>
             <Text style={s.title}>{doc.heading}</Text>
             {doc.ref ? (
-              <View style={[s.metaRow, { marginTop: 6 }]}>
+              <View style={[s.metaRow, { marginTop: 5 }]}>
                 <Text style={s.metaLabel}>Ref</Text>
                 <Text style={s.metaValue}>{doc.ref}</Text>
               </View>
@@ -162,23 +180,6 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
               </View>
             ) : null}
           </View>
-        </View>
-
-        <View style={s.parties}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={s.label}>{doc.type === "proforma" ? "Bill to" : "To"}</Text>
-            {doc.to.map((l, i) => (
-              <Text key={i} style={i === 0 ? [s.strong, { fontSize: 10 }] : { color: muted }}>
-                {l}
-              </Text>
-            ))}
-          </View>
-          {doc.attention ? (
-            <View style={{ flex: 1 }}>
-              <Text style={s.label}>Kind attention</Text>
-              <Text style={s.strong}>{doc.attention}</Text>
-            </View>
-          ) : null}
         </View>
 
         {doc.title ? (
@@ -228,7 +229,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
               <Text style={s.totalLabel}>VAT @ {doc.vatRatePct}%</Text>
               <Text style={s.totalValue}>{money(doc.vat)}</Text>
             </View>
-            <View style={[s.totalRow, { backgroundColor: "#eef2ff", borderBottomWidth: 0.75 }]}>
+            <View style={[s.totalRow, { backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
               <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
               <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
             </View>
