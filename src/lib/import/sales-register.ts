@@ -21,9 +21,14 @@ export type RawSalesRow = {
   salesman: string;
   // Billing company (Somotex / Sakuragi), when the export has that column.
   entity?: string;
+  // Set when the row was moved to its code's shared account name: the name
+  // the ERP row was actually billed to (kept on the deal's title).
+  billedName?: string;
 };
 
-export type TransformedAccount = { name: string; code: string; city: string | null; ownerKey: string };
+// code is null when the register row has no Cust Code (blank codes would
+// collide on Account.code's unique index and silently drop the account).
+export type TransformedAccount = { name: string; code: string | null; city: string | null; ownerKey: string };
 export type TransformedProduct = {
   code: string;
   brand: "MIDEA";
@@ -46,6 +51,7 @@ export type TransformedDeal = {
   value: number;
   closedAt: Date;
   custName: string;
+  custCode: string;
   ownerKey: string;
 };
 export type TransformedLineItem = {
@@ -119,7 +125,38 @@ function placeholderEmail(name: string): string {
   return `${slug}.imported@caccrm.local`;
 }
 
-export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
+// The name to use for each Cust Code billed under more than one name. The
+// ERP bills walk-in buyers under a shared one-time cash-customer code with
+// the buyer's name typed in (and names drift: "CINE 21" / "CINEMA 21"); one
+// code is one account, named after the code's cash / service / retail
+// customer name if it has one, else the name it was billed under most.
+const CASH_NAME = /cash\s*customer|one\s*time|service\s*customer|retail/i;
+export function canonicalCustNames(rows: RawSalesRow[]): Map<string, string> {
+  const byCode = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const code = r.custCode.trim();
+    const name = r.custName.trim();
+    if (!code || !name) continue;
+    const names = byCode.get(code) ?? new Map<string, number>();
+    names.set(r.custName, (names.get(r.custName) ?? 0) + 1);
+    byCode.set(code, names);
+  }
+  const canonical = new Map<string, string>();
+  for (const [code, names] of byCode) {
+    if (names.size < 2) continue;
+    const ranked = [...names.entries()].sort((a, b) => b[1] - a[1]);
+    canonical.set(code, (ranked.find(([n]) => CASH_NAME.test(n)) ?? ranked[0])[0]);
+  }
+  return canonical;
+}
+
+export function transformSalesRegister(inputRows: RawSalesRow[]): TransformResult {
+  // Every row of a shared code is billed to that code's one account.
+  const canonical = canonicalCustNames(inputRows);
+  const rows = inputRows.map((r) => {
+    const name = canonical.get(r.custCode.trim());
+    return name && name !== r.custName ? { ...r, custName: name, billedName: r.custName } : r;
+  });
   const totalRowsIn = rows.length;
 
   // Project & Service lines, and everything invoiced under the Service
@@ -139,12 +176,19 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
   // Sort ascending by date so "last write wins" == "most recent" for dedup maps.
   const sorted = [...kept].sort((a, b) => a.docDate.getTime() - b.docDate.getTime());
 
-  // Accounts: most recent Cust Code + city per customer name.
+  // Accounts: most recent Cust Code + city per customer name - for every
+  // customer billed, Project & Service included (a customer with only
+  // project / service billing still needs an account, or its lines show no
+  // account code).
   const accountMap = new Map<string, TransformedAccount>();
-  for (const row of sorted) {
+  const allSorted = [...excludedService, ...kept].sort((a, b) => a.docDate.getTime() - b.docDate.getTime());
+  for (const row of allSorted) {
+    if (!row.custName.trim()) continue;
+    const prev = accountMap.get(row.custName);
     accountMap.set(row.custName, {
       name: row.custName,
-      code: row.custCode,
+      // A later row with no code doesn't wipe a code seen earlier.
+      code: row.custCode.trim() || prev?.code || null,
       city: row.locnName ?? null,
       ownerKey: normalizeSalesmanName(row.salesman),
     });
@@ -241,10 +285,11 @@ export function transformSalesRegister(rows: RawSalesRow[]): TransformResult {
     deals.push({
       docKey,
       txnNo,
-      title: value < 0 ? `${first.custName} — Return #${txnNo}` : `${first.custName} — Order #${txnNo}`,
+      title: value < 0 ? `${first.billedName ?? first.custName} — Return #${txnNo}` : `${first.billedName ?? first.custName} — Order #${txnNo}`,
       value,
       closedAt: first.docDate,
       custName: first.custName,
+      custCode: first.custCode.trim(),
       ownerKey: normalizeSalesmanName(first.salesman),
     });
   }

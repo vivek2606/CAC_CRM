@@ -211,8 +211,41 @@ export async function importSalesRegister(
     select: { id: true, name: true, code: true, city: true },
   });
   const existingAccountByName = new Map(existingAccounts.map((a) => [a.name, a]));
-
-  const accountsToCreate = result.accounts.filter((a) => !existingAccountByName.has(a.name));
+  // One Cust Code is one account. The transform already bills every row of a
+  // shared code (one-time cash customers, name variants) to one name; a code
+  // already held by an account under another name links there by the code
+  // (see accountIdByCode below) instead of creating a clashing account.
+  const codeHolders = await prisma.account.findMany({
+    where: { code: { in: result.accounts.map((a) => a.code).filter((c): c is string => !!c) } },
+    select: { id: true, code: true, name: true },
+  });
+  // An account imported earlier under one of a shared code's buyer names
+  // (whichever came first took the code) is renamed to the code's account
+  // name, e.g. "MR SAMIR" -> "CASH CUSTOMER-CEHA-LAGOS".
+  const namesByCode = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const c = r.custCode.trim();
+    if (!c) continue;
+    const set = namesByCode.get(c) ?? new Set<string>();
+    set.add(r.custName);
+    namesByCode.set(c, set);
+  }
+  for (const a of result.accounts) {
+    if (!a.code || existingAccountByName.has(a.name)) continue;
+    const holder = codeHolders.find((h) => h.code === a.code);
+    if (holder && holder.name !== a.name && namesByCode.get(a.code)?.has(holder.name)) {
+      await prisma.account.update({ where: { id: holder.id }, data: { name: a.name } });
+      existingAccountByName.set(a.name, { id: holder.id, name: a.name, code: holder.code, city: null });
+    }
+  }
+  const takenCodes = new Set(codeHolders.map((a) => a.code));
+  const accountsToCreate = result.accounts.filter((a) => {
+    if (existingAccountByName.has(a.name)) return false;
+    if (!a.code) return true;
+    if (takenCodes.has(a.code)) return false;
+    takenCodes.add(a.code);
+    return true;
+  });
   if (accountsToCreate.length > 0) {
     await prisma.account.createMany({
       data: accountsToCreate.map((a) => ({
@@ -228,9 +261,11 @@ export async function importSalesRegister(
   let accountsUpdated = 0;
   for (const a of result.accounts) {
     const existing = existingAccountByName.get(a.name);
-    if (existing && (existing.code !== a.code || existing.city !== a.city)) {
+    // Never blank out a code the account already has.
+    const code = a.code ?? existing?.code ?? null;
+    if (existing && (existing.code !== code || existing.city !== a.city)) {
       try {
-        await prisma.account.update({ where: { id: existing.id }, data: { code: a.code, city: a.city } });
+        await prisma.account.update({ where: { id: existing.id }, data: { code, city: a.city } });
         accountsUpdated++;
       } catch {
         // Code collided with a different existing account - leave this one as-is.
@@ -239,10 +274,16 @@ export async function importSalesRegister(
   }
 
   const dbAccounts = await prisma.account.findMany({
-    where: { name: { in: result.accounts.map((a) => a.name) } },
+    where: {
+      OR: [
+        { name: { in: result.accounts.map((a) => a.name) } },
+        { code: { in: result.deals.map((d) => d.custCode).filter(Boolean) } },
+      ],
+    },
     select: { id: true, code: true, name: true },
   });
   const accountIdByName = new Map(dbAccounts.map((a) => [a.name, a.id]));
+  const accountIdByCode = new Map(dbAccounts.filter((a) => a.code).map((a) => [a.code!, a.id]));
 
   // Products
   const productCreateData = result.products.map((p) => ({
@@ -272,7 +313,12 @@ export async function importSalesRegister(
     createdAt: d.closedAt,
     updatedAt: d.closedAt,
     ownerId: userIdByKey.get(d.ownerKey) ?? head.id,
-    accountId: accountIdByName.get(d.custName) ?? null,
+    // By name; else by Cust Code (a name billed under a shared code); a
+    // name-only account with no code loses to the code's holder.
+    accountId:
+      (d.custCode && !dbAccounts.some((a) => a.name === d.custName && a.code === d.custCode) ? accountIdByCode.get(d.custCode) : undefined) ??
+      accountIdByName.get(d.custName) ??
+      null,
     sourceTxnNo: d.txnNo,
     sourceDocKey: d.docKey,
     // The register's Txn No is the invoice no.

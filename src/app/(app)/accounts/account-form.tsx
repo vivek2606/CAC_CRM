@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { CompanyNameField, type AccountNameOption } from "./company-name-field";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -27,7 +27,7 @@ export function AccountForm({
   defaultValues,
   submitLabel,
 }: {
-  action: (formData: FormData) => void;
+  action: (formData: FormData) => Promise<{ error: string } | void>;
   isHead: boolean;
   owners: Option[];
   accounts: AccountNameOption[];
@@ -54,6 +54,8 @@ export function AccountForm({
   submitLabel: string;
 }) {
   const [contactMode, setContactMode] = useState<ContactMode>("none");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
 
   const completenessFields = [
     { label: "Account type", filled: !!defaultValues?.accountType },
@@ -67,7 +69,20 @@ export function AccountForm({
   ];
 
   return (
-    <form action={action} className="space-y-5 max-w-2xl">
+    <form
+      // Submitted by hand (not as a form action) so a problem reported back,
+      // e.g. a customer code already in use, keeps everything typed.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        setError(null);
+        startSaving(async () => {
+          const res = await action(fd);
+          if (res?.error) setError(res.error);
+        });
+      }}
+      className="space-y-5 max-w-2xl"
+    >
       <CompletenessBar fields={completenessFields} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
@@ -261,12 +276,15 @@ export function AccountForm({
         </div>
       )}
 
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
       <div className="flex gap-3">
         <button
           type="submit"
-          className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 transition-colors"
+          disabled={saving}
+          className="rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 transition-colors"
         >
-          {submitLabel}
+          {saving ? "Saving…" : submitLabel}
         </button>
       </div>
     </form>

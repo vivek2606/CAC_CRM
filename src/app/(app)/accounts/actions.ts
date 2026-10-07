@@ -34,12 +34,22 @@ function toAccountType(value: string | undefined): AccountType | null {
   return value && value.trim() !== "" ? (value as AccountType) : null;
 }
 
+export type AccountFormResult = { error: string } | void;
+
 // Account.code is unique (it's the identity key the Sales Register import
-// dedupes customers on) - a manually-typed duplicate should read as a
-// normal validation error, not crash the request.
-function rethrowFriendly(e: unknown): never {
+// dedupes customers on) - a duplicate comes back to the form as a message
+// naming the account that has it, instead of an error page.
+async function codeTakenMessage(code: string, exceptId?: string): Promise<string | null> {
+  const clash = await prisma.account.findFirst({
+    where: { code: { equals: code.trim(), mode: "insensitive" }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { name: true, owner: { select: { name: true } } },
+  });
+  return clash ? `Customer code ${code.trim()} is already used by "${clash.name}" (${clash.owner.name}). Check the code, or open that account instead.` : null;
+}
+
+function friendlyError(e: unknown): { error: string } {
   if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-    throw new Error("That customer code is already used by another account.");
+    return { error: "That customer code is already used by another account." };
   }
   throw e;
 }
@@ -74,14 +84,19 @@ async function linkOrCreateContact(formData: FormData, accountId: string, ownerI
   }
 }
 
-export async function createAccount(formData: FormData) {
+export async function createAccount(formData: FormData): Promise<AccountFormResult> {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
-  const parsed = accountSchema.parse(raw);
+  const result = accountSchema.safeParse(raw);
+  if (!result.success) return { error: result.error.issues[0]?.message ?? "Check the form." };
+  const parsed = { ...result.data, name: result.data.name.trim(), code: result.data.code.trim() };
   const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
+  const taken = await codeTakenMessage(parsed.code);
+  if (taken) return { error: taken };
 
-  const account = await prisma.account
-    .create({
+  let account;
+  try {
+    account = await prisma.account.create({
       data: {
         name: parsed.name,
         code: toNullable(parsed.code),
@@ -97,8 +112,10 @@ export async function createAccount(formData: FormData) {
         tags: parseTagsInput(formData.get("tags")),
         ownerId,
       },
-    })
-    .catch(rethrowFriendly);
+    });
+  } catch (e) {
+    return friendlyError(e);
+  }
 
   await linkOrCreateContact(formData, account.id, ownerId);
 
@@ -107,17 +124,21 @@ export async function createAccount(formData: FormData) {
   redirect(`/accounts/${account.id}`);
 }
 
-export async function updateAccount(accountId: string, formData: FormData) {
+export async function updateAccount(accountId: string, formData: FormData): Promise<AccountFormResult> {
   const user = await requireUser();
   const existing = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-  if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this account.");
+  if (!canAccessOwner(user, existing.ownerId)) return { error: "You do not have access to this account." };
 
   const raw = Object.fromEntries(formData.entries());
-  const parsed = accountSchema.parse(raw);
+  const result = accountSchema.safeParse(raw);
+  if (!result.success) return { error: result.error.issues[0]?.message ?? "Check the form." };
+  const parsed = { ...result.data, name: result.data.name.trim(), code: result.data.code.trim() };
   const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
+  const taken = await codeTakenMessage(parsed.code, accountId);
+  if (taken) return { error: taken };
 
-  await prisma.account
-    .update({
+  try {
+    await prisma.account.update({
       where: { id: accountId },
       data: {
         name: parsed.name,
@@ -134,8 +155,10 @@ export async function updateAccount(accountId: string, formData: FormData) {
         tags: parseTagsInput(formData.get("tags")),
         ownerId,
       },
-    })
-    .catch(rethrowFriendly);
+    });
+  } catch (e) {
+    return friendlyError(e);
+  }
 
   await linkOrCreateContact(formData, accountId, ownerId);
 
