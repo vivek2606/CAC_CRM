@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DEAL_STAGES, OPEN_DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS } from "@/lib/constants";
 import { formatCompactCurrency } from "@/lib/format";
@@ -8,7 +9,6 @@ import { Avatar } from "@/components/ui";
 import { TagChips } from "@/components/tag-chips";
 import { updateDealStage } from "./actions";
 import { MarkLostDialog } from "./mark-lost-dialog";
-import { MarkWonDialog } from "./mark-won-dialog";
 import type { DealStage, LostReason } from "@prisma/client";
 
 type DealCard = {
@@ -25,7 +25,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<string | null>(null);
   const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
-  const [pendingWonDealId, setPendingWonDealId] = useState<string | null>(null);
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // This board only ever holds open-pipeline deals (see OPEN_DEAL_STAGES) -
@@ -48,7 +48,9 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
         alert("Link this deal to an account before marking it Won.");
         return;
       }
-      setPendingWonDealId(dealId);
+      // Marking Won needs the products billed and the invoice - done in the
+      // dialog on the deal's own page, which has the product list.
+      router.push(`/deals/${dealId}?markWon=1`);
       return;
     }
 
@@ -73,23 +75,6 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     startTransition(async () => {
       try {
         await updateDealStage(dealId, "LOST", category, note || undefined, closedAt);
-      } catch (e) {
-        if (deal) setItems((prev) => [...prev, deal]);
-        alert(e instanceof Error ? e.message : "Could not update this deal.");
-      }
-    });
-  }
-
-  function confirmWon(closedAt: string, invoiceNo: string) {
-    const dealId = pendingWonDealId;
-    setPendingWonDealId(null);
-    if (!dealId) return;
-
-    const deal = items.find((d) => d.id === dealId);
-    setItems((prev) => prev.filter((d) => d.id !== dealId));
-    startTransition(async () => {
-      try {
-        await updateDealStage(dealId, "WON", undefined, undefined, closedAt, invoiceNo);
       } catch (e) {
         if (deal) setItems((prev) => [...prev, deal]);
         alert(e instanceof Error ? e.message : "Could not update this deal.");
@@ -170,7 +155,6 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       })}
     </div>
     {pendingLostDealId && <MarkLostDialog onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />}
-    {pendingWonDealId && <MarkWonDialog onConfirm={confirmWon} onCancel={() => setPendingWonDealId(null)} />}
     </>
   );
 }

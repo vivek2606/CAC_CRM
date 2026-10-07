@@ -19,8 +19,7 @@ const monthValue = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() 
 const monthLabel = (d: Date) => d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const pct = (a: number | null) => (a == null ? "—" : `${(a * 100).toFixed(1)}%`);
 const ratePct = (r: number) => (r > 0 ? `${Number((r * 100).toFixed(3))}%` : "Not eligible");
-// Whole naira in the table so every column fits; the CSV keeps kobo.
-const naira = (n: number) => `₦${Math.round(n).toLocaleString("en-NG")}`;
+const naira = (n: number) => `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function schemeText(settings: IncentiveSettings) {
   const tiers = [...settings.tiers].sort((a, b) => b.minAchievementPct - a.minAchievementPct);

@@ -9,7 +9,7 @@ import type { CompanyProfile } from "@/lib/company-profile";
 Font.registerHyphenationCallback((word) => [word]);
 
 const money = (n: number) => n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const whole = (n: number) => Math.round(n).toLocaleString("en-NG");
+const whole = money; // all amounts to 2 decimal places
 const pct = (a: number | null) => (a == null ? "-" : `${(a * 100).toFixed(1)}%`);
 const rate = (r: number) => (r > 0 ? `${Number((r * 100).toFixed(3))}%` : "Not eligible");
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
@@ -20,7 +20,7 @@ const rule = "#cbd5e1";
 const accent = "#1e4f9c";
 
 const s = StyleSheet.create({
-  page: { paddingTop: 28, paddingBottom: 40, paddingHorizontal: 32, fontSize: 8.5, fontFamily: "Helvetica", color: ink },
+  page: { paddingTop: 28, paddingBottom: 40, paddingHorizontal: 28, fontSize: 8, fontFamily: "Helvetica", color: ink },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 10 },
   logo: { height: 36, width: 134, objectFit: "contain", objectPosition: "left" },
   company: { fontSize: 11, fontFamily: "Helvetica-Bold", textAlign: "right" },
@@ -42,13 +42,13 @@ const s = StyleSheet.create({
 });
 
 const COLS = [
-  { key: "name", label: "Sales person", width: 120 },
-  { key: "target", label: "Target", width: 62 },
-  { key: "productSales", label: "Product sales", width: 66 },
-  { key: "projectSales", label: "Project billing", width: 62 },
-  { key: "sales", label: "Total sales", width: 66 },
-  { key: "achievement", label: "Achievement", width: 52 },
-  { key: "rate", label: "Rate", width: 50 },
+  { key: "name", label: "Sales person", width: 104 },
+  { key: "target", label: "Target", width: 72 },
+  { key: "productSales", label: "Product sales", width: 72 },
+  { key: "projectSales", label: "Project billing", width: 68 },
+  { key: "sales", label: "Total sales", width: 72 },
+  { key: "achievement", label: "Achievement", width: 48 },
+  { key: "rate", label: "Rate", width: 46 },
   { key: "incentive", label: "Incentive", width: 60 },
   { key: "payout", label: "Share", width: 60 },
   { key: "salarySupport", label: "Salary support", width: 60 },

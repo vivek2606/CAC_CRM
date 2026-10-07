@@ -36,6 +36,7 @@ export default async function ProjectBillingPage({
     select: { id: true, name: true, title: true },
   });
   const ownerId = owners.some((o) => o.id === params.owner) ? params.owner! : null;
+  const accounts = await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } });
   const lines = await prisma.projectBilling.findMany({
     where: { month, ...(ownerId ? { ownerId } : {}) },
     orderBy: [{ docDate: "desc" }, { createdAt: "desc" }],
@@ -67,14 +68,18 @@ export default async function ProjectBillingPage({
       <div className="p-6 space-y-6">
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Add billing</h2>
-          <AddBillingForm owners={ownerOptions} today={today} />
+          <AddBillingForm
+            owners={ownerOptions}
+            accounts={accounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
+            today={today}
+          />
         </Card>
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Upload from Excel</h2>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Columns: Date, Invoice No, Customer, Sales Person, Description, Value. Sales Person is matched to the login by
-            name - lines under the Service Manager are service billing, everyone else&apos;s project billing. Uploading the
+            Columns: Date, Invoice No, Customer, Sales Person, Description, Value - Invoice No is required. Customer is matched to
+            the account by name or code. Sales Person is matched to the login by name - lines under the Service Manager are service billing, everyone else&apos;s project billing. Uploading the
             same sheet again doesn&apos;t double it.
           </p>
           <UploadBillingForm />

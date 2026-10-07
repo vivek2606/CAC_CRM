@@ -25,8 +25,15 @@ import { StakeholdersSection } from "../stakeholders-section";
 import { ReorderFlag } from "../reorder-flag";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
-export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DealDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ markWon?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const user = await requireUser();
 
   const deal = await prisma.deal.findUnique({
@@ -97,7 +104,14 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         description={deal.account?.name ?? undefined}
         action={
           <div className="flex items-center gap-2">
-            <StageActions dealId={deal.id} stage={deal.stage} blockWonReason={stageActionsBlockReason} />
+            <StageActions
+              dealId={deal.id}
+              stage={deal.stage}
+              blockWonReason={stageActionsBlockReason}
+              openWon={sp.markWon === "1"}
+              existingItems={deal.items.map((i) => ({ label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
+              products={productOptions.map((p) => ({ id: p.id, label: p.label, defaultPrice: p.defaultPrice }))}
+            />
             {deal.items.length > 0 && (
               <form action={viewQuoteAction}>
                 <button

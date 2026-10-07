@@ -275,6 +275,8 @@ export async function importSalesRegister(
     accountId: accountIdByName.get(d.custName) ?? null,
     sourceTxnNo: d.txnNo,
     sourceDocKey: d.docKey,
+    // The register's Txn No is the invoice no.
+    invoiceNo: String(d.txnNo),
   }));
 
   // Deals imported before documents were keyed by Txn Code + Txn No only
@@ -361,7 +363,7 @@ export async function importSalesRegister(
     // changed, so a large file doesn't issue one update per invoice.
     const existing = await prisma.deal.findMany({
       where: { sourceDocKey: { in: fileDocKeys } },
-      select: { id: true, sourceDocKey: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true },
+      select: { id: true, sourceDocKey: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true, invoiceNo: true },
     });
     const existingByDocKey = new Map(existing.map((d) => [d.sourceDocKey!, d]));
     const updates = [];
@@ -373,7 +375,8 @@ export async function importSalesRegister(
         cur.value !== d.value ||
         cur.closedAt?.getTime() !== d.closedAt.getTime() ||
         cur.ownerId !== d.ownerId ||
-        cur.accountId !== d.accountId
+        cur.accountId !== d.accountId ||
+        cur.invoiceNo !== d.invoiceNo
       ) {
         updates.push(
           prisma.deal.update({
@@ -384,6 +387,7 @@ export async function importSalesRegister(
               closedAt: d.closedAt,
               ownerId: d.ownerId,
               accountId: d.accountId,
+              invoiceNo: d.invoiceNo,
               stage: "WON",
               probability: 100,
             },

@@ -169,10 +169,10 @@ export function DealForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
           <input
             name="customerName"
-            required
+            required={!isHead}
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
@@ -181,10 +181,10 @@ export function DealForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone{isHead ? "" : " *"}</label>
           <input
             name="customerPhone"
-            required
+            required={!isHead}
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -209,6 +209,7 @@ export function DealForm({
             name="value"
             type="number"
             min={0}
+            step="0.01"
             required
             value={value}
             onChange={(e) => setValue(e.target.value)}

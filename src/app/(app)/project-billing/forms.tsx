@@ -2,6 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { formatCurrency } from "@/lib/format";
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   addProjectBilling,
   deleteProjectBilling,
@@ -14,7 +15,15 @@ const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 const labelClass = "block text-xs font-medium text-slate-500 mb-1";
 
-export function AddBillingForm({ owners, today }: { owners: { id: string; name: string; service: boolean }[]; today: string }) {
+export function AddBillingForm({
+  owners,
+  accounts,
+  today,
+}: {
+  owners: { id: string; name: string; service: boolean }[];
+  accounts: { id: string; label: string }[];
+  today: string;
+}) {
   const [state, action, isPending] = useActionState<FormState, FormData>(addProjectBilling, {});
   return (
     <form action={action} className="space-y-3">
@@ -38,12 +47,12 @@ export function AddBillingForm({ owners, today }: { owners: { id: string; name: 
           </select>
         </div>
         <div>
-          <label className={labelClass}>Invoice no. (optional)</label>
-          <input name="invoiceNo" className={inputClass} />
+          <label className={labelClass}>Invoice no.</label>
+          <input name="invoiceNo" required className={inputClass} />
         </div>
         <div>
-          <label className={labelClass}>Customer</label>
-          <input name="customer" required className={inputClass} />
+          <label className={labelClass}>Account</label>
+          <SearchableSelect name="accountId" options={accounts} placeholder="Search account…" emptyLabel="none - pick an account" />
         </div>
         <div>
           <label className={labelClass}>Description (optional)</label>

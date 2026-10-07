@@ -21,10 +21,11 @@ export function formatNumber(value: number): string {
 export function formatCompactCurrency(value: number): string {
   const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
-  if (abs >= 1e9) return `${sign}₦${trimZero(abs / 1e9)}B`;
-  if (abs >= 1e6) return `${sign}₦${trimZero(abs / 1e6)}M`;
-  if (abs >= 1e3) return `${sign}₦${trimZero(abs / 1e3)}K`;
-  return `${sign}₦${abs.toFixed(0)}`;
+  // Always 2 decimal places, e.g. ₦559.48M, ₦4.20B, ₦850.00.
+  if (abs >= 1e9) return `${sign}₦${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}₦${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}₦${(abs / 1e3).toFixed(2)}K`;
+  return `${sign}₦${abs.toFixed(2)}`;
 }
 
 // For bar charts that label bars with bare numbers: one unit for the whole
@@ -43,10 +44,6 @@ export function chartUnit(values: number[]): {
     axisTick: (v) => (Number(v) === 0 ? "₦0" : `₦${inUnit(Number(v))}${suffix}`),
     inUnit,
   };
-}
-
-function trimZero(n: number): string {
-  return n.toFixed(1).replace(/\.0$/, "");
 }
 
 export function formatDate(date: Date | string | null | undefined): string {

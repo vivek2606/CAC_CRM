@@ -110,10 +110,12 @@ export async function resyncCategoryData(): Promise<{ checked: number; repaired:
 
 const dealSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  customerName: z.string().min(1, "Customer name is required"),
-  customerPhone: z.string().min(1, "Customer phone is required"),
+  // Required for sales managers (checked in requireContact); optional for
+  // the Head and Sales Coordinator.
+  customerName: z.string().trim().optional().default(""),
+  customerPhone: z.string().trim().optional().default(""),
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]),
-  value: z.coerce.number().min(0),
+  value: z.coerce.number().min(0).transform((v) => Math.round(v * 100) / 100),
   probability: z.coerce.number().min(0).max(100).optional(),
   expectedCloseDate: z.string().optional(),
   accountId: z.string().optional(),
@@ -146,6 +148,12 @@ function toPaymentTerms(value: string | undefined): PaymentTerms | null {
 // Backs both the "Date" entry field (backdating when a deal is logged) and
 // the Mark Won/Lost close-date override - falls back to "now" if missing
 // or unparseable, matching the previous unconditional `new Date()` behavior.
+function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
+  if (isBackOffice(user)) return;
+  if (!name) throw new Error("Customer name is required");
+  if (!phone) throw new Error("Customer phone is required");
+}
+
 function parseDateInput(value: string | undefined): Date {
   if (!value) return new Date();
   const d = new Date(`${value}T00:00:00`);
@@ -179,14 +187,15 @@ export async function createDeal(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
+  requireContact(user, parsed.customerName, parsed.customerPhone);
   const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
   const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
 
   const deal = await prisma.deal.create({
     data: {
       title: parsed.title,
-      customerName: parsed.customerName,
-      customerPhone: parsed.customerPhone,
+      customerName: toNullable(parsed.customerName),
+      customerPhone: toNullable(parsed.customerPhone),
       stage: parsed.stage,
       value: parsed.value,
       probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[parsed.stage],
@@ -216,6 +225,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
+  requireContact(user, parsed.customerName, parsed.customerPhone);
   const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
 
   // A Won/Lost deal can only change stage through the dedicated Mark
@@ -234,8 +244,8 @@ export async function updateDeal(dealId: string, formData: FormData) {
     where: { id: dealId },
     data: {
       title: parsed.title,
-      customerName: parsed.customerName,
-      customerPhone: parsed.customerPhone,
+      customerName: toNullable(parsed.customerName),
+      customerPhone: toNullable(parsed.customerPhone),
       stage,
       value: parsed.value,
       probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[stage],
@@ -295,6 +305,11 @@ export async function updateDealStage(
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
   if (stage === "WON") {
+    // The products billed must be recorded - quantity and basic rate.
+    if (existing.items.length === 0) throw new Error("Add the products billed (quantity and basic rate) to mark this deal Won.");
+    if (existing.items.some((i) => !(i.qty > 0) || !(i.unitPrice > 0))) {
+      throw new Error("Every product billed needs a quantity and a basic rate above 0.");
+    }
     if (!invoiceNo?.trim()) throw new Error("Enter the invoice no. to mark this deal Won.");
     if (!closedAtOverride) throw new Error("Enter the invoice date to mark this deal Won.");
     if (!existing.accountId) {
@@ -468,4 +483,85 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   revalidatePath("/reports/sales-register");
   revalidatePath("/deals");
   revalidatePath("/");
+}
+
+// Mark Won from the dialog: records the products billed first (when the
+// deal has none yet), then marks it Won with the invoice no. and date.
+export async function markDealWon(
+  dealId: string,
+  closedAt: string,
+  invoiceNo: string,
+  newItems: { productId: string; qty: number; unitPrice: number }[],
+) {
+  const user = await requireUser();
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, _count: { select: { items: true } } } });
+  if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+  if (deal.stage === "WON" || deal.stage === "LOST") throw new Error("This deal is already closed.");
+  if (deal._count.items === 0) {
+    const rows = newItems.filter((i) => i.productId && i.qty > 0 && i.unitPrice > 0);
+    if (rows.length === 0) throw new Error("Add the products billed (quantity and basic rate) to mark this deal Won.");
+    if (rows.length !== newItems.length) throw new Error("Every product billed needs a quantity and a basic rate above 0.");
+    const found = await prisma.product.count({ where: { id: { in: rows.map((r) => r.productId) } } });
+    if (found !== new Set(rows.map((r) => r.productId)).size) throw new Error("A product picked no longer exists - pick it again.");
+    await prisma.dealLineItem.createMany({
+      data: rows.map((r) => ({ dealId, productId: r.productId, qty: r.qty, unitPrice: Math.round(r.unitPrice * 100) / 100 })),
+    });
+    // The deal's value follows the products billed.
+    const value = rows.reduce((s, r) => s + r.qty * r.unitPrice, 0);
+    await prisma.deal.update({ where: { id: dealId }, data: { value: Math.round(value * 100) / 100, discountApprovedAt: null, discountApprovedById: null } });
+  }
+  await updateDealStage(dealId, "WON", undefined, undefined, closedAt, invoiceNo);
+}
+
+export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number };
+
+// Reads an uploaded sheet of products billed (Product Code and/or Model,
+// Qty, Rate) for the Mark Won dialog. Products are matched by code, else by
+// model; unmatched rows are reported rather than created.
+export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: WonSheetRow[]; problems: string[] }> {
+  await requireUser();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { rows: [], problems: ["Choose a file."] };
+  const ExcelJS = (await import("exceljs")).default;
+  const { cellValue } = await import("@/lib/import/parse-stock-receipts");
+  const wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(await file.arrayBuffer());
+  } catch {
+    return { rows: [], problems: ["Couldn't read the file - upload an .xlsx sheet."] };
+  }
+  const ws = wb.worksheets[0];
+  if (!ws) return { rows: [], problems: ["The file has no worksheets."] };
+  const headers: string[] = [];
+  ws.getRow(1).eachCell({ includeEmpty: true }, (c, i) => (headers[i] = String(cellValue(c.value) ?? "").trim().toLowerCase()));
+  const col = (...names: string[]) => headers.findIndex((h) => h != null && names.includes(h));
+  const iCode = col("product code", "item code", "code");
+  const iModel = col("model", "product", "item name", "description");
+  const iQty = col("qty", "quantity");
+  const iRate = col("rate", "basic rate", "unit price", "price", "rate (excl. vat)", "dealer price");
+  if ((iCode === -1 && iModel === -1) || iQty === -1 || iRate === -1) {
+    return { rows: [], problems: ["The sheet needs columns: Product Code (or Model), Qty and Rate."] };
+  }
+  const products = await prisma.product.findMany({ select: { id: true, code: true, model: true } });
+  const norm = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const byCode = new Map(products.map((p) => [p.code.toUpperCase(), p]));
+  const byModel = new Map<string, (typeof products)[number]>();
+  for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p);
+  const rows: WonSheetRow[] = [];
+  const problems: string[] = [];
+  ws.eachRow({ includeEmpty: false }, (row, n) => {
+    if (n === 1) return;
+    const get = (i: number) => (i === -1 ? null : cellValue(row.getCell(i).value));
+    const code = String(get(iCode) ?? "").trim();
+    const model = String(get(iModel) ?? "").trim();
+    if (!code && !model) return;
+    const num = (v: unknown) => (typeof v === "number" ? v : Number(String(v ?? "").replace(/[₦,\s]/g, "")));
+    const qty = num(get(iQty));
+    const rate = num(get(iRate));
+    const p = (code && byCode.get(code.toUpperCase())) || (model && byModel.get(norm(model)));
+    if (!p) return void problems.push(`Row ${n}: no product matches "${code || model}"`);
+    if (!(qty > 0) || !(rate > 0)) return void problems.push(`Row ${n}: quantity and rate must be above 0 (${p.model})`);
+    rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100 });
+  });
+  return { rows, problems };
 }

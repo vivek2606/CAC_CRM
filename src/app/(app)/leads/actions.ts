@@ -11,7 +11,9 @@ import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe }
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  customerName: z.string().min(1, "Customer name is required"),
+  // Required for sales managers (checked in requireContact); optional for
+  // the Head and Sales Coordinator entering on someone's behalf.
+  customerName: z.string().trim().optional().default(""),
   company: z.string().optional(),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
   winProbability: z.string().optional(),
@@ -21,15 +23,21 @@ const leadSchema = z.object({
   competitorBrand: z.string().optional(),
   budgetConfirmed: z.string().optional(),
   expectedPurchaseTimeframe: z.string().optional(),
-  value: z.coerce.number().min(0).optional(),
+  value: z.coerce.number().min(0).transform((v) => Math.round(v * 100) / 100).optional(),
   email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().min(1, "Customer phone is required"),
+  phone: z.string().trim().optional().default(""),
   notes: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
   ownerId: z.string().min(1),
   createdAt: z.string().optional(),
 });
+
+function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
+  if (isBackOffice(user)) return;
+  if (!name) throw new Error("Customer name is required");
+  if (!phone) throw new Error("Customer phone is required");
+}
 
 function toNullable(value: string | undefined) {
   return value && value.trim() !== "" ? value : null;
@@ -72,13 +80,14 @@ export async function createLead(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
+  requireContact(user, parsed.customerName, parsed.phone);
 
   const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
 
   const lead = await prisma.lead.create({
     data: {
       title: parsed.title,
-      customerName: parsed.customerName,
+      customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
       status: parsed.status,
       winProbability: toWinProbability(parsed.winProbability),
@@ -90,7 +99,7 @@ export async function createLead(formData: FormData) {
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: parsed.phone,
+      phone: toNullable(parsed.phone),
       notes: toNullable(parsed.notes),
       tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),
@@ -113,13 +122,14 @@ export async function updateLead(leadId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
+  requireContact(user, parsed.customerName, parsed.phone);
   const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
 
   await prisma.lead.update({
     where: { id: leadId },
     data: {
       title: parsed.title,
-      customerName: parsed.customerName,
+      customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
       status: parsed.status,
       winProbability: toWinProbability(parsed.winProbability),
@@ -131,7 +141,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: parsed.phone,
+      phone: toNullable(parsed.phone),
       notes: toNullable(parsed.notes),
       tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),

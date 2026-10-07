@@ -18,7 +18,7 @@ export type ApprovalView = {
 
 const when = (iso?: string) =>
   iso ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
-const naira = (n: number) => `₦${Math.round(n).toLocaleString("en-NG")}`;
+const naira = (n: number) => `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function ApprovalPanel({
   month,

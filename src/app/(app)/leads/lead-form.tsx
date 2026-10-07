@@ -124,10 +124,10 @@ export function LeadForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
           <input
             name="customerName"
-            required
+            required={!isHead}
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
@@ -151,6 +151,7 @@ export function LeadForm({
             name="value"
             type="number"
             min={0}
+            step="0.01"
             defaultValue={defaultValues?.value ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
@@ -285,10 +286,10 @@ export function LeadForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone{isHead ? "" : " *"}</label>
           <input
             name="phone"
-            required
+            required={!isHead}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"

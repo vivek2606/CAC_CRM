@@ -49,9 +49,9 @@ export type FormState = { error?: string; ok?: string };
 const manualSchema = z.object({
   date: z.string().min(1, "Pick the billing date."),
   ownerId: z.string().min(1, "Pick the sales person."),
-  customer: z.string().trim().min(1, "Enter the customer."),
+  accountId: z.string().min(1, "Pick the account."),
   description: z.string().trim().max(200),
-  invoiceNo: z.string().trim().max(60),
+  invoiceNo: z.string().trim().min(1, "Enter the invoice no.").max(60),
   value: z.coerce.number().refine((v) => Number.isFinite(v) && v !== 0, "Enter the amount (negative for a credit note)."),
 });
 
@@ -60,7 +60,7 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
   const parsed = manualSchema.safeParse({
     date: formData.get("date"),
     ownerId: formData.get("ownerId"),
-    customer: formData.get("customer"),
+    accountId: formData.get("accountId") ?? "",
     description: formData.get("description") ?? "",
     invoiceNo: formData.get("invoiceNo") ?? "",
     value: String(formData.get("value") ?? "").replace(/[₦,\s]/g, ""),
@@ -71,6 +71,8 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
   if (!date) return { error: "Couldn't read the date." };
   const owner = (await billingOwners()).find((o) => o.id === d.ownerId);
   if (!owner) return { error: "Pick a valid sales person." };
+  const account = await prisma.account.findUnique({ where: { id: d.accountId }, select: { name: true } });
+  if (!account) return { error: "Pick the account from the list." };
   const type = typeFor(owner);
 
   await prisma.projectBilling.create({
@@ -80,7 +82,7 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
       txnNo: txnNoOf(d.invoiceNo || null),
       docDate: date,
       month: firstOfMonth(date),
-      custName: d.customer,
+      custName: account.name,
       itemCode: type.toUpperCase(),
       itemName: d.description || type,
       value: d.value,
@@ -88,7 +90,7 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
     },
   });
   revalidate();
-  return { ok: `Added ${type.toLowerCase()} billing for ${d.customer} under ${owner.name}.` };
+  return { ok: `Added ${type.toLowerCase()} billing for ${account.name} under ${owner.name}.` };
 }
 
 // Only entries made in the CRM can be deleted here - register lines are
@@ -142,9 +144,22 @@ export async function importProjectBilling(
     return loose.length === 1 ? loose[0] : null;
   };
 
+  const accounts = await prisma.account.findMany({ select: { name: true, code: true } });
+  const accountByKey = new Map<string, string>();
+  for (const a of accounts) {
+    accountByKey.set(norm(a.name), a.name);
+    if (a.code) accountByKey.set(a.code.trim().toLowerCase(), a.name);
+  }
+
   const occurrence = new Map<string, number>();
   const data = [];
   for (const r of parsed.rows) {
+    if (!r.invoiceNo) {
+      problems.push({ rowNumber: r.rowNumber, problem: `No invoice no. (${r.customer})` });
+      continue;
+    }
+    // The account's own name when the sheet's customer matches one (by name or code).
+    const accountName = accountByKey.get(norm(r.customer)) ?? accountByKey.get(r.customer.trim().toLowerCase()) ?? r.customer;
     const owner = matchOwner(r.salesPerson);
     if (!owner) {
       problems.push({ rowNumber: r.rowNumber, problem: `No sales person login matches "${r.salesPerson}"` });
@@ -152,7 +167,7 @@ export async function importProjectBilling(
     }
     const type = typeFor(owner);
     // Same row uploaded again = same key, so a re-upload doesn't double it.
-    const base = [r.date.toISOString().slice(0, 10), r.invoiceNo ?? "", norm(r.customer), owner.id, type, r.value].join("|");
+    const base = [r.date.toISOString().slice(0, 10), r.invoiceNo, norm(accountName), owner.id, type, r.value].join("|");
     const n = occurrence.get(base) ?? 0;
     occurrence.set(base, n + 1);
     data.push({
@@ -161,7 +176,7 @@ export async function importProjectBilling(
       txnNo: txnNoOf(r.invoiceNo),
       docDate: r.date,
       month: firstOfMonth(r.date),
-      custName: r.customer,
+      custName: accountName,
       itemCode: type.toUpperCase(),
       itemName: r.description ?? type,
       value: r.value,
