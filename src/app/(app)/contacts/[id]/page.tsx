@@ -26,7 +26,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   });
 
   if (!contact) notFound();
-  if (!canAccessOwner(user, contact.ownerId)) redirect("/contacts");
+  if (!canAccessOwner(user, contact.ownerId)) redirect("/accounts?tab=contacts");
 
   const deleteAction = deleteContact.bind(null, contact.id);
 

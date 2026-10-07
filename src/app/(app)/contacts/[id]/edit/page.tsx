@@ -12,7 +12,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
 
   const contact = await prisma.contact.findUnique({ where: { id } });
   if (!contact) notFound();
-  if (!canAccessOwner(user, contact.ownerId)) redirect("/contacts");
+  if (!canAccessOwner(user, contact.ownerId)) redirect("/accounts?tab=contacts");
 
   const [owners, accounts] = await Promise.all([
     isBackOffice(user)

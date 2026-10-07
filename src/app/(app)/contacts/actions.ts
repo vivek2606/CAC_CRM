@@ -42,7 +42,7 @@ export async function createContact(formData: FormData) {
     },
   });
 
-  revalidatePath("/contacts");
+  revalidatePath("/accounts");
   redirect(`/contacts/${contact.id}`);
 }
 
@@ -70,7 +70,7 @@ export async function updateContact(contactId: string, formData: FormData) {
     },
   });
 
-  revalidatePath("/contacts");
+  revalidatePath("/accounts");
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/contacts/${contactId}`);
 }
@@ -81,6 +81,6 @@ export async function deleteContact(contactId: string) {
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this contact.");
 
   await prisma.contact.delete({ where: { id: contactId } });
-  revalidatePath("/contacts");
-  redirect("/contacts");
+  revalidatePath("/accounts");
+  redirect("/accounts?tab=contacts");
 }

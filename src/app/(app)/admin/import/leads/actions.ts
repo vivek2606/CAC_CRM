@@ -200,6 +200,6 @@ export async function clearLeadsWithoutNewFile(): Promise<ClearLeadsState> {
   await requireBackOffice();
   const summary = await clearPreviousLeadsImport();
   revalidatePath("/leads");
-  revalidatePath("/contacts");
+  revalidatePath("/accounts");
   return { summary };
 }

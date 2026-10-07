@@ -7,7 +7,6 @@ import {
   Target,
   KanbanSquare,
   Building2,
-  Contact,
   CheckSquare,
   BarChart3,
   Package,
@@ -79,8 +78,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
   { href: "/targets", label: "Targets", icon: TrendingUp, color: "emerald" },
   { href: "/incentives", label: "Incentives", icon: BadgePercent, color: "purple" },
-  { href: "/accounts", label: "Accounts", icon: Building2, color: "amber" },
-  { href: "/contacts", label: "Contacts", icon: Contact, color: "rose" },
+  { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
   { href: "/activities", label: "Activities", icon: CheckSquare, color: "teal" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
@@ -116,10 +114,12 @@ export function Sidebar({
   const pathname = usePathname();
   // The most specific nav entry for this page - so /reports/sales-register
   // highlights "Sales Register", not "Team Reports" (/reports) as well.
+  // Contact pages sit under Accounts & Contacts.
+  const navPath = pathname === "/contacts" || pathname.startsWith("/contacts/") ? "/accounts" : pathname;
   const activeHref =
     [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS]
       .map((n) => n.href)
-      .filter((h) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(h + "/")))
+      .filter((h) => (h === "/" ? navPath === "/" : navPath === h || navPath.startsWith(h + "/")))
       .sort((a, b) => b.length - a.length)[0] ?? null;
 
   return (
