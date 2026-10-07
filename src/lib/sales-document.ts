@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getCompanySettings, pickCompany, type CompanyProfile } from "@/lib/company-profile";
-import { nairaInWords, serialNumbers } from "@/lib/document-format";
+import { nairaInWords, serialNumbers, isAvailabilityNote } from "@/lib/document-format";
 
 export { nairaInWords, serialNumbers, defaultRef } from "@/lib/document-format";
 
@@ -38,6 +38,9 @@ export const documentInputSchema = z.object({
   // "separate": rates excl. VAT, VAT added below. "inclusive": the rates
   // entered already include VAT and no VAT line is shown.
   vatMode: z.enum(["separate", "inclusive"]).default("separate"),
+  // Off: the stock status filled in from the product list ("Available",
+  // "Not Available", "In Transit (ETA ...)") is left off the document.
+  showAvailability: z.boolean().default(true),
   // Pre-filled from Company Details, editable per document.
   tin: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(120).default(""),
@@ -84,7 +87,8 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     .map((r, i): DocRow | null => {
       if (r.kind === "section") return r.label ? { kind: "section", label: r.label, sn: sns[i] } : null;
       if (!r.description && r.qty === 0) return null;
-      return { ...r, sn: sns[i], amount: round2(r.qty * r.unitPrice) };
+      const detail = !input.showAvailability && isAvailabilityNote(r.detail) ? "" : r.detail;
+      return { ...r, detail, sn: sns[i], amount: round2(r.qty * r.unitPrice) };
     })
     .filter((r): r is DocRow => r != null);
   const vatInclusive = input.vatMode === "inclusive";

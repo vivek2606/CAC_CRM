@@ -87,6 +87,13 @@ export function DealItemsSection({
       )}
 
       <AddLineItemForm dealId={dealId} products={products} />
+      <p className="mt-3 text-xs text-slate-500">
+        To change quantities and rates or replace the whole list from an Excel sheet,{" "}
+        <a href={`/deals/${dealId}/edit`} className="text-indigo-600 hover:underline">
+          edit the deal
+        </a>
+        .
+      </p>
     </div>
   );
 }

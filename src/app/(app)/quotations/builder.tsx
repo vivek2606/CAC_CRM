@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
-import { nairaInWords, serialNumbers, defaultRef } from "@/lib/document-format";
+import { nairaInWords, serialNumbers, defaultRef, isAvailabilityNote } from "@/lib/document-format";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
 export type ModelOption = {
@@ -53,6 +53,8 @@ type Draft = {
   terms: string[];
   validityDays: string;
   vatMode: "separate" | "inclusive";
+  // Optional so drafts saved before this setting existed read as "on".
+  showAvailability?: boolean;
   tin: string;
   bankName: string;
   accountName: string;
@@ -140,6 +142,7 @@ export function QuotationBuilder({
       terms: [...(fromDeal?.terms ?? defaultTerms)],
       validityDays: String(validityDays),
       vatMode: "separate",
+      showAvailability: true,
       tin: co.tin,
       bankName: co.bankName,
       accountName: co.accountName,
@@ -218,6 +221,7 @@ export function QuotationBuilder({
   };
 
   const sns = serialNumbers(d.rows);
+  const showAvailability = d.showAvailability !== false;
   const inclusive = d.vatMode === "inclusive";
   const vatFactor = 1 + vatRatePct / 100;
   const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -243,6 +247,7 @@ export function QuotationBuilder({
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
     vatMode: d.vatMode,
+    showAvailability: showAvailability,
     tin: d.tin,
     bankName: d.bankName,
     accountName: d.accountName,
@@ -377,6 +382,15 @@ export function QuotationBuilder({
                 </button>
               ))}
             </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={showAvailability}
+                onChange={(e) => update({ showAvailability: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Show product availability on the document
+            </label>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -460,7 +474,8 @@ export function QuotationBuilder({
                         value={r.detail}
                         onChange={(e) => setRow(r.uid, { detail: e.target.value })}
                         placeholder={r.custom ? "Note (optional), e.g. Copper pipes by client" : "Availability / note, e.g. Available"}
-                        className={`${input} text-xs py-1.5`}
+                        className={`${input} text-xs py-1.5 ${!showAvailability && isAvailabilityNote(r.detail) ? "line-through text-slate-400" : ""}`}
+                        title={!showAvailability && isAvailabilityNote(r.detail) ? "Availability is switched off - not printed on the document" : undefined}
                       />
                       {opt && (
                         <p className="text-[11px] text-slate-500">

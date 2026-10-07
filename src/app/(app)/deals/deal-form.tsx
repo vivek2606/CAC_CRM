@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Plus, Trash2, Upload } from "lucide-react";
 import {
   OPEN_DEAL_STAGES,
   DEAL_STAGE_LABELS,
@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
 import { CompletenessBar } from "@/components/completeness-bar";
+import { parseWonItemsSheet } from "./actions";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -41,6 +42,7 @@ export function DealForm({
   productsTotal = null,
   initialItems = [],
   requireItems = false,
+  dealId,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
@@ -79,6 +81,8 @@ export function DealForm({
   initialItems?: LineItemRow[];
   // A won deal must keep at least one product billed.
   requireItems?: boolean;
+  // Edit form: lets the products sheet download pre-filled with this deal's list.
+  dealId?: string;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
   const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
@@ -130,6 +134,37 @@ export function DealForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [value, setValue] = useState(defaultValues?.value != null ? String(defaultValues.value) : "");
 
+  // Products brought in by an Excel upload that aren't in the dropdown list
+  // (e.g. no dealer price on file) - added so their rows still show a label.
+  const [uploadedOptions, setUploadedOptions] = useState<ProductOption[]>([]);
+  const productOptions = products
+    ? [...products, ...uploadedOptions.filter((o) => !products.some((p) => p.id === o.id))]
+    : undefined;
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
+  const [uploading, startUpload] = useTransition();
+
+  function uploadSheet(file: File) {
+    startUpload(async () => {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await parseWonItemsSheet(fd);
+      if (res.rows.length) {
+        setFormError(null);
+        setUploadedOptions((prev) => [
+          ...prev,
+          ...res.rows.map((r) => ({ id: r.productId, label: r.label, defaultPrice: null, availableQty: null, inTransitLabel: null })),
+        ]);
+        applyItems(res.rows.map((r) => ({ productId: r.productId, qty: String(r.qty), unitPrice: String(r.unitPrice) })));
+      }
+      setUploadNote(
+        (res.rows.length
+          ? `Product list replaced with ${res.rows.length} product${res.rows.length === 1 ? "" : "s"} from the sheet - review and save.`
+          : "Nothing was taken from the sheet - the product list is unchanged.") +
+          (res.problems.length ? ` Not added: ${res.problems.join("; ")}` : ""),
+      );
+    });
+  }
+
   function itemsTotal(rows: LineItemRow[]): number {
     return rows.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitPrice) || 0), 0);
   }
@@ -154,7 +189,7 @@ export function DealForm({
   }
 
   function handleProductChange(index: number, productId: string) {
-    const product = products?.find((p) => p.id === productId);
+    const product = productOptions?.find((p) => p.id === productId);
     updateRow(index, {
       productId,
       unitPrice: product?.defaultPrice != null ? String(product.defaultPrice) : items[index].unitPrice,
@@ -379,12 +414,12 @@ export function DealForm({
             {items.length > 0 && (
               <div className="mb-2 space-y-2">
                 {items.map((row, index) => {
-                  const selectedProduct = products?.find((p) => p.id === row.productId);
+                  const selectedProduct = productOptions?.find((p) => p.id === row.productId);
                   return (
                   <div key={index} className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[160px]">
                       <SearchableSelect
-                        options={products}
+                        options={productOptions ?? []}
                         value={row.productId}
                         onSelect={(opt) => handleProductChange(index, opt?.id ?? "")}
                         placeholder="Type to search models..."
@@ -443,6 +478,34 @@ export function DealForm({
               <Plus className="h-4 w-4" />
               Add product
             </button>
+            <label
+              className={`ml-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3 py-1.5 transition-colors ${uploading ? "opacity-60" : ""}`}
+            >
+              <Upload className="h-4 w-4" />
+              {uploading ? "Reading…" : "Upload from Excel"}
+              <input
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) uploadSheet(f);
+                }}
+              />
+            </label>
+            <a
+              href={dealId ? `/deals/won-items-template?deal=${dealId}` : "/deals/won-items-template"}
+              download
+              className="ml-3 text-xs text-slate-500 hover:text-slate-800"
+            >
+              {dealId && initialItems.length ? "Download current list (.xlsx)" : "Download template"}
+            </a>
+            <p className="mt-1 text-xs text-slate-400">
+              Sheet columns: Product Code (or Model), Qty, Rate (excl. VAT). Uploading replaces the list above.
+            </p>
+            {uploadNote && <p className="mt-1 text-xs text-slate-600">{uploadNote}</p>}
             {validItems.length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
                 Products total: <span className="font-medium text-slate-700">{formatCurrency(itemsTotal(validItems))}</span>

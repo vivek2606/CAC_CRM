@@ -68,3 +68,9 @@ export function nairaInWords(amount: number): string {
   const words = `${integerInWords(naira)} Naira${k ? ` and ${integerInWords(k)} Kobo` : ""} Only`;
   return negative ? `Minus ${words}` : words;
 }
+
+// The availability text the Quotations builder fills in when a model is
+// picked ("Available", "Not Available", "In Transit (ETA ...)").
+export function isAvailabilityNote(detail: string): boolean {
+  return /^(available|not available|in transit)\b/i.test(detail.trim());
+}

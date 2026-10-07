@@ -96,6 +96,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
             productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}
             products={productOptions}
             requireItems={deal.stage === "WON"}
+            dealId={deal.id}
             initialItems={deal.items.map((i) => ({ productId: i.productId, qty: String(i.qty), unitPrice: String(i.unitPrice) }))}
             submitLabel="Save Changes"
           />
