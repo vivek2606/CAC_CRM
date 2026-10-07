@@ -57,7 +57,7 @@ const s = StyleSheet.create({
   words: { borderLeftWidth: 0.75, borderRightWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink, paddingVertical: 5, paddingHorizontal: 6, fontSize: 8.5 },
   terms: { flexDirection: "row", marginTop: 10 },
   bankRow: { flexDirection: "row", marginTop: 2 },
-  bankLabel: { width: 78, color: muted, fontSize: 8.5 },
+  bankLabel: { width: 72, color: muted, fontSize: 8.5 },
   signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
   signBlock: { width: 220 },
   signLine: { borderTopWidth: 0.75, borderTopColor: ink, marginTop: 26, paddingTop: 4 },
@@ -248,7 +248,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
                 ))}
               </View>
               {hasBank || doc.tin ? (
-                <View style={{ width: 210 }}>
+                <View style={{ width: 262 }}>
                   <Text style={s.label}>Bank details for payment</Text>
                   {doc.bank.bankName ? (
                     <View style={s.bankRow}>

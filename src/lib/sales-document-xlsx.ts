@@ -132,7 +132,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   });
   ws.getRow(r).height = 30;
 
-  // Terms (left) and bank details + TIN (right)
+  // Terms, then bank details + TIN
   r += 2;
   put(r, 1, "TERMS & CONDITIONS", { font: { size: 8, bold: true, ...muted } });
   const bank: [string, string][] = (
@@ -143,14 +143,25 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
       ["TIN", doc.tin],
     ] as [string, string][]
   ).filter(([, v]) => v);
-  if (bank.length) put(r, 5, "BANK DETAILS FOR PAYMENT", { font: { size: 8, bold: true, ...muted } });
-  const start = r + 1;
-  doc.terms.forEach((t, i) => put(start + i, 1, `• ${t}`, { font: { size: 9 } }));
-  bank.forEach(([label, value], i) => {
-    put(start + i, 5, label, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } });
-    put(start + i, 6, value, { font: { size: 9, bold: label === "Account number" }, alignment: { horizontal: "right" } });
-  });
-  r = start + Math.max(doc.terms.length, bank.length);
+  doc.terms.forEach((t, i) => put(r + 1 + i, 1, `• ${t}`, { font: { size: 9 } }));
+  r += doc.terms.length;
+
+  // Bank details in their own block, one full-width line each ("Account
+  // name: ...") so long names are never cut off by a narrow column.
+  if (bank.length) {
+    r += 2;
+    put(r, 1, "BANK DETAILS FOR PAYMENT", { font: { size: 8, bold: true, ...muted } });
+    for (const [label, value] of bank) {
+      r++;
+      ws.mergeCells(r, 1, r, 6);
+      put(r, 1, {
+        richText: [
+          { text: `${label}: `, font: { size: 10, color: { argb: "FF64748B" } } },
+          { text: value, font: { size: 10, bold: true } },
+        ],
+      });
+    }
+  }
 
   // Signatory (left), customer acceptance (right)
   r += 2;
