@@ -271,6 +271,20 @@ export async function updateDeal(dealId: string, formData: FormData) {
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
+  // Products edited in the form (sent whenever the form shows the editor).
+  if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null) {
+    const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty > 0);
+    const current = await prisma.dealLineItem.findMany({ where: { dealId }, select: { productId: true, qty: true, unitPrice: true } });
+    const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
+      rows.map((r) => `${r.productId}|${r.qty}|${Math.round(r.unitPrice * 100) / 100}`).sort().join(",");
+    if (key(next) !== key(current)) {
+      if (existing.stage === "WON" && next.length === 0) throw new Error("A won deal needs at least one product billed.");
+      if (existing.stage === "WON" && next.some((i) => !(i.unitPrice > 0))) throw new Error("Every product billed needs a basic rate above 0.");
+      await prisma.dealLineItem.deleteMany({ where: { dealId } });
+      if (next.length) await prisma.dealLineItem.createMany({ data: next.map((i) => ({ dealId, productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })) });
+      await revokeDiscountApproval(dealId);
+    }
+  }
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
 

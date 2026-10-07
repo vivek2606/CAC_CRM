@@ -4,15 +4,41 @@ import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/li
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../../deal-form";
 import { updateDeal } from "../../actions";
+import { getAvailableStockByProduct, getInTransitByProduct, getLatestPriceByProduct, getQuotableProducts, inTransitLabel } from "@/lib/pricing";
 
 export default async function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const deal = await prisma.deal.findUnique({ where: { id }, include: { items: { select: { qty: true, unitPrice: true } } } });
+  const deal = await prisma.deal.findUnique({
+    where: { id },
+    include: { items: { orderBy: { createdAt: "asc" }, select: { productId: true, qty: true, unitPrice: true, product: { select: { model: true, code: true } } } } },
+  });
   if (!deal) notFound();
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
+
+  // Products can be edited here too - except on a deal imported from the
+  // Sales Register, whose lines come from the register.
+  const editableProducts = deal.sourceTxnNo == null;
+  const [products, prices, stock, inTransit] = editableProducts
+    ? await Promise.all([getQuotableProducts(), getLatestPriceByProduct(), getAvailableStockByProduct(), getInTransitByProduct()])
+    : [[], new Map<string, number>(), new Map<string, number>(), new Map<string, { qty: number; eta: Date | null }>()];
+  const productOptions = editableProducts
+    ? [
+        ...products.map((p) => ({
+          id: p.id,
+          label: `${p.model} (${p.code})`,
+          defaultPrice: prices.get(p.id) ?? null,
+          availableQty: stock.get(p.id) ?? null,
+          inTransitLabel: inTransitLabel(inTransit.get(p.id)),
+        })),
+        // The deal's own products, even ones with no dealer price on file.
+        ...deal.items
+          .filter((i, n, all) => !products.some((p) => p.id === i.productId) && all.findIndex((x) => x.productId === i.productId) === n)
+          .map((i) => ({ id: i.productId, label: `${i.product.model} (${i.product.code})`, defaultPrice: null, availableQty: null, inTransitLabel: null })),
+      ]
+    : undefined;
 
   const [owners, accounts, contacts] = await Promise.all([
     isBackOffice(user)
@@ -68,6 +94,9 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               createdAt: deal.createdAt.toISOString().slice(0, 10),
             }}
             productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}
+            products={productOptions}
+            requireItems={deal.stage === "WON"}
+            initialItems={deal.items.map((i) => ({ productId: i.productId, qty: String(i.qty), unitPrice: String(i.unitPrice) }))}
             submitLabel="Save Changes"
           />
         </Card>

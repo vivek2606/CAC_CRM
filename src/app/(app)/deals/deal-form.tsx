@@ -39,6 +39,8 @@ export function DealForm({
   defaultValues,
   submitLabel,
   productsTotal = null,
+  initialItems = [],
+  requireItems = false,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
@@ -73,6 +75,10 @@ export function DealForm({
   // Total of the deal's saved products (edit form) - when set, the value is
   // taken from them and can't be typed over.
   productsTotal?: number | null;
+  // Edit form: the deal's current products, editable here.
+  initialItems?: LineItemRow[];
+  // A won deal must keep at least one product billed.
+  requireItems?: boolean;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
   const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
@@ -120,7 +126,8 @@ export function DealForm({
     }
   }
 
-  const [items, setItems] = useState<LineItemRow[]>([]);
+  const [items, setItems] = useState<LineItemRow[]>(initialItems);
+  const [formError, setFormError] = useState<string | null>(null);
   const [value, setValue] = useState(defaultValues?.value != null ? String(defaultValues.value) : "");
 
   function itemsTotal(rows: LineItemRow[]): number {
@@ -157,8 +164,19 @@ export function DealForm({
   const validItems = items.filter((r) => r.productId && Number(r.qty) > 0);
 
   return (
-    <form action={action} className="space-y-5 max-w-2xl">
+    <form
+      action={action}
+      onSubmit={(e) => {
+        if (!requireItems) return;
+        if (validItems.length === 0 || validItems.some((r) => !(Number(r.unitPrice) > 0))) {
+          e.preventDefault();
+          setFormError("A won deal needs at least one product billed, each with a quantity and a basic rate above 0.");
+        }
+      }}
+      className="space-y-5 max-w-2xl"
+    >
       <input type="hidden" name="lineItems" value={JSON.stringify(validItems)} />
+      {products && <input type="hidden" name="lineItemsPresent" value="1" />}
       <CompletenessBar fields={completenessFields} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
@@ -215,14 +233,14 @@ export function DealForm({
             min={0}
             step="0.01"
             required
-            value={productsTotal != null ? String(productsTotal) : value}
+            value={productsTotal != null && !products ? String(productsTotal) : value}
             onChange={(e) => setValue(e.target.value)}
-            readOnly={productsTotal != null || validItems.length > 0}
+            readOnly={(productsTotal != null && !products) || validItems.length > 0}
             className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-              productsTotal != null || validItems.length > 0 ? "bg-slate-50 text-slate-600" : ""
+              (productsTotal != null && !products) || validItems.length > 0 ? "bg-slate-50 text-slate-600" : ""
             }`}
           />
-          {(productsTotal != null || validItems.length > 0) && (
+          {((productsTotal != null && !products) || validItems.length > 0) && (
             <p className="mt-1 text-xs text-slate-400">Set from the products (quantity × basic rate, excl. VAT).</p>
           )}
         </div>
@@ -479,6 +497,7 @@ export function DealForm({
         </div>
       </div>
 
+      {formError && <p className="text-sm text-red-600">{formError}</p>}
       <div className="flex gap-3">
         <button
           type="submit"
