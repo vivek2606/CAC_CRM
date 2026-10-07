@@ -7,6 +7,9 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "CRM for managing the complete sales cycle across the team.",
     start_url: "/",
     display: "standalone",
+    // Where supported (Chrome / Edge on desktop), the installed app gets a
+    // tab strip like a browser; elsewhere it stays a normal app window.
+    display_override: ["tabbed", "standalone"] as unknown as MetadataRoute.Manifest["display_override"],
     background_color: "#ffffff",
     theme_color: "#1d4ed8",
     icons: [

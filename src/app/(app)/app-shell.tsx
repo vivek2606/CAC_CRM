@@ -7,6 +7,7 @@ import { Sidebar } from "./sidebar";
 import { SearchBox } from "./search-box";
 import { SakuragiMark } from "@/components/sakuragi-logo";
 import { CalculatorButton } from "@/components/calculator";
+import { NewWindowButton } from "@/components/new-window-button";
 
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +36,8 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <SakuragiMark className="lg:hidden h-7 w-7 shrink-0" />
           <span className="lg:hidden font-semibold text-slate-900 text-sm shrink-0">SAKURAGI</span>
           <SearchBox />
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto shrink-0 flex items-center gap-2">
+            <NewWindowButton />
             <CalculatorButton />
           </div>
         </div>
