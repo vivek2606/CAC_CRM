@@ -1,9 +1,12 @@
 import { Document, Font, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import type { SalesDocument } from "@/lib/sales-document";
 
-// A4 quotation / proforma invoice / bill of quantity. Amounts are printed
-// as plain numbers under "NGN" headings - the built-in PDF fonts have no ₦
-// glyph.
+// A4 quotation / proforma invoice / bill of quantity. The item table always
+// runs down to the totals/terms block, which sits at the foot of the last
+// page - empty ruled space fills the gap (as on the BOQ template), and a
+// page holding only the terms still shows an empty table above them.
+// Amounts are plain numbers under "NGN" headings - the built-in PDF fonts
+// have no ₦ glyph.
 
 // Wrap whole words - no "Lim-ited" style hyphenation in names and numbers.
 Font.registerHyphenationCallback((word) => [word]);
@@ -14,15 +17,18 @@ const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", mon
 
 const ink = "#0f172a";
 const muted = "#64748b";
-const line = "#e2e8f0";
+const rule = "#cbd5e1";
 const accent = "#4338ca";
+
+// Column widths (S/N, Unit, Qty, Rate, Amount fixed; Description flexes).
+const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90 };
 
 const s = StyleSheet.create({
   // paddingTop leaves room for the continuation header on pages 2+.
-  page: { paddingTop: 64, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink },
+  page: { paddingTop: 52, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
   contHeader: { position: "absolute", top: 22, left: 38, right: 38 },
   contTitle: { flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: muted, marginBottom: 4 },
-  header: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 10, marginBottom: 12, marginTop: -32 },
+  header: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 10, marginBottom: 12, marginTop: -20 },
   logo: { maxHeight: 46, maxWidth: 170, objectFit: "contain", marginBottom: 5 },
   company: { fontSize: 13, fontFamily: "Helvetica-Bold" },
   small: { fontSize: 7.5, color: muted, marginTop: 1.5 },
@@ -33,38 +39,63 @@ const s = StyleSheet.create({
   parties: { flexDirection: "row", marginBottom: 10 },
   label: { fontSize: 7, color: muted, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3 },
   strong: { fontFamily: "Helvetica-Bold" },
-  th: { flexDirection: "row", backgroundColor: "#eef2ff", borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#c7d2fe", paddingVertical: 5 },
+  // Everything from the table down grows to fill the page, so the bottom
+  // block lands at the foot of the last page.
+  body: { flexGrow: 1, flexDirection: "column" },
+  row: { flexDirection: "row", borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: ink },
+  th: { backgroundColor: "#eef2ff", borderTopWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink },
   thText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#3730a3" },
-  tr: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: line, paddingVertical: 5 },
-  section: { flexDirection: "row", backgroundColor: "#f8fafc", borderBottomWidth: 0.5, borderBottomColor: line, paddingVertical: 4 },
-  cNo: { width: 24, paddingLeft: 4 },
-  cDesc: { flex: 1, paddingRight: 6 },
-  cUnit: { width: 30, textAlign: "center" },
-  cQty: { width: 34, textAlign: "right" },
-  cPrice: { width: 80, textAlign: "right" },
-  cAmt: { width: 88, textAlign: "right", paddingRight: 4 },
-  totals: { alignSelf: "flex-end", width: 240, marginTop: 8 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
-  grand: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 5, marginTop: 2, borderTopWidth: 1.5, borderTopColor: ink },
-  words: { marginTop: 10, padding: 7, backgroundColor: "#f8fafc", borderWidth: 0.5, borderColor: line, fontSize: 8.5 },
-  bottom: { flexDirection: "row", marginTop: 12 },
+  cell: { paddingVertical: 4.5, paddingHorizontal: 4, borderRightWidth: 0.5, borderRightColor: rule },
+  last: { borderRightWidth: 0 },
+  filler: { flexGrow: 1, minHeight: 10 },
+  sectionText: { fontFamily: "Helvetica-Bold" },
+  // Grows too: on a page of its own it puts an empty table above the totals.
+  bottom: { flexGrow: 1, flexDirection: "column" },
+  totalRow: { flexDirection: "row", borderLeftWidth: 0.75, borderRightWidth: 0.75, borderBottomWidth: 0.5, borderColor: ink },
+  totalLabel: { flex: 1, paddingVertical: 4, paddingHorizontal: 6, textAlign: "right", borderRightWidth: 0.5, borderRightColor: rule },
+  totalValue: { width: W.amt, paddingVertical: 4, paddingHorizontal: 4, textAlign: "right" },
+  words: { borderLeftWidth: 0.75, borderRightWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink, paddingVertical: 5, paddingHorizontal: 6, fontSize: 8.5 },
+  terms: { flexDirection: "row", marginTop: 10 },
   bankRow: { flexDirection: "row", marginTop: 2 },
   bankLabel: { width: 78, color: muted, fontSize: 8.5 },
-  signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 18 },
+  signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
   signBlock: { width: 220 },
-  signLine: { borderTopWidth: 0.75, borderTopColor: ink, marginTop: 28, paddingTop: 4 },
-  footer: { position: "absolute", bottom: 20, left: 38, right: 38, fontSize: 7, color: muted, textAlign: "center", borderTopWidth: 0.5, borderTopColor: line, paddingTop: 5 },
+  signLine: { borderTopWidth: 0.75, borderTopColor: ink, marginTop: 26, paddingTop: 4 },
+  footer: { position: "absolute", bottom: 20, left: 38, right: 38, fontSize: 7, color: muted, textAlign: "center", borderTopWidth: 0.5, borderTopColor: "#e2e8f0", paddingTop: 5 },
 });
+
+const col = {
+  no: [s.cell, { width: W.no }],
+  desc: [s.cell, { flex: 1 }],
+  unit: [s.cell, { width: W.unit, textAlign: "center" as const }],
+  qty: [s.cell, { width: W.qty, textAlign: "right" as const }],
+  rate: [s.cell, { width: W.rate, textAlign: "right" as const }],
+  amt: [s.cell, s.last, { width: W.amt, textAlign: "right" as const }],
+};
 
 function TableHeader() {
   return (
-    <View style={s.th}>
-      <Text style={[s.thText, s.cNo]}>S/N</Text>
-      <Text style={[s.thText, s.cDesc]}>Description</Text>
-      <Text style={[s.thText, s.cUnit]}>Unit</Text>
-      <Text style={[s.thText, s.cQty]}>Qty</Text>
-      <Text style={[s.thText, s.cPrice]}>Rate (NGN)</Text>
-      <Text style={[s.thText, s.cAmt]}>Amount (NGN)</Text>
+    <View style={[s.row, s.th]}>
+      <Text style={[...col.no, s.thText]}>S/N</Text>
+      <Text style={[...col.desc, s.thText]}>Description</Text>
+      <Text style={[...col.unit, s.thText]}>Unit</Text>
+      <Text style={[...col.qty, s.thText]}>Qty</Text>
+      <Text style={[...col.rate, s.thText]}>Rate (NGN)</Text>
+      <Text style={[...col.amt, s.thText]}>Amount (NGN)</Text>
+    </View>
+  );
+}
+
+// Empty ruled columns - stretches to fill whatever height is left.
+function EmptyRows({ grow = true }: { grow?: boolean }) {
+  return (
+    <View style={[s.row, grow ? s.filler : { height: 0 }]}>
+      <View style={col.no} />
+      <View style={col.desc} />
+      <View style={col.unit} />
+      <View style={col.qty} />
+      <View style={col.rate} />
+      <View style={col.amt} />
     </View>
   );
 }
@@ -98,6 +129,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
             ) : null
           }
         />
+
         <View style={s.header}>
           <View style={{ flex: 1, paddingRight: 12 }}>
             {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image, not an HTML img */}
@@ -156,103 +188,110 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
           </Text>
         ) : null}
 
-        <TableHeader />
-        {doc.rows.map((r, i) =>
-          r.kind === "section" ? (
-            <View key={i} style={s.section} wrap={false}>
-              <Text style={[s.cNo, s.strong]}>{r.sn}</Text>
-              <Text style={[s.cDesc, s.strong]}>{r.label}</Text>
-            </View>
-          ) : (
-            <View key={i} style={s.tr} wrap={false}>
-              <Text style={[s.cNo, { color: muted }]}>{r.sn}</Text>
-              <View style={s.cDesc}>
-                <Text>{r.description}</Text>
-                {r.detail ? <Text style={{ fontSize: 7.5, color: muted, marginTop: 1 }}>{r.detail}</Text> : null}
+        <View style={s.body}>
+          <TableHeader />
+          {doc.rows.map((r, i) =>
+            r.kind === "section" ? (
+              <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
+                <Text style={[...col.no, s.sectionText]}>{r.sn}</Text>
+                <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
+                <View style={col.unit} />
+                <View style={col.qty} />
+                <View style={col.rate} />
+                <View style={col.amt} />
               </View>
-              <Text style={s.cUnit}>{r.unit}</Text>
-              <Text style={s.cQty}>{qtyFmt(r.qty)}</Text>
-              <Text style={s.cPrice}>{money(r.unitPrice)}</Text>
-              <Text style={s.cAmt}>{money(r.amount)}</Text>
+            ) : (
+              <View key={i} style={s.row} wrap={false}>
+                <Text style={[...col.no, { color: muted }]}>{r.sn}</Text>
+                <View style={col.desc}>
+                  <Text>{r.description}</Text>
+                  {r.detail ? <Text style={{ fontSize: 7.5, color: muted, marginTop: 1 }}>{r.detail}</Text> : null}
+                </View>
+                <Text style={col.unit}>{r.unit}</Text>
+                <Text style={col.qty}>{qtyFmt(r.qty)}</Text>
+                <Text style={col.rate}>{money(r.unitPrice)}</Text>
+                <Text style={col.amt}>{money(r.amount)}</Text>
+              </View>
+            ),
+          )}
+
+          {/* Empty table down to the bottom block (and above it on a page of its own). */}
+          <EmptyRows />
+
+          <View style={s.bottom} wrap={false}>
+            <EmptyRows />
+            <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
+              <Text style={s.totalLabel}>Subtotal (excl. VAT)</Text>
+              <Text style={s.totalValue}>{money(doc.subtotal)}</Text>
             </View>
-          ),
-        )}
+            <View style={s.totalRow}>
+              <Text style={s.totalLabel}>VAT @ {doc.vatRatePct}%</Text>
+              <Text style={s.totalValue}>{money(doc.vat)}</Text>
+            </View>
+            <View style={[s.totalRow, { backgroundColor: "#eef2ff", borderBottomWidth: 0.75 }]}>
+              <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
+              <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
+            </View>
+            <Text style={s.words}>
+              <Text style={s.strong}>Amount in words: </Text>
+              {doc.totalInWords}
+            </Text>
 
-        <View style={s.totals} wrap={false}>
-          <View style={s.totalRow}>
-            <Text style={{ color: muted }}>Subtotal (excl. VAT)</Text>
-            <Text>{money(doc.subtotal)}</Text>
-          </View>
-          <View style={s.totalRow}>
-            <Text style={{ color: muted }}>VAT @ {doc.vatRatePct}%</Text>
-            <Text>{money(doc.vat)}</Text>
-          </View>
-          <View style={s.grand}>
-            <Text style={[s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
-            <Text style={[s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
-          </View>
-        </View>
-
-        <View style={s.words} wrap={false}>
-          <Text>
-            <Text style={s.strong}>Amount in words: </Text>
-            {doc.totalInWords}
-          </Text>
-        </View>
-
-        <View style={s.bottom} wrap={false}>
-          <View style={{ flex: 1, paddingRight: 14 }}>
-            <Text style={s.label}>Terms &amp; conditions</Text>
-            {doc.terms.map((t, i) => (
-              <Text key={i} style={{ marginTop: 1.5 }}>
-                • {t}
-              </Text>
-            ))}
-          </View>
-          {hasBank || doc.tin ? (
-            <View style={{ width: 210 }}>
-              <Text style={s.label}>Bank details for payment</Text>
-              {doc.bank.bankName ? (
-                <View style={s.bankRow}>
-                  <Text style={s.bankLabel}>Bank</Text>
-                  <Text style={{ flex: 1 }}>{doc.bank.bankName}</Text>
-                </View>
-              ) : null}
-              {doc.bank.accountName ? (
-                <View style={s.bankRow}>
-                  <Text style={s.bankLabel}>Account name</Text>
-                  <Text style={{ flex: 1 }}>{doc.bank.accountName}</Text>
-                </View>
-              ) : null}
-              {doc.bank.accountNumber ? (
-                <View style={s.bankRow}>
-                  <Text style={s.bankLabel}>Account number</Text>
-                  <Text style={[s.strong, { flex: 1 }]}>{doc.bank.accountNumber}</Text>
-                </View>
-              ) : null}
-              {doc.tin ? (
-                <View style={s.bankRow}>
-                  <Text style={s.bankLabel}>TIN</Text>
-                  <Text style={{ flex: 1 }}>{doc.tin}</Text>
+            <View style={s.terms}>
+              <View style={{ flex: 1, paddingRight: 14 }}>
+                <Text style={s.label}>Terms &amp; conditions</Text>
+                {doc.terms.map((t, i) => (
+                  <Text key={i} style={{ marginTop: 1.5 }}>
+                    • {t}
+                  </Text>
+                ))}
+              </View>
+              {hasBank || doc.tin ? (
+                <View style={{ width: 210 }}>
+                  <Text style={s.label}>Bank details for payment</Text>
+                  {doc.bank.bankName ? (
+                    <View style={s.bankRow}>
+                      <Text style={s.bankLabel}>Bank</Text>
+                      <Text style={{ flex: 1 }}>{doc.bank.bankName}</Text>
+                    </View>
+                  ) : null}
+                  {doc.bank.accountName ? (
+                    <View style={s.bankRow}>
+                      <Text style={s.bankLabel}>Account name</Text>
+                      <Text style={{ flex: 1 }}>{doc.bank.accountName}</Text>
+                    </View>
+                  ) : null}
+                  {doc.bank.accountNumber ? (
+                    <View style={s.bankRow}>
+                      <Text style={s.bankLabel}>Account number</Text>
+                      <Text style={[s.strong, { flex: 1 }]}>{doc.bank.accountNumber}</Text>
+                    </View>
+                  ) : null}
+                  {doc.tin ? (
+                    <View style={s.bankRow}>
+                      <Text style={s.bankLabel}>TIN</Text>
+                      <Text style={{ flex: 1 }}>{doc.tin}</Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
             </View>
-          ) : null}
-        </View>
 
-        <View style={s.signRow} wrap={false}>
-          <View style={s.signBlock}>
-            <Text style={s.strong}>For {c.name}</Text>
-            <View style={s.signLine}>
-              {doc.signatory.name ? <Text style={s.strong}>{doc.signatory.name}</Text> : <Text style={{ color: muted }}>Name</Text>}
-              {doc.signatory.designation ? <Text style={{ color: muted }}>{doc.signatory.designation}</Text> : null}
-              {doc.signatory.phone ? <Text style={{ color: muted }}>{doc.signatory.phone}</Text> : null}
-            </View>
-          </View>
-          <View style={s.signBlock}>
-            <Text style={s.strong}>Customer acceptance</Text>
-            <View style={s.signLine}>
-              <Text style={{ color: muted }}>Name, signature and date</Text>
+            <View style={s.signRow}>
+              <View style={s.signBlock}>
+                <Text style={s.strong}>For {c.name}</Text>
+                <View style={s.signLine}>
+                  {doc.signatory.name ? <Text style={s.strong}>{doc.signatory.name}</Text> : <Text style={{ color: muted }}>Name</Text>}
+                  {doc.signatory.designation ? <Text style={{ color: muted }}>{doc.signatory.designation}</Text> : null}
+                  {doc.signatory.phone ? <Text style={{ color: muted }}>{doc.signatory.phone}</Text> : null}
+                </View>
+              </View>
+              <View style={s.signBlock}>
+                <Text style={s.strong}>Customer acceptance</Text>
+                <View style={s.signLine}>
+                  <Text style={{ color: muted }}>Name, signature and date</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
