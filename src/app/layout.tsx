@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { RegisterServiceWorker } from "./register-sw";
 import "./globals.css";
 
@@ -40,9 +41,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      // data-embed is set before hydration on pages shown inside an in-app tab.
+      suppressHydrationWarning
       className={`${sans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+        {/* A page opened in one of the app's own tabs (an iframe) hides the menu and top bar. */}
+        <Script id="embed-detect" strategy="beforeInteractive">
+          {`try{if(window.self!==window.top)document.documentElement.setAttribute("data-embed","")}catch(e){document.documentElement.setAttribute("data-embed","")}`}
+        </Script>
         {children}
         <RegisterServiceWorker />
       </body>

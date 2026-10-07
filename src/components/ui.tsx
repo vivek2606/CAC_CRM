@@ -13,7 +13,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 sticky top-14 z-10">
+    <div className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 sticky top-[var(--app-top)] z-10">
       <div className="flex items-center gap-2 min-w-0">
         <BackButton />
         <div className="min-w-0">

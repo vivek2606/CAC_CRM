@@ -98,31 +98,50 @@ function roleLabel(role: string): string {
   return role === "HEAD" ? "Head of Sales" : role === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager";
 }
 
+// The menu section a page belongs to: the most specific entry - so
+// /reports/sales-register is "Sales Register", not "Team Reports" (/reports).
+// Contact pages sit under Accounts & Contacts, activity pages under Leads &
+// Activities, targets under Incentives & Targets.
+export function sectionFor(pathname: string, role: SessionUser["role"]): { href: string; label: string } | null {
+  const path = pathname.split("?")[0];
+  const under = (base: string) => path === base || path.startsWith(base + "/");
+  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : under("/targets") ? "/incentives" : path;
+  const items = role === "HEAD" || role === "COORDINATOR" ? [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS] : NAV_ITEMS;
+  return (
+    items
+      .filter((n) => (n.href === "/" ? navPath === "/" : navPath === n.href || navPath.startsWith(n.href + "/")))
+      .sort((a, b) => b.href.length - a.href.length)[0] ?? null
+  );
+}
+
 export function Sidebar({
   user,
   open,
   onClose,
+  currentPath,
+  onOpenSection,
 }: {
   user: SessionUser;
   open: boolean;
   onClose: () => void;
+  // The page in the tab being looked at (highlights its section).
+  currentPath: string;
+  // Opens a section in its own in-app tab (see AppShell).
+  onOpenSection: (href: string, label: string) => void;
 }) {
   const pathname = usePathname();
-  // The most specific nav entry for this page - so /reports/sales-register
-  // highlights "Sales Register", not "Team Reports" (/reports) as well.
-  // Contact pages sit under Accounts & Contacts, activity pages under Leads &
-  // Activities, targets under Incentives & Targets.
-  const under = (base: string) => pathname === base || pathname.startsWith(base + "/");
-  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : under("/targets") ? "/incentives" : pathname;
-  const activeHref =
-    [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS]
-      .map((n) => n.href)
-      .filter((h) => (h === "/" ? navPath === "/" : navPath === h || navPath.startsWith(h + "/")))
-      .sort((a, b) => b.length - a.length)[0] ?? null;
+  const activeHref = sectionFor(currentPath, user.role)?.href ?? null;
+  // A plain click opens the section in its own tab; Ctrl / Cmd / Shift /
+  // middle click keep the browser's usual behaviour.
+  const openInTab = (href: string, label: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    onOpenSection(href, label);
+  };
 
   return (
     <aside
-      className={`w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col h-screen
+      className={`app-chrome w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col h-screen
         fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out
         lg:sticky lg:top-0 lg:translate-x-0
         ${open ? "translate-x-0" : "-translate-x-full"}`}
@@ -148,7 +167,7 @@ export function Sidebar({
             <Link
               key={item.href}
               href={item.href}
-              onClick={onClose}
+              onClick={openInTab(item.href, item.label)}
               className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? "bg-slate-100 text-slate-900"
@@ -175,7 +194,7 @@ export function Sidebar({
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={onClose}
+                  onClick={openInTab(item.href, item.label)}
                   className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}

@@ -59,3 +59,17 @@ table {
     margin: 12mm;
   }
 }
+
+/* Height of the app's top bar (+ tab strip when tabs are open) that page
+   headers stick under - set by AppShell. */
+:root {
+  --app-top: 3.5rem;
+}
+
+/* Pages shown inside an in-app tab: no menu / top bar of their own. */
+html[data-embed] {
+  --app-top: 0px;
+}
+html[data-embed] .app-chrome {
+  display: none !important;
+}
