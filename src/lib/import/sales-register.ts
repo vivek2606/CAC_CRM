@@ -150,10 +150,41 @@ export function canonicalCustNames(rows: RawSalesRow[]): Map<string, string> {
   return canonical;
 }
 
-export function transformSalesRegister(inputRows: RawSalesRow[]): TransformResult {
+// A customer name for matching: case, punctuation and company suffixes
+// ("LTD", "LIMITED", "NIG", ...) ignored - "VIBENZ TECHNICAL WORKS" and
+// "Vibenz Technical Works Ltd." match.
+const SUFFIXES = new Set(["LTD", "LIMITED", "PLC", "NIG", "NIGERIA", "CO", "COMPANY", "INC", "ENT", "ENTERPRISES"]);
+export function custNameMatchKey(name: string): string {
+  const words = name.toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+  while (words.length > 1 && SUFFIXES.has(words[words.length - 1])) words.pop();
+  return words.join(" ");
+}
+
+// knownAccounts: accounts already in the CRM with a customer code, so a
+// buyer billed under a cash code who has their own code in the CRM (but not
+// in this file) still goes to their own account.
+export function transformSalesRegister(inputRows: RawSalesRow[], knownAccounts: { name: string; code: string }[] = []): TransformResult {
+  // A buyer billed under a shared cash-customer code who also has a code of
+  // their own (e.g. invoiced as a walk-in before their account was opened)
+  // goes to their own account.
+  const before = canonicalCustNames(inputRows);
+  const ownCode = new Map<string, { code: string; name: string }>();
+  for (const a of knownAccounts) {
+    if (a.code && !before.has(a.code.trim())) ownCode.set(custNameMatchKey(a.name), { code: a.code.trim(), name: a.name });
+  }
+  for (const r of [...inputRows].sort((x, y) => x.docDate.getTime() - y.docDate.getTime())) {
+    const code = r.custCode.trim();
+    if (code && !before.has(code)) ownCode.set(custNameMatchKey(r.custName), { code, name: r.custName });
+  }
+  const reassigned = inputRows.map((r) => {
+    if (!before.has(r.custCode.trim())) return r;
+    const own = ownCode.get(custNameMatchKey(r.custName));
+    return own ? { ...r, custCode: own.code, custName: own.name } : r;
+  });
+
   // Every row of a shared code is billed to that code's one account.
-  const canonical = canonicalCustNames(inputRows);
-  const rows = inputRows.map((r) => {
+  const canonical = canonicalCustNames(reassigned);
+  const rows = reassigned.map((r) => {
     const name = canonical.get(r.custCode.trim());
     return name && name !== r.custName ? { ...r, custName: name, billedName: r.custName } : r;
   });

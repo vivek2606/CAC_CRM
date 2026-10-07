@@ -98,7 +98,11 @@ export async function importSalesRegister(
     if (rows.length === 0) return { error: `The file has no rows up to ${upToLabel}.` };
   }
 
-  const result = transformSalesRegister(rows);
+  const knownAccounts = await prisma.account.findMany({ where: { code: { not: null } }, select: { name: true, code: true } });
+  const result = transformSalesRegister(
+    rows,
+    knownAccounts.map((a) => ({ name: a.name, code: a.code! })),
+  );
 
   // Replace mode: every month the file touches (first row's month through
   // last row's month) is treated as authoritative - imported deals and line
