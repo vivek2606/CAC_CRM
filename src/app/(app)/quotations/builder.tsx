@@ -298,20 +298,7 @@ export function QuotationBuilder({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className={label}>Issued by</label>
-            <select
-              value={d.companyKey}
-              onChange={(e) => {
-                const co = companyFor(e.target.value);
-                update({ companyKey: co.key, tin: co.tin, bankName: co.bankName, accountName: co.accountName, accountNumber: co.accountNumber });
-              }}
-              className={input}
-            >
-              {companies.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 truncate">{companyFor(d.companyKey).name}</p>
           </div>
           <div>
             <label className={label}>Ref no.</label>

@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
-// Letterhead and document settings for quotations and proforma invoices,
-// one profile per billing company (CAC bills through Sakuragi and, still
-// sometimes, Somotex). Edited by the Head under Company Details and stored
-// in AppSetting "company"; DEFAULT_COMPANY_SETTINGS applies until then.
+// Letterhead and document settings for quotations and proforma invoices.
+// All quotations and proformas are issued by Sakuragi Industries Nigeria
+// Limited (no billing through Somotex). Edited by the Head under Company
+// Details and stored in AppSetting "company"; DEFAULT_COMPANY_SETTINGS
+// applies until then.
 
 const companySchema = z.object({
   key: z.string().trim().min(1),
@@ -60,21 +61,6 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
       accountNumber: "1312253223",
       logo: "",
     },
-    {
-      key: "SOMOTEX",
-      name: "Somotex Nigeria Limited",
-      refPrefix: "SNL",
-      addressLines: ["Lagos, Nigeria"],
-      phone: "",
-      email: "sales@somotexnig.com",
-      website: "somotexnig.com",
-      rcNumber: "",
-      tin: "",
-      bankName: "",
-      accountName: "",
-      accountNumber: "",
-      logo: "",
-    },
   ],
   defaultCompany: "SAKURAGI",
   vatRatePct: 7.5,
@@ -105,10 +91,17 @@ export async function getCompanySettings(): Promise<CompanySettings> {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: SETTINGS_KEY } });
     const parsed = row ? companySettingsSchema.safeParse(row.value) : null;
-    return parsed?.success ? parsed.data : DEFAULT_COMPANY_SETTINGS;
+    return parsed?.success ? sakuragiOnly(parsed.data) : DEFAULT_COMPANY_SETTINGS;
   } catch {
     return DEFAULT_COMPANY_SETTINGS;
   }
+}
+
+// Documents only ever go out under Sakuragi - drop any other company that an
+// earlier save may still hold.
+function sakuragiOnly(settings: CompanySettings): CompanySettings {
+  const sakuragi = settings.companies.find((c) => c.key === "SAKURAGI") ?? DEFAULT_COMPANY_SETTINGS.companies[0];
+  return { ...settings, companies: [sakuragi], defaultCompany: sakuragi.key };
 }
 
 export async function saveCompanySettings(settings: CompanySettings) {

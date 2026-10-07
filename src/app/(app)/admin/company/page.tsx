@@ -10,7 +10,7 @@ export default async function CompanyDetailsPage() {
     <div>
       <PageHeader
         title="Company Details"
-        description="Letterhead, bank details and terms printed on quotations and proforma invoices"
+        description="Sakuragi Industries Nigeria Limited letterhead, logo, bank details and terms printed on quotations and proforma invoices"
       />
       <div className="p-6">
         <Card className="p-6">

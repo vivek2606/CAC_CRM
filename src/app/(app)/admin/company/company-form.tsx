@@ -36,16 +36,7 @@ export function CompanyForm({ initial }: { initial: CompanySettings }) {
         <div key={c.key} className="rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-900">{c.name || c.key}</h2>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="radio"
-                name="defaultCompany"
-                checked={s.defaultCompany === c.key}
-                onChange={() => setS({ ...s, defaultCompany: c.key })}
-                className="h-4 w-4"
-              />
-              Default for new documents
-            </label>
+            <span className="text-xs text-slate-500">Issues all quotations and proforma invoices</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {FIELDS.map((f) => (
