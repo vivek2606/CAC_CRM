@@ -63,7 +63,6 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
         <input
           name="qty"
           type="number"
-          min={0}
           step="any"
           required
           defaultValue={1}
@@ -75,7 +74,6 @@ export function AddLineItemForm({ dealId, products }: { dealId: string; products
         <input
           name="unitPrice"
           type="number"
-          min={0}
           step="any"
           required
           value={unitPrice}

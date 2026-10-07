@@ -115,7 +115,8 @@ const dealSchema = z.object({
   customerName: z.string().trim().optional().default(""),
   customerPhone: z.string().trim().optional().default(""),
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]),
-  value: z.coerce.number().min(0).transform((v) => Math.round(v * 100) / 100),
+  // Can be below 0 when the products include a sales return.
+  value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100),
   probability: z.coerce.number().min(0).max(100).optional(),
   expectedCloseDate: z.string().optional(),
   accountId: z.string().optional(),
@@ -162,8 +163,9 @@ function parseDateInput(value: string | undefined): Date {
 
 const dealLineItemSchema = z.object({
   productId: z.string().min(1, "Choose a product"),
-  qty: z.coerce.number().positive("Quantity must be greater than zero"),
-  unitPrice: z.coerce.number().min(0, "Unit price can't be negative"),
+  // Negative quantity / rate = a sales return.
+  qty: z.coerce.number().finite().refine((v) => v !== 0, "Quantity can't be zero"),
+  unitPrice: z.coerce.number().finite(),
 });
 
 // The New Deal form serializes its optional product rows as a JSON array in
@@ -273,13 +275,13 @@ export async function updateDeal(dealId: string, formData: FormData) {
   });
   // Products edited in the form (sent whenever the form shows the editor).
   if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null) {
-    const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty > 0);
+    const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
     const current = await prisma.dealLineItem.findMany({ where: { dealId }, select: { productId: true, qty: true, unitPrice: true } });
     const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
       rows.map((r) => `${r.productId}|${r.qty}|${Math.round(r.unitPrice * 100) / 100}`).sort().join(",");
     if (key(next) !== key(current)) {
       if (existing.stage === "WON" && next.length === 0) throw new Error("A won deal needs at least one product billed.");
-      if (existing.stage === "WON" && next.some((i) => !(i.unitPrice > 0))) throw new Error("Every product billed needs a basic rate above 0.");
+      if (existing.stage === "WON" && next.some((i) => i.unitPrice === 0)) throw new Error("Every product billed needs a basic rate (negative for a return).");
       await prisma.dealLineItem.deleteMany({ where: { dealId } });
       if (next.length) await prisma.dealLineItem.createMany({ data: next.map((i) => ({ dealId, productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })) });
       await revokeDiscountApproval(dealId);
@@ -323,8 +325,8 @@ export async function updateDealStage(
   if (stage === "WON") {
     // The products billed must be recorded - quantity and basic rate.
     if (existing.items.length === 0) throw new Error("Add the products billed (quantity and basic rate) to mark this deal Won.");
-    if (existing.items.some((i) => !(i.qty > 0) || !(i.unitPrice > 0))) {
-      throw new Error("Every product billed needs a quantity and a basic rate above 0.");
+    if (existing.items.some((i) => i.qty === 0 || i.unitPrice === 0)) {
+      throw new Error("Every product billed needs a quantity and a basic rate (negative for a return).");
     }
     if (!invoiceNo?.trim()) throw new Error("Enter the invoice no. to mark this deal Won.");
     if (!closedAtOverride) throw new Error("Enter the invoice date to mark this deal Won.");
@@ -542,8 +544,8 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   for (const [n, inv] of invoices.entries()) {
     const label = invoices.length > 1 ? ` on invoice ${inv.invoiceNo.trim() || n + 1}` : "";
     if (inv.items.length === 0) throw new Error(`Add the products billed${label}.`);
-    if (inv.items.some((i) => !i.productId || !(i.qty > 0) || !(i.unitPrice > 0))) {
-      throw new Error(`Every product${label} needs a model, a quantity and a basic rate above 0.`);
+    if (inv.items.some((i) => !i.productId || !Number.isFinite(i.qty) || !Number.isFinite(i.unitPrice) || i.qty === 0 || i.unitPrice === 0)) {
+      throw new Error(`Every product${label} needs a model, a quantity and a basic rate (negative for a return).`);
     }
   }
   const productIds = [...new Set(invoices.flatMap((i) => i.items.map((x) => x.productId)))];
@@ -677,7 +679,10 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     const rate = num(get(iRate));
     const p = (code && byCode.get(code.toUpperCase())) || (model && byModel.get(norm(model)));
     if (!p) return void problems.push(`Row ${n}: no product matches "${code || model}"`);
-    if (!(qty > 0) || !(rate > 0)) return void problems.push(`Row ${n}: quantity and rate must be above 0 (${p.model})`);
+    // Negative quantity or rate = a sales return; zero or blank isn't allowed.
+    if (!Number.isFinite(qty) || !Number.isFinite(rate) || qty === 0 || rate === 0) {
+      return void problems.push(`Row ${n}: enter a quantity and a rate other than 0 (${p.model})`);
+    }
     rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100 });
   });
   return { rows, problems };

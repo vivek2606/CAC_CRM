@@ -196,16 +196,17 @@ export function DealForm({
     });
   }
 
-  const validItems = items.filter((r) => r.productId && Number(r.qty) > 0);
+  // Negative quantity / rate = a sales return.
+  const validItems = items.filter((r) => r.productId && Number.isFinite(Number(r.qty)) && Number(r.qty) !== 0);
 
   return (
     <form
       action={action}
       onSubmit={(e) => {
         if (!requireItems) return;
-        if (validItems.length === 0 || validItems.some((r) => !(Number(r.unitPrice) > 0))) {
+        if (validItems.length === 0 || validItems.some((r) => !Number(r.unitPrice))) {
           e.preventDefault();
-          setFormError("A won deal needs at least one product billed, each with a quantity and a basic rate above 0.");
+          setFormError("A won deal needs at least one product billed, each with a quantity and a basic rate (negative for a return).");
         }
       }}
       className="space-y-5 max-w-2xl"
@@ -265,7 +266,7 @@ export function DealForm({
           <input
             name="value"
             type="number"
-            min={0}
+            min={validItems.length > 0 ? undefined : 0}
             step="0.01"
             required
             value={productsTotal != null && !products ? String(productsTotal) : value}
@@ -438,7 +439,6 @@ export function DealForm({
                     <div className="w-20">
                       <input
                         type="number"
-                        min={0}
                         step="any"
                         placeholder="Qty"
                         value={row.qty}
@@ -449,7 +449,6 @@ export function DealForm({
                     <div className="w-32">
                       <input
                         type="number"
-                        min={0}
                         step="any"
                         placeholder="Rate (₦)"
                         value={row.unitPrice}

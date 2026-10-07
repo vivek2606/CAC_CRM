@@ -23,7 +23,7 @@ const leadSchema = z.object({
   competitorBrand: z.string().optional(),
   budgetConfirmed: z.string().optional(),
   expectedPurchaseTimeframe: z.string().optional(),
-  value: z.coerce.number().min(0).transform((v) => Math.round(v * 100) / 100).optional(),
+  value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100).optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().optional().default(""),
   notes: z.string().optional(),

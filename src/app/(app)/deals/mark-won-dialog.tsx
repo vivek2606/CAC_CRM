@@ -96,7 +96,7 @@ export function MarkWonDialog({
       const filled = b.rows.filter((r) => r.productId || r.rate.trim());
       if (filled.length === 0) return setError(`Add the products billed${label} - model, quantity and basic rate.`);
       if (filled.some((r) => !r.productId)) return setError(`Pick the product on every row${label} (or remove the empty row).`);
-      if (filled.some((r) => !(num(r.qty) > 0) || !(num(r.rate) > 0))) return setError(`Every product${label} needs a quantity and a basic rate above 0.`);
+      if (filled.some((r) => num(r.qty) === 0 || num(r.rate) === 0)) return setError(`Every product${label} needs a quantity and a basic rate (use a minus sign for a sales return).`);
       if (!b.invoiceNo.trim()) return setError(`Enter the invoice no.${label}.`);
       if (!b.closedAt) return setError(`Enter the invoice date${label}.`);
       invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });

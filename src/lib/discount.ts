@@ -23,6 +23,8 @@ export function computeDealDiscount(
   let itemizedTotal = 0;
   let referenceTotal = 0;
   for (const item of items) {
+    // Sales-return lines (negative quantity or rate) aren't a discount.
+    if (item.qty <= 0 || item.unitPrice < 0) continue;
     itemizedTotal += item.qty * item.unitPrice;
     const ref = referencePriceByProduct.get(item.productId);
     if (ref != null) referenceTotal += item.qty * ref;
