@@ -38,6 +38,7 @@ export function DealForm({
   products,
   defaultValues,
   submitLabel,
+  productsTotal = null,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
@@ -69,6 +70,9 @@ export function DealForm({
     tags?: string[];
   };
   submitLabel: string;
+  // Total of the deal's saved products (edit form) - when set, the value is
+  // taken from them and can't be typed over.
+  productsTotal?: number | null;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
   const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
@@ -211,12 +215,15 @@ export function DealForm({
             min={0}
             step="0.01"
             required
-            value={value}
+            value={productsTotal != null ? String(productsTotal) : value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            readOnly={productsTotal != null || validItems.length > 0}
+            className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+              productsTotal != null || validItems.length > 0 ? "bg-slate-50 text-slate-600" : ""
+            }`}
           />
-          {validItems.length > 0 && (
-            <p className="mt-1 text-xs text-slate-400">Auto-filled from products below - edit to override.</p>
+          {(productsTotal != null || validItems.length > 0) && (
+            <p className="mt-1 text-xs text-slate-400">Set from the products (quantity × basic rate, excl. VAT).</p>
           )}
         </div>
 

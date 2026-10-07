@@ -10,7 +10,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
-  const deal = await prisma.deal.findUnique({ where: { id } });
+  const deal = await prisma.deal.findUnique({ where: { id }, include: { items: { select: { qty: true, unitPrice: true } } } });
   if (!deal) notFound();
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
 
@@ -67,6 +67,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
               tags: deal.tags,
               createdAt: deal.createdAt.toISOString().slice(0, 10),
             }}
+            productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}
             submitLabel="Save Changes"
           />
         </Card>

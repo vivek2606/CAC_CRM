@@ -213,6 +213,7 @@ export async function createDeal(formData: FormData) {
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
+  await syncDealValueFromItems(deal.id);
 
   revalidatePath("/deals");
   redirect(`/deals/${deal.id}`);
@@ -270,6 +271,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
+  await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
 
   revalidatePath("/deals");
@@ -344,6 +346,17 @@ export async function updateDealStage(
   revalidatePath("/");
 }
 
+// A deal with products (qty x basic rate) takes their total as its value,
+// and so does the lead it came from (its estimated value). With no
+// products the value entered by hand stands.
+async function syncDealValueFromItems(dealId: string) {
+  const items = await prisma.dealLineItem.findMany({ where: { dealId }, select: { qty: true, unitPrice: true } });
+  if (items.length === 0) return;
+  const value = Math.round(items.reduce((s, i) => s + i.qty * i.unitPrice, 0) * 100) / 100;
+  await prisma.deal.update({ where: { id: dealId }, data: { value } });
+  await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value } });
+}
+
 // Any change to a deal's line items invalidates a standing discount
 // approval - it was granted against a specific quoted total, not a
 // blanket pass for whatever the deal becomes afterward.
@@ -364,6 +377,7 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
   await prisma.dealLineItem.create({
     data: { dealId, productId: parsed.productId, qty: parsed.qty, unitPrice: parsed.unitPrice },
   });
+  await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
 
@@ -376,6 +390,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
 
   await prisma.dealLineItem.delete({ where: { id: lineItemId } });
+  await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
 
