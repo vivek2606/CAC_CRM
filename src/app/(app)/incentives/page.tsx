@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { PerfTabs } from "@/components/perf-tabs";
@@ -271,11 +272,29 @@ export default async function IncentivesPage({ searchParams }: { searchParams: P
         <Card>
           <div className="flex items-center justify-between p-4 pb-0">
             <h2 className="text-sm font-semibold text-slate-900">Sales team</h2>
-            <ExportCsvButton
-              filename={`incentives-${monthValue(month)}.csv`}
-              headers={["Type", "Name", "Target", "Product sales", "Project billing", "Sales", "Achievement %", "Rate %", "Incentive", "Payout", "To support pool", "Salary support", "Total to receive"]}
-              rows={csvRows}
-            />
+            <div className="flex items-center gap-2">
+              {/* The Head can download any month (DRAFT until approved); the
+                  Coordinator once the Head has approved it. */}
+              {(isHead || approvalRecord?.status === "APPROVED") &&
+                (["pdf", "xlsx"] as const).map((f) => (
+                  <a
+                    key={f}
+                    href={`/incentives/report?month=${monthValue(month)}&format=${f}`}
+                    download
+                    title={approvalRecord?.status === "APPROVED" ? "Approved figures" : "Live figures - marked DRAFT until you approve the month"}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-4 w-4" />
+                    {f === "pdf" ? "PDF" : "Excel"}
+                    {approvalRecord?.status !== "APPROVED" && <span className="text-[10px] font-semibold text-amber-700">DRAFT</span>}
+                  </a>
+                ))}
+              <ExportCsvButton
+                filename={`incentives-${monthValue(month)}.csv`}
+                headers={["Type", "Name", "Target", "Product sales", "Project billing", "Sales", "Achievement %", "Rate %", "Incentive", "Payout", "To support pool", "Salary support", "Total to receive"]}
+                rows={csvRows}
+              />
+            </div>
           </div>
           {rows.length === 0 ? (
             <div className="p-4">

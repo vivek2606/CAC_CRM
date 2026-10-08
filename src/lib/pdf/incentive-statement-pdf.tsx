@@ -59,11 +59,15 @@ export function IncentiveStatementPdf({
   monthLabel,
   approval,
   company,
+  draft = false,
 }: {
   monthLabel: string;
   approval: IncentiveApproval & { snapshot: IncentiveSnapshot };
   company: CompanyProfile;
+  // Live figures for a month not yet approved (Head only) - marked DRAFT.
+  draft?: boolean;
 }) {
+  const docName = draft ? "Sales Incentive Report (DRAFT)" : "Sales Incentive Statement";
   const snap = approval.snapshot;
   const rows = snap.rows;
   const sum = (k: "target" | "productSales" | "projectSales" | "sales" | "incentive" | "payout" | "salarySupport" | "totalToReceive") =>
@@ -82,7 +86,7 @@ export function IncentiveStatementPdf({
   };
 
   return (
-    <Document title={`Sales Incentive Statement - ${monthLabel}`} author={company.name}>
+    <Document title={`${docName} - ${monthLabel}`} author={company.name}>
       <Page size="A4" orientation="landscape" style={s.page}>
         <View style={s.header}>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image, not an HTML img */}
@@ -99,7 +103,9 @@ export function IncentiveStatementPdf({
 
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
           <View>
-            <Text style={s.title}>Sales Incentive Statement - {monthLabel}</Text>
+            <Text style={s.title}>
+              {docName} - {monthLabel}
+            </Text>
             <Text style={{ color: muted, marginTop: 2 }}>
               Achievement = month&apos;s sales (product sales + project billing) ÷ target.{" "}
               {tiers.map((t) => `${t.minAchievementPct}%+ earns ${t.ratePct}%`).join(", ")} of sales. Sales person keeps {keep}%; {100 - keep}% goes to support
@@ -107,10 +113,19 @@ export function IncentiveStatementPdf({
             </Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={[s.strong, { color: "#047857" }]}>APPROVED</Text>
-            <Text style={{ color: muted }}>
-              {approval.approvedBy?.name} · {when(approval.approvedAt)}
-            </Text>
+            {draft ? (
+              <>
+                <Text style={[s.strong, { color: "#b45309" }]}>DRAFT - NOT YET APPROVED</Text>
+                <Text style={{ color: muted }}>{approval.status === "SUBMITTED" && approval.submittedBy ? `Submitted by ${approval.submittedBy?.name ?? ""} · ${when(approval.submittedAt)}` : "Live figures - may change"}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[s.strong, { color: "#047857" }]}>APPROVED</Text>
+                <Text style={{ color: muted }}>
+                  {approval.approvedBy?.name} · {when(approval.approvedAt)}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
@@ -219,7 +234,7 @@ export function IncentiveStatementPdf({
         <Text
           style={s.footer}
           fixed
-          render={({ pageNumber, totalPages }) => `${company.name}  ·  Sales Incentive Statement ${monthLabel}  ·  Page ${pageNumber} of ${totalPages}`}
+          render={({ pageNumber, totalPages }) => `${company.name}  ·  ${docName} ${monthLabel}  ·  Page ${pageNumber} of ${totalPages}`}
         />
       </Page>
     </Document>
