@@ -120,17 +120,11 @@ export function inTransitLabel(t: { qty: number; eta: Date | null } | undefined)
   return `${t.qty} in transit${eta}`;
 }
 
-// Products a rep can actually search for and quote - ones with a current
-// dealer price on file (from a Stock & Price List upload or a manually-added
-// price). Excludes a product known only from historical sales-register data,
-// which was never priced and has no code/model info a rep should be quoting
-// from. Used by every rep-facing product search (Products page lookup, deal
-// line-item picker) - the Head's own price-entry forms intentionally skip
-// this filter, since pricing a not-yet-priced product is exactly what those
-// are for.
+// Every product in the catalog - pickable on deals and quotes whether or
+// not it has a dealer price yet (the rate is then typed in, or comes from
+// the tentative price list on a quote).
 export async function getQuotableProducts(): Promise<{ id: string; code: string; model: string }[]> {
   return prisma.product.findMany({
-    where: { pricelistEntries: { some: {} } },
     orderBy: { model: "asc" },
     select: { id: true, code: true, model: true },
   });

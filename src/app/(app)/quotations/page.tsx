@@ -39,6 +39,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     return "Not Available";
   };
   const optionIds = new Set(products.map((p) => p.id));
+  const tentativeByModel = new Map(tentative.map((t) => [t.model.trim().toLowerCase(), t.dealerPrice]));
   const productModels = new Set(products.map((p) => p.model.trim().toLowerCase()));
   const options: ModelOption[] = [
     ...products.map((p) => ({
@@ -46,11 +47,12 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       label: `${p.model} (${p.code})`,
       model: p.model,
       code: p.code,
-      rate: prices.get(p.id) ?? null,
+      // No dealer price yet: the tentative price for the same model, if any.
+      rate: prices.get(p.id) ?? tentativeByModel.get(p.model.trim().toLowerCase()) ?? null,
+      tentative: !prices.has(p.id) && tentativeByModel.has(p.model.trim().toLowerCase()),
       stock: stock.get(p.id) ?? 0,
       inTransit: inTransit.get(p.id)?.qty ?? 0,
       availability: availability(p.id),
-      tentative: false,
     })),
     // Models only on the tentative price list (not stocked).
     ...tentative
