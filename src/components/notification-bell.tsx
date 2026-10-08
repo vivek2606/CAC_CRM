@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell, X } from "lucide-react";
 import type { Notifications } from "@/lib/notifications";
+import { PushToggle } from "./push-toggle";
 
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -107,6 +108,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             ))}
           </div>
+          <PushToggle pushKey={data?.pushKey} />
         </div>
       )}
     </div>

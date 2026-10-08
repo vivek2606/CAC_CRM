@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
@@ -216,6 +217,7 @@ export async function createDeal(formData: FormData) {
     },
   });
   await syncDealValueFromItems(deal.id);
+  if (lineItems.length > 0) await notifyDiscountIfNeeded(deal.id);
 
   revalidatePath("/deals");
   redirect(`/deals/${deal.id}`);
@@ -285,6 +287,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       await prisma.dealLineItem.deleteMany({ where: { dealId } });
       if (next.length) await prisma.dealLineItem.createMany({ data: next.map((i) => ({ dealId, productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })) });
       await revokeDiscountApproval(dealId);
+      await notifyDiscountIfNeeded(dealId);
     }
   }
   await syncDealValueFromItems(dealId);
@@ -396,6 +399,7 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
+  await notifyDiscountIfNeeded(dealId);
 
   revalidatePath(`/deals/${dealId}`);
 }
@@ -421,6 +425,7 @@ export async function approveDealDiscount(dealId: string) {
     where: { id: dealId },
     data: { discountApprovedAt: new Date(), discountApprovedById: head.id },
   });
+  await notifyDiscountApproved(dealId);
 
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/deals");

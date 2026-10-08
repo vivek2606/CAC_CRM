@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { notifyIncentives } from "@/lib/push-events";
 import { requireBackOffice, requireHead } from "@/lib/rbac";
 import { getIncentiveSettings } from "@/lib/incentive";
 import { computeMonthIncentives } from "@/lib/incentive-month";
@@ -32,6 +33,7 @@ export async function submitIncentives(rawMonth: string) {
   const current = await getIncentiveApproval(month);
   if (current?.status === "APPROVED") throw new Error("Already approved.");
   await saveIncentiveApproval(month, { status: "SUBMITTED", submittedAt: new Date().toISOString(), submittedBy: who(user) });
+  if (user.role !== "HEAD") await notifyIncentives("submitted", month, who(user).name);
   done();
 }
 
@@ -50,6 +52,7 @@ export async function approveIncentives(rawMonth: string) {
     approvedBy: who(head),
     snapshot: snapshotOf(rows, support, settings),
   });
+  if (current?.submittedBy && current.submittedBy.id !== head.id) await notifyIncentives("approved", month, who(head).name, current.submittedBy.id);
   done();
 }
 
@@ -66,5 +69,6 @@ export async function returnIncentives(rawMonth: string, note: string) {
     returnedBy: who(head),
     note: note.trim().slice(0, 500) || (current?.status === "APPROVED" ? "Approval withdrawn." : "Sent back for changes."),
   });
+  if (current?.submittedBy && current.submittedBy.id !== head.id) await notifyIncentives("returned", month, who(head).name, current.submittedBy.id, note.trim());
   done();
 }

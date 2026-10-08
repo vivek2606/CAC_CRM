@@ -6,7 +6,9 @@ import { getIncentiveApproval } from "@/lib/incentive-approval";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
-export type Notifications = { total: number; groups: NotificationGroup[] };
+// pushKey: the server's public push key when phone / desktop notifications
+// are set up (added by the route).
+export type Notifications = { total: number; groups: NotificationGroup[]; pushKey?: string | null };
 
 const STALE_DAYS = 14;
 const SHOW = 5;
