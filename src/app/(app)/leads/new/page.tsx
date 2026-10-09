@@ -12,7 +12,8 @@ export default async function NewLeadPage() {
     isBackOffice(user)
       ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
       : Promise.resolve([]),
-    prisma.account.findMany({ where: { ownerId: { in: ownerIds } }, select: { id: true, name: true } }),
+    // Any account can be linked - the whole account list, not just your own.
+    prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
     prisma.contact.findMany({
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true, accountId: true, phone: true, email: true },

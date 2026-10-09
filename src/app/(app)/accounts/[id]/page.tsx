@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { PageHeader, Card, Badge, EmptyState, Avatar } from "@/components/ui";
@@ -19,7 +19,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const user = await requireUser();
 
-  const account = await prisma.account.findUnique({
+  const found = await prisma.account.findUnique({
     where: { id },
     include: {
       owner: { select: { name: true, avatarColor: true } },
@@ -29,8 +29,13 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     },
   });
 
-  if (!account) notFound();
-  if (!canAccessOwner(user, account.ownerId)) redirect("/accounts");
+  if (!found) notFound();
+  // Anyone can open any account (all accounts can be linked to deals and
+  // leads); someone who doesn't own it sees it read-only, with only their
+  // own deals, leads and contacts on it.
+  const isOwner = canAccessOwner(user, found.ownerId);
+  const mine = <T extends { ownerId: string }>(xs: T[]) => (isOwner ? xs : xs.filter((x) => x.ownerId === user.id));
+  const account = { ...found, contacts: mine(found.contacts), leads: mine(found.leads), deals: mine(found.deals) };
 
   const hasWonDeal = account.deals.some((d) => d.stage === "WON");
 
@@ -40,6 +45,11 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         title={account.name}
         description={[account.industry, account.city].filter(Boolean).join(" · ") || undefined}
         action={
+          !isOwner ? (
+            <span className="text-xs text-slate-500">
+              Owned by {account.owner.name} - showing your own deals, leads and contacts only
+            </span>
+          ) : (
           <div className="flex items-center gap-2">
             <Link
               href={`/accounts/${account.id}/edit`}
@@ -59,6 +69,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <DeleteAccountButton accountId={account.id} accountName={account.name} />
             )}
           </div>
+          )
         }
       />
 
