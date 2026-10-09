@@ -91,9 +91,13 @@ export default async function DealDetailPage({
   }));
 
   const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);
-  const stageActionsBlockReason = !deal.accountId
-    ? "Link this deal to an account before marking it Won."
-    : discount?.needsApproval
+  // Every account, for linking one when the deal has none (Mark Won).
+  const allAccounts =
+    !deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"
+      ? await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } })
+      : [];
+  // A missing account isn't a block - Mark Won asks for it (pick or create).
+  const stageActionsBlockReason = discount?.needsApproval
       ? `Discounted ${discount.discountPct.toFixed(1)}% below list - needs Head approval before this can be marked Won.`
       : null;
 
@@ -109,6 +113,8 @@ export default async function DealDetailPage({
               stage={deal.stage}
               blockWonReason={deal.stage === "WON" ? null : stageActionsBlockReason}
               openWon={sp.markWon === "1"}
+              needsAccount={!deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"}
+              accounts={allAccounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
               wonInvoice={
                 deal.stage === "WON" && deal.sourceTxnNo == null
                   ? { invoiceNo: deal.invoiceNo ?? "", closedAt: deal.closedAt ? deal.closedAt.toISOString().slice(0, 10) : "" }

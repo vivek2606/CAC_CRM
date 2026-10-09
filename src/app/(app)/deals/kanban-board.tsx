@@ -44,12 +44,9 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     }
 
     if (stage === "WON") {
-      if (!deal.account) {
-        alert("Link this deal to an account before marking it Won.");
-        return;
-      }
       // Marking Won needs the products billed and the invoice - done in the
-      // dialog on the deal's own page, which has the product list.
+      // dialog on the deal's own page, which has the product list (and asks
+      // for the account first when the deal has none).
       router.push(`/deals/${dealId}?markWon=1`);
       return;
     }
