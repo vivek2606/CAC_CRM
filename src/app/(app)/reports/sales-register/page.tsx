@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/ui";
 import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-table";
 import { InvoiceEntry } from "../../deals/invoice-entry";
 import { DeletePeriodSalesButton } from "./delete-period-sales-button";
+import { DeleteOrphanLinesButton } from "./delete-orphan-lines-button";
+import { clearOrphanCrmLines } from "../../deals/actions";
 import { formatCurrency, formatDate } from "@/lib/format";
 import Link from "next/link";
 import { ResyncCategoryButton } from "../resync-category-button";
@@ -66,6 +68,9 @@ export default async function SalesRegisterPage({
   const lineCompanyWhere =
     company === "none" ? { OR: [{ dealId: null }, { deal: { billingCompany: null } }] } : company ? { deal: { billingCompany: company } } : {};
   const dealCompanyWhere = company === "none" ? { billingCompany: null } : company ? { billingCompany: company } : {};
+
+  // Lines left behind by deals deleted before deleting took them along.
+  await clearOrphanCrmLines();
 
   const [lines, billings, categories] = await Promise.all([
     category === "Project & Service" || category === "No products listed"
@@ -197,6 +202,16 @@ export default async function SalesRegisterPage({
         })
       : null;
 
+  // Head: lines with no deal behind them (no account, company or link).
+  const orphanLines =
+    user.role === "HEAD"
+      ? await prisma.saleLineItem.aggregate({
+          where: { dealId: null, docDate: { gte: from, lt: end }, ...ownerWhere },
+          _count: true,
+          _sum: { value: true },
+        })
+      : null;
+
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
   const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service", "No products listed"];
 
@@ -205,8 +220,18 @@ export default async function SalesRegisterPage({
       <PageHeader title="Sales Register" description={description} />
       <div className="p-4 space-y-3">
         <RegisterTabs active="lines" />
-        {crmSales && crmSales._count > 0 && repId && (
-          <div className="flex justify-end">
+        {((crmSales && crmSales._count > 0 && repId) || (orphanLines && orphanLines._count > 0)) && (
+          <div className="flex flex-wrap justify-end gap-2">
+            {orphanLines && orphanLines._count > 0 && (
+              <DeleteOrphanLinesButton
+                ownerId={repId}
+                from={iso(from)}
+                to={iso(to)}
+                count={orphanLines._count}
+                total={formatCurrency(orphanLines._sum.value ?? 0)}
+              />
+            )}
+            {crmSales && crmSales._count > 0 && repId && (
             <DeletePeriodSalesButton
               ownerId={repId}
               ownerName={people.find((p) => p.id === repId)?.name ?? "This sales person"}
@@ -215,6 +240,7 @@ export default async function SalesRegisterPage({
               count={crmSales._count}
               total={formatCurrency(crmSales._sum.value ?? 0)}
             />
+            )}
           </div>
         )}
         <form className="flex flex-wrap items-end gap-3" action="/reports/sales-register">

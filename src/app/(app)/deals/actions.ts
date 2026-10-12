@@ -1011,3 +1011,24 @@ export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: 
   revalidatePath("/");
   return { deleted: ids.length };
 }
+
+// Sales Register lines entered in the CRM whose deal was deleted (before
+// deleting a deal took its lines with it): they'd stay counted with no
+// account, company or link. Cleared whenever the register is opened.
+export async function clearOrphanCrmLines(): Promise<void> {
+  await prisma.saleLineItem.deleteMany({ where: { dealId: null, sourceKey: { startsWith: "deal-item:" } } });
+}
+
+// Head only: deletes Sales Register lines with no deal behind them (e.g. an
+// imported invoice whose deal was deleted) for the period, optionally for
+// one sales person.
+export async function deleteOrphanLinesInPeriod(ownerId: string | null, from: string, to: string): Promise<{ deleted: number }> {
+  await requireHead();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Pick the period.");
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(new Date(`${to}T00:00:00Z`).getTime() + 86400000);
+  const res = await prisma.saleLineItem.deleteMany({ where: { dealId: null, docDate: { gte: start, lt: end }, ...(ownerId ? { ownerId } : {}) } });
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/");
+  return { deleted: res.count };
+}
