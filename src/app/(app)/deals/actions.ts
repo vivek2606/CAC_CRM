@@ -667,7 +667,12 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   if (invoices.length === 0) throw new Error("Add the invoice.");
   const nos = invoices.map((i) => i.invoiceNo.trim());
   if (nos.some((n) => !n)) throw new Error("Enter the invoice no. for every invoice.");
-  if (new Set(nos.map((n) => n.toLowerCase())).size !== nos.length) throw new Error("Each invoice needs a different invoice no.");
+  // Sakuragi and Somotex number their invoices separately, so the same
+  // number can come up once per company.
+  const invoiceKey = (i: WonInvoice) => `${billingCompanyOf(i.billingCompany) ?? ""}|${i.invoiceNo.trim().toLowerCase()}`;
+  if (new Set(invoices.map(invoiceKey)).size !== invoices.length) {
+    throw new Error("Each invoice needs a different invoice no. (the same number is fine once for Sakuragi and once for Somotex).");
+  }
   if (invoices.some((i) => !/^\d{4}-\d{2}-\d{2}$/.test(i.closedAt))) throw new Error("Enter the invoice date for every invoice.");
   for (const [n, inv] of invoices.entries()) {
     const label = invoices.length > 1 ? ` on invoice ${inv.invoiceNo.trim() || n + 1}` : "";
@@ -730,7 +735,9 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
     const value = round2(inv.items.reduce((t, i) => t + i.qty * i.unitPrice, 0));
     const copy = await prisma.deal.create({
       data: {
-        title: `${deal.title} - Inv ${inv.invoiceNo.trim()}`,
+        title: `${deal.title} - Inv ${inv.invoiceNo.trim()}${
+          invoices.filter((o) => o.invoiceNo.trim().toLowerCase() === inv.invoiceNo.trim().toLowerCase()).length > 1 && companyOf(inv) ? ` (${companyOf(inv)})` : ""
+        }`,
         customerName: deal.customerName,
         customerPhone: deal.customerPhone,
         stage: deal.stage,
@@ -859,20 +866,22 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     const rawDate = get(iDate);
     let invoiceDate = toDate(rawDate) ?? "";
     if (rawDate != null && String(rawDate).trim() && !invoiceDate) problems.push(`Row ${n}: couldn't read the date "${String(rawDate)}" - use dd/mm/yyyy`);
-    if (invoiceNo) {
-      // One date per invoice: the first row's.
-      const known = dateOfInvoice.get(invoiceNo.toLowerCase());
-      if (known && invoiceDate && known !== invoiceDate) problems.push(`Row ${n}: invoice ${invoiceNo} has another date above - used ${known}`);
-      if (known) invoiceDate = known;
-      else if (invoiceDate) dateOfInvoice.set(invoiceNo.toLowerCase(), invoiceDate);
-    }
     const rawCompany = String(get(iCompany) ?? "").trim();
     const company = billingCompanyOf(rawCompany) ?? "";
     if (rawCompany && !company) problems.push(`Row ${n}: company "${rawCompany}" - use Sakuragi or Somotex`);
+    if (invoiceNo) {
+      // One date per invoice - an invoice being its company + number (the
+      // two companies number their invoices separately): the first row's.
+      const key = `${company}|${invoiceNo.toLowerCase()}`;
+      const known = dateOfInvoice.get(key);
+      if (known && invoiceDate && known !== invoiceDate) problems.push(`Row ${n}: invoice ${invoiceNo} has another date above - used ${known}`);
+      if (known) invoiceDate = known;
+      else if (invoiceDate) dateOfInvoice.set(key, invoiceDate);
+    }
     rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100, invoiceNo, invoiceDate, company });
   });
   // Rows of an invoice whose date was only on a later row.
-  for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(r.invoiceNo.toLowerCase()) ?? "";
+  for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(`${r.company}|${r.invoiceNo.toLowerCase()}`) ?? "";
   if (rows.some((r) => r.invoiceNo) && rows.some((r) => !r.invoiceNo)) {
     problems.push("Some rows have an invoice no. and some don't - fill in the invoice no. on every row");
   }

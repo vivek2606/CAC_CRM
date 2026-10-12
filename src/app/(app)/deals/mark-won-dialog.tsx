@@ -145,8 +145,9 @@ export function MarkWonDialog({
       if (!b.company) return setError(`Pick the company that raised the invoice${label} - Sakuragi or Somotex.`);
       invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, billingCompany: b.company, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });
     }
-    const nos = invoices.map((i) => i.invoiceNo.toLowerCase());
-    if (new Set(nos).size !== nos.length) return setError("Each invoice needs a different invoice no.");
+    // The same number is fine once per company - they number separately.
+    const keys = invoices.map((i) => `${i.billingCompany}|${i.invoiceNo.toLowerCase()}`);
+    if (new Set(keys).size !== keys.length) return setError("Each invoice needs a different invoice no. (the same number is fine once for Sakuragi and once for Somotex).");
     onConfirm(invoices);
   };
 
