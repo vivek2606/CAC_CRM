@@ -985,3 +985,29 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   revalidatePath("/deals");
   return { count: lines.length };
 }
+
+// Head only: deletes every sale a sales person entered in the CRM (won
+// deals, not ones imported from the Sales Register) with an invoice date in
+// [from, to] - to clear a muddled month and enter it again. Each goes the
+// way deleteDeal does: its Sales Register lines too, and its lead reopened.
+export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: string): Promise<{ deleted: number }> {
+  await requireHead();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Pick the period.");
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(new Date(`${to}T00:00:00Z`).getTime() + 86400000);
+  const deals = await prisma.deal.findMany({
+    where: { ownerId, stage: "WON", sourceTxnNo: null, closedAt: { gte: start, lt: end } },
+    select: { id: true },
+  });
+  const ids = deals.map((d) => d.id);
+  if (ids.length === 0) return { deleted: 0 };
+  await prisma.saleLineItem.deleteMany({ where: { dealId: { in: ids } } });
+  await prisma.lead.updateMany({ where: { convertedDealId: { in: ids } }, data: { convertedDealId: null, status: "QUALIFIED" } });
+  await prisma.appSetting.deleteMany({ where: { key: { in: ids.map((id) => `won-plan:${id}`) } } });
+  await prisma.deal.deleteMany({ where: { id: { in: ids } } });
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/deals");
+  revalidatePath("/leads");
+  revalidatePath("/");
+  return { deleted: ids.length };
+}

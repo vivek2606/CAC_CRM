@@ -3,6 +3,7 @@ import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-table";
 import { InvoiceEntry } from "../../deals/invoice-entry";
+import { DeletePeriodSalesButton } from "./delete-period-sales-button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import Link from "next/link";
 import { ResyncCategoryButton } from "../resync-category-button";
@@ -185,6 +186,17 @@ export default async function SalesRegisterPage({
     },
   });
 
+  // Head, one sales person picked: the sales they entered in the CRM in the
+  // period, which can be cleared in one go and entered again.
+  const crmSales =
+    user.role === "HEAD" && repId
+      ? await prisma.deal.aggregate({
+          where: { ownerId: repId, stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end } },
+          _count: true,
+          _sum: { value: true },
+        })
+      : null;
+
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
   const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service", "No products listed"];
 
@@ -193,6 +205,18 @@ export default async function SalesRegisterPage({
       <PageHeader title="Sales Register" description={description} />
       <div className="p-4 space-y-3">
         <RegisterTabs active="lines" />
+        {crmSales && crmSales._count > 0 && repId && (
+          <div className="flex justify-end">
+            <DeletePeriodSalesButton
+              ownerId={repId}
+              ownerName={people.find((p) => p.id === repId)?.name ?? "This sales person"}
+              from={iso(from)}
+              to={iso(to)}
+              count={crmSales._count}
+              total={formatCurrency(crmSales._sum.value ?? 0)}
+            />
+          </div>
+        )}
         <form className="flex flex-wrap items-end gap-3" action="/reports/sales-register">
           <PeriodFields from={iso(from)} to={iso(to)} />
           {all && (
