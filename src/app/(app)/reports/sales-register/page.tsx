@@ -265,9 +265,13 @@ export default async function SalesRegisterPage({
                       </td>
                       <td className="px-4 py-1.5">
                         {d._count.items === 0 ? (
-                          <Link href={`/deals/${d.id}?markWon=1`} className="font-medium text-indigo-700 hover:underline">
-                            Fix
-                          </Link>
+                          all ? (
+                            <Link href={`/deals/${d.id}?markWon=1`} className="font-medium text-indigo-700 hover:underline">
+                              Fix
+                            </Link>
+                          ) : (
+                            <span className="text-slate-500">Ask the Sales Coordinator to add the products</span>
+                          )
                         ) : (
                           <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} compact />
                         )}

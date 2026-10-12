@@ -123,7 +123,8 @@ export default async function DealDetailPage({
               needsAccount={!deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"}
               accounts={allAccounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
               wonInvoice={
-                deal.stage === "WON" && deal.sourceTxnNo == null
+                // Invoices & products of a won deal: Head / Coordinator only.
+                deal.stage === "WON" && deal.sourceTxnNo == null && isBackOffice(user)
                   ? { invoiceNo: deal.invoiceNo ?? "", closedAt: deal.closedAt ? deal.closedAt.toISOString().slice(0, 10) : "" }
                   : undefined
               }
@@ -226,7 +227,7 @@ export default async function DealDetailPage({
                 <p className="text-xs text-slate-400 mb-3">
                   What&apos;s being quoted on this deal. Feeds the Sales Register once it&apos;s won.
                 </p>
-                <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} />
+                <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} readOnly={deal.stage === "WON" && !isBackOffice(user)} />
                 {deal.stage === "NEGOTIATION" && (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <ReorderFlag

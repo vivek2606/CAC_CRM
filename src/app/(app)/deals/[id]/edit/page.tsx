@@ -20,7 +20,8 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
 
   // Products can be edited here too - except on a deal imported from the
   // Sales Register, whose lines come from the register.
-  const editableProducts = deal.sourceTxnNo == null;
+  // Once Won, only the Head / Coordinator change them.
+  const editableProducts = deal.sourceTxnNo == null && (deal.stage !== "WON" || isBackOffice(user));
   const [products, prices, stock, inTransit] = editableProducts
     ? await Promise.all([getQuotableProducts(), getLatestPriceByProduct(), getAvailableStockByProduct(), getInTransitByProduct()])
     : [[], new Map<string, number>(), new Map<string, number>(), new Map<string, { qty: number; eta: Date | null }>()];

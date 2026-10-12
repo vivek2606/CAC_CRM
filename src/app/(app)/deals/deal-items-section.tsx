@@ -22,10 +22,13 @@ export function DealItemsSection({
   dealId,
   items,
   products,
+  readOnly = false,
 }: {
   dealId: string;
   items: DealItem[];
   products: ProductOption[];
+  // A won deal seen by a sales person: only the Head / Coordinator change it.
+  readOnly?: boolean;
 }) {
   const total = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
 
@@ -33,7 +36,8 @@ export function DealItemsSection({
     <div>
       {items.length === 0 ? (
         <p className="text-sm text-slate-400 mb-4">
-          No products itemized yet. Add what&apos;s being quoted so it feeds the Sales Register once this deal is won.
+          No products itemized yet. Add what&apos;s being quoted so it feeds the
+          Sales Register once this deal is won.
         </p>
       ) : (
         <div className="mb-4 overflow-x-auto">
@@ -57,28 +61,41 @@ export function DealItemsSection({
                     </span>
                   </td>
                   <td className="py-2 px-3 text-slate-600">{item.qty}</td>
-                  <td className="py-2 px-3 text-slate-600">{formatCurrency(item.unitPrice)}</td>
-                  <td className="py-2 px-3 text-slate-700 font-medium">{formatCurrency(item.qty * item.unitPrice)}</td>
+                  <td className="py-2 px-3 text-slate-600">
+                    {formatCurrency(item.unitPrice)}
+                  </td>
+                  <td className="py-2 px-3 text-slate-700 font-medium">
+                    {formatCurrency(item.qty * item.unitPrice)}
+                  </td>
                   <td className="py-2 text-right">
-                    <form action={deleteDealLineItem.bind(null, item.id, dealId)}>
-                      <button
-                        type="submit"
-                        aria-label="Remove line item"
-                        className="text-slate-400 hover:text-red-600 transition-colors"
+                    {!readOnly && (
+                      <form
+                        action={deleteDealLineItem.bind(null, item.id, dealId)}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </form>
+                        <button
+                          type="submit"
+                          aria-label="Remove line item"
+                          className="text-slate-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </form>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="border-t border-slate-200">
-                <td colSpan={3} className="py-2 px-3 text-right text-slate-500 font-medium">
+                <td
+                  colSpan={3}
+                  className="py-2 px-3 text-right text-slate-500 font-medium"
+                >
                   Total
                 </td>
-                <td className="py-2 px-3 text-slate-900 font-semibold">{formatCurrency(total)}</td>
+                <td className="py-2 px-3 text-slate-900 font-semibold">
+                  {formatCurrency(total)}
+                </td>
                 <td />
               </tr>
             </tfoot>
@@ -86,14 +103,27 @@ export function DealItemsSection({
         </div>
       )}
 
-      <AddLineItemForm dealId={dealId} products={products} />
-      <p className="mt-3 text-xs text-slate-500">
-        To change quantities and rates or replace the whole list from an Excel sheet,{" "}
-        <a href={`/deals/${dealId}/edit`} className="text-indigo-600 hover:underline">
-          edit the deal
-        </a>
-        .
-      </p>
+      {readOnly ? (
+        <p className="text-xs text-slate-500">
+          This deal is won - only the Head of Sales or the Sales Coordinator can
+          change its products, quantities and rates.
+        </p>
+      ) : (
+        <>
+          <AddLineItemForm dealId={dealId} products={products} />
+          <p className="mt-3 text-xs text-slate-500">
+            To change quantities and rates or replace the whole list from an
+            Excel sheet,{" "}
+            <a
+              href={`/deals/${dealId}/edit`}
+              className="text-indigo-600 hover:underline"
+            >
+              edit the deal
+            </a>
+            .
+          </p>
+        </>
+      )}
     </div>
   );
 }

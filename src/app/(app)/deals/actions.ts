@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead } from "@/lib/rbac";
+import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
@@ -320,7 +320,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
     },
   });
   // Products edited in the form (sent whenever the form shows the editor).
-  if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null) {
+  if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
     const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
     const current = await prisma.dealLineItem.findMany({ where: { dealId }, select: { productId: true, qty: true, unitPrice: true } });
     const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
@@ -487,10 +487,18 @@ async function revokeDiscountApproval(dealId: string) {
   });
 }
 
+// Once a deal is Won, its products, quantities and rates (and invoices) are
+// changed only by the Head of Sales or the Sales Coordinator.
+const WON_ITEMS_LOCKED = "Only the Head of Sales or the Sales Coordinator can change a won deal's products, quantities and rates.";
+function assertCanEditItems(user: { role: SessionUser["role"] }, stage: DealStage) {
+  if (stage === "WON" && !isBackOffice(user)) throw new Error(WON_ITEMS_LOCKED);
+}
+
 export async function addDealLineItem(dealId: string, formData: FormData) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+  assertCanEditItems(user, deal.stage);
 
   const parsed = dealLineItemSchema.parse(Object.fromEntries(formData.entries()));
 
@@ -509,6 +517,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
+  assertCanEditItems(user, deal.stage);
 
   await prisma.dealLineItem.delete({ where: { id: lineItemId } });
   await syncDealValueFromItems(dealId);
@@ -645,6 +654,7 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   // A deal already Won (e.g. won before products were required) can have its
   // invoices and products recorded the same way, split included.
   const alreadyWon = deal.stage === "WON";
+  if (alreadyWon) assertCanEditItems(user, deal.stage);
   if (!deal.accountId && !alreadyWon) throw new Error("Link this deal to an account before marking it Won.");
 
   // ---- validate everything first
