@@ -19,6 +19,8 @@ export function StageActions({
   openWon = false,
   wonInvoice,
   billingCompany,
+  pendingInvoices,
+  pendingError,
   needsAccount = false,
   accounts = [],
 }: {
@@ -38,6 +40,9 @@ export function StageActions({
   // and products can be recorded or split from here.
   wonInvoice?: { invoiceNo: string; closedAt: string };
   billingCompany?: string | null;
+  // Invoices from a products sheet not applied yet (see won-plan.ts).
+  pendingInvoices?: WonInvoiceInput[];
+  pendingError?: string | null;
   // No account linked yet: Mark Won first asks for one (pick or create).
   needsAccount?: boolean;
   accounts?: { id: string; label: string }[];
@@ -67,6 +72,8 @@ export function StageActions({
             products={products}
             wonInvoice={wonInvoice}
             billingCompany={billingCompany}
+            initialInvoices={pendingInvoices}
+            initialError={pendingError}
             onConfirm={markWon}
             onCancel={() => setShowWonDialog(false)}
           />
@@ -130,6 +137,8 @@ export function StageActions({
             quotedValue={quotedValue}
             products={products}
             billingCompany={billingCompany}
+            initialInvoices={pendingInvoices}
+            initialError={pendingError}
             onConfirm={markWon}
             onCancel={() => setShowWonDialog(false)}
           />

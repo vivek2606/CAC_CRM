@@ -35,6 +35,8 @@ export function MarkWonDialog({
   onCancel,
   wonInvoice,
   billingCompany,
+  initialInvoices,
+  initialError,
 }: {
   existingItems: WonExistingItem[];
   quotedValue: number;
@@ -46,10 +48,22 @@ export function MarkWonDialog({
   wonInvoice?: { invoiceNo: string; closedAt: string };
   // The deal's billing company, if set - the default for its invoices.
   billingCompany?: string | null;
+  // Invoices saved from a products sheet that couldn't be applied yet, and why.
+  initialInvoices?: WonInvoiceInput[];
+  initialError?: string | null;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const priceById = new Map(products.map((p) => [p.id, p.defaultPrice]));
-  const [blocks, setBlocks] = useState<Block[]>(() => [
+  const [blocks, setBlocks] = useState<Block[]>(() =>
+    initialInvoices?.length
+      ? initialInvoices.map((inv) => ({
+          key: newKey(),
+          invoiceNo: inv.invoiceNo,
+          closedAt: inv.closedAt || today,
+          company: inv.billingCompany || billingCompany || "",
+          rows: inv.items.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) })),
+        }))
+      : [
     {
       key: newKey(),
       invoiceNo: wonInvoice?.invoiceNo ?? "",
@@ -146,6 +160,12 @@ export function MarkWonDialog({
           Record the invoice and what was billed on it. If the order was billed on more than one invoice, add each invoice - the first stays on this deal and
           each other one becomes its own won deal with the same customer and details. The invoice date is when the sale counts toward targets and incentives.
         </p>
+        {initialInvoices?.length ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            The invoices from the products sheet are filled in below.
+            {initialError ? <> When the deal was saved they couldn&apos;t be applied: {initialError}</> : null}
+          </div>
+        ) : null}
 
         <div className="space-y-4">
           {blocks.map((b, n) => (

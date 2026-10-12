@@ -11,6 +11,7 @@ import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
 import { billingCompanyOf } from "@/lib/billing-company";
+import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
 import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms, ContactRole } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -184,13 +185,14 @@ const wonInvoicesSchema = z
     }),
   )
   .max(50);
-function parseWonInvoices(raw: FormDataEntryValue | null): WonInvoice[] {
+// [] when there are none; null when they're there but can't be read.
+function parseWonInvoices(raw: FormDataEntryValue | null): WonInvoice[] | null {
   if (typeof raw !== "string" || !raw.trim()) return [];
   try {
     const r = wonInvoicesSchema.safeParse(JSON.parse(raw));
-    return r.success ? r.data : [];
+    return r.success ? r.data : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -199,12 +201,16 @@ function parseWonInvoices(raw: FormDataEntryValue | null): WonInvoice[] {
 // says why on its page, where Mark Won can finish it.
 async function applySheetInvoices(dealId: string, formData: FormData): Promise<string | null> {
   const invoices = parseWonInvoices(formData.get("wonInvoices"));
+  if (invoices === null) return "The invoices in the sheet couldn't be read - check each has an invoice no., a date and a company, then use Mark Won.";
   if (invoices.length === 0) return null;
   try {
     await markDealWon(dealId, invoices);
     return null;
   } catch (e) {
-    return e instanceof Error ? e.message : "Couldn't mark the deal Won.";
+    const error = e instanceof Error ? e.message : "Couldn't mark the deal Won.";
+    // Keep the invoices, so Mark Won opens with them once this is sorted.
+    await saveWonPlan(dealId, { invoices, error });
+    return error;
   }
 }
 
@@ -360,6 +366,21 @@ export async function updateDealStage(
   // Required when marking Won - the invoice raised for the deal.
   invoiceNo?: string
 ) {
+  await setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true);
+}
+
+// updateDealStage, minus the discount check when markDealWon has already
+// checked the order's discount itself (an order split across invoices is
+// checked as a whole, not invoice by invoice). Not exported.
+async function setDealStage(
+  dealId: string,
+  stage: DealStage,
+  lostReasonCategory: LostReason | undefined,
+  lostReasonNote: string | undefined,
+  closedAtOverride: string | undefined,
+  invoiceNo: string | undefined,
+  checkDiscount: boolean,
+) {
   const user = await requireUser();
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
@@ -375,8 +396,8 @@ export async function updateDealStage(
     if (!existing.accountId) {
       throw new Error("Link this deal to an account before marking it Won.");
     }
-    const referencePrices = await getLatestPriceByProduct();
-    const discount = computeDealDiscount(existing.items, referencePrices, existing.discountApprovedAt);
+    const referencePrices = checkDiscount ? await getLatestPriceByProduct() : new Map<string, number>();
+    const discount = checkDiscount ? computeDealDiscount(existing.items, referencePrices, existing.discountApprovedAt) : null;
     if (discount?.needsApproval) {
       throw new Error(
         `Discounted ${discount.discountPct.toFixed(1)}% below list price - needs Head approval before this can be marked Won.`
@@ -605,17 +626,30 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const norm = (items: WonInvoice["items"]) =>
     items.map((i) => `${i.productId}|${i.qty}|${round2(i.unitPrice)}`).sort().join(",");
-  // Unchanged products keep a standing discount approval; any change needs a fresh one.
-  const firstUnchanged = norm(invoices[0].items) === norm(deal.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })));
-  const approvedAt = deal.discountApprovedAt;
+  // A standing discount approval holds while the products are the ones
+  // approved - on the first invoice, or split across the invoices (the
+  // deal's products billed on several invoices); any other change needs a
+  // fresh one. The Head marking it Won is the approval.
+  const dealItems = norm(deal.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })));
+  const firstUnchanged = norm(invoices[0].items) === dealItems;
+  const allUnchanged = norm(invoices.flatMap((i) => i.items)) === dealItems;
+  const approvalHolds = deal.discountApprovedAt != null && (firstUnchanged || allUnchanged);
+  const approval: { at: Date; by: string | null } | null = approvalHolds
+    ? { at: deal.discountApprovedAt!, by: deal.discountApprovedById }
+    : user.role === "HEAD"
+      ? { at: new Date(), by: user.id }
+      : null;
   const prices = await getLatestPriceByProduct();
-  for (const [n, inv] of alreadyWon ? [] : invoices.entries()) {
-    const approval = n === 0 ? (firstUnchanged ? approvedAt : null) : approvedAt && firstUnchanged ? approvedAt : null;
-    const d = computeDealDiscount(inv.items, prices, approval);
+  // The deal's own products split across invoices are checked as the one
+  // order they are (as on the deal page, where it's approved); anything
+  // else invoice by invoice.
+  const checks = allUnchanged
+    ? [{ label: "", items: invoices.flatMap((i) => i.items) }]
+    : invoices.map((inv) => ({ label: invoices.length > 1 ? `Invoice ${inv.invoiceNo.trim()}: ` : "", items: inv.items }));
+  for (const c of alreadyWon ? [] : checks) {
+    const d = computeDealDiscount(c.items, prices, approval?.at ?? null);
     if (d?.needsApproval) {
-      throw new Error(
-        `${invoices.length > 1 ? `Invoice ${inv.invoiceNo.trim()}: ` : ""}discounted ${d.discountPct.toFixed(1)}% below list price - needs Head approval before it can be marked Won.`,
-      );
+      throw new Error(`${c.label}discounted ${d.discountPct.toFixed(1)}% below list price - needs Head approval before it can be marked Won.`);
     }
   }
 
@@ -624,11 +658,13 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   if (!firstUnchanged) {
     await prisma.dealLineItem.deleteMany({ where: { dealId } });
     await prisma.dealLineItem.createMany({ data: first.items.map((i) => ({ dealId, productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) });
-    await prisma.deal.update({ where: { id: dealId }, data: { discountApprovedAt: null, discountApprovedById: null } });
+  }
+  if ((approval?.at ?? null) !== deal.discountApprovedAt) {
+    await prisma.deal.update({ where: { id: dealId }, data: { discountApprovedAt: approval?.at ?? null, discountApprovedById: approval?.by ?? null } });
   }
   await syncDealValueFromItems(dealId);
   if (alreadyWon) await recordWonInvoice(dealId, first.closedAt, first.invoiceNo);
-  else await updateDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim());
+  else await setDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim(), false);
   const companyOf = (inv: WonInvoice) => billingCompanyOf(inv.billingCompany) ?? deal.billingCompany;
   if (companyOf(first) !== deal.billingCompany) await prisma.deal.update({ where: { id: dealId }, data: { billingCompany: companyOf(first) } });
 
@@ -655,19 +691,20 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
         contactId: deal.contactId,
         createdAt: deal.createdAt,
         billingCompany: companyOf(inv),
-        discountApprovedAt: approvedAt && firstUnchanged ? approvedAt : null,
-        discountApprovedById: approvedAt && firstUnchanged ? deal.discountApprovedById : null,
+        discountApprovedAt: approval?.at ?? null,
+        discountApprovedById: approval?.by ?? null,
         items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
       },
     });
     if (alreadyWon) await recordWonInvoice(copy.id, inv.closedAt, inv.invoiceNo);
-    else await updateDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim());
+    else await setDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim(), false);
   }
   if (rest.length > 0) {
     // The lead behind the order is worth the whole order - every invoice.
     const total = round2(invoices.reduce((t, inv) => t + inv.items.reduce((u, i) => u + i.qty * i.unitPrice, 0), 0));
     await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value: total } });
   }
+  await clearWonPlan(dealId);
   revalidatePath("/deals");
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");

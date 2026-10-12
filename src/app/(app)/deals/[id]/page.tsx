@@ -23,6 +23,7 @@ import { DealItemsSection } from "../deal-items-section";
 import { SaleLineItemsTable } from "../sale-line-items-table";
 import { StakeholdersSection } from "../stakeholders-section";
 import { ReorderFlag } from "../reorder-flag";
+import { getWonPlan } from "@/lib/won-plan";
 import { SavedQuotesTable, savedQuoteSelect } from "../../quotations/saved-quotes-table";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
@@ -60,6 +61,8 @@ export default async function DealDetailPage({
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
 
   const colors = DEAL_STAGE_COLORS[deal.stage];
+  // Invoices from a products sheet still waiting to be applied (Mark Won opens with them).
+  const wonPlan = deal.stage !== "WON" && deal.stage !== "LOST" ? await getWonPlan(deal.id) : null;
   // "First contacted" (see Lead detail page for the same idea) - for a
   // capital-goods business where enquiries mostly land directly as a Deal,
   // this is the number that reflects how fast the enquiry actually got a
@@ -114,7 +117,7 @@ export default async function DealDetailPage({
               dealId={deal.id}
               stage={deal.stage}
               blockWonReason={deal.stage === "WON" ? null : stageActionsBlockReason}
-              openWon={sp.markWon === "1" || (Boolean(sp.wonError) && deal.stage !== "WON")}
+              openWon={sp.markWon === "1" || (Boolean(sp.wonError) && deal.stage !== "WON" && !stageActionsBlockReason)}
               needsAccount={!deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"}
               accounts={allAccounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
               wonInvoice={
@@ -125,6 +128,8 @@ export default async function DealDetailPage({
               existingItems={deal.items.map((i) => ({ productId: i.productId, label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
               quotedValue={deal.value}
               billingCompany={deal.billingCompany}
+              pendingInvoices={wonPlan?.invoices.map((i) => ({ ...i, billingCompany: i.billingCompany ?? "" }))}
+              pendingError={wonPlan?.error}
               products={[
                 ...productOptions.map((p) => ({ id: p.id, label: p.label, defaultPrice: p.defaultPrice })),
                 // The deal's own products, even ones with no dealer price on file.
@@ -165,10 +170,12 @@ export default async function DealDetailPage({
       />
 
       <div className="p-6 space-y-6">
-        {sp.wonError && deal.stage !== "WON" && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            <span className="font-semibold">The deal was saved, but not marked Won:</span> {sp.wonError} Fix that, then use Mark Won - you can upload the
-            same sheet there and it fills in each invoice.
+        {(sp.wonError || wonPlan) && deal.stage !== "WON" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">
+              {wonPlan ? `${wonPlan.invoices.length} invoice${wonPlan.invoices.length === 1 ? "" : "s"} from the products sheet waiting to be applied.` : "The deal was saved, but not marked Won."}
+            </span>{" "}
+            {sp.wonError ?? wonPlan?.error} Once that&apos;s sorted, press Mark Won - the invoices are already filled in.
           </div>
         )}
         {deal.stage === "WON" && !deal.invoiceNo && deal.sourceTxnNo == null && deal.closedAt && (
