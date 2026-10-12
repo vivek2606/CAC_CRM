@@ -73,3 +73,24 @@ html[data-embed] {
 html[data-embed] .app-chrome {
   display: none !important;
 }
+
+/* Condensed tables across the app: tighter rows and smaller text, so more
+   fits on screen. Left un-layered on purpose so it wins over the padding /
+   text-size utilities on individual cells. Tables already built compact
+   (text-xs / text-[11px], e.g. the Sales Register) keep their own sizing. */
+main table:not(.text-xs):not(.text-\[11px\]) {
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+}
+main table:not(.text-xs):not(.text-\[11px\]) :is(th, td) {
+  padding: 0.3rem 0.5rem;
+}
+main table:not(.text-xs):not(.text-\[11px\]) :is(th, td):first-child {
+  padding-left: 0.75rem;
+}
+main table:not(.text-xs):not(.text-\[11px\]) :is(th, td):last-child {
+  padding-right: 0.75rem;
+}
+main table:not(.text-xs):not(.text-\[11px\]) th {
+  font-size: 0.65rem;
+}
