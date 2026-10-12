@@ -345,6 +345,10 @@ model Deal {
   // Entered when a deal is marked Won in the CRM (the register's Txn No for
   // imported deals is sourceTxnNo).
   invoiceNo     String?
+  // Which company raised the invoice: "Sakuragi" or "Somotex" (both bill
+  // CAC sales). From the Sales Register's Company column, or entered when
+  // marking Won / in the products sheet.
+  billingCompany String?
   // Set when a Head approves a deal whose itemized total is discounted past
   // DISCOUNT_APPROVAL_THRESHOLD_PCT below catalog price - required before
   // the deal can be marked Won. Cleared whenever line items change, so a

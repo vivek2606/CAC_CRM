@@ -219,6 +219,12 @@ export function DealForm({
           setFormError("Pick the account - it's needed to mark the deal Won with the invoices from the sheet.");
           return;
         }
+        const noCompany = sheetInvoices.filter((i) => !i.company).map((i) => i.invoiceNo);
+        if (noCompany.length) {
+          e.preventDefault();
+          setFormError(`No company for invoice ${noCompany.join(", ")} - fill in Sakuragi or Somotex in the Company column and upload the sheet again.`);
+          return;
+        }
         const undated = sheetInvoices.filter((i) => !i.closedAt).map((i) => i.invoiceNo);
         if (undated.length) {
           e.preventDefault();
@@ -242,6 +248,7 @@ export function DealForm({
             sheetInvoices.map((inv) => ({
               invoiceNo: inv.invoiceNo,
               closedAt: inv.closedAt,
+              billingCompany: inv.company,
               items: inv.rows.map((r) => ({ productId: r.productId, qty: r.qty, unitPrice: r.unitPrice })),
             })),
           )}
@@ -537,7 +544,8 @@ export function DealForm({
               {dealId && initialItems.length ? "Download current list (.xlsx)" : "Download template"}
             </a>
             <p className="mt-1 text-xs text-slate-400">
-              Sheet columns: Date, Invoice No, Item Code, Item Name, Quantity, Rate (excl. VAT). Leave Date and Invoice No blank if it isn&apos;t billed yet.
+              Sheet columns: Date, Invoice No, Company (Sakuragi / Somotex), Item Code, Item Name, Quantity, Rate (excl. VAT). Leave Date, Invoice No and
+              Company blank if it isn&apos;t billed yet.
               Uploading replaces the list above.
             </p>
             {uploadNote && <p className="mt-1 text-xs text-slate-600">{uploadNote}</p>}
@@ -551,7 +559,7 @@ export function DealForm({
                 <ul className="mt-1 space-y-0.5">
                   {sheetInvoices.map((inv) => (
                     <li key={inv.invoiceNo}>
-                      Invoice {inv.invoiceNo} · {inv.closedAt ? new Date(`${inv.closedAt}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : <span className="text-red-600">no date</span>} ·{" "}
+                      Invoice {inv.invoiceNo} · {inv.company || <span className="text-red-600">no company</span>} · {inv.closedAt ? new Date(`${inv.closedAt}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : <span className="text-red-600">no date</span>} ·{" "}
                       {inv.rows.length} line{inv.rows.length === 1 ? "" : "s"} · {formatCurrency(inv.rows.reduce((t, r) => t + r.qty * r.unitPrice, 0))}
                     </li>
                   ))}

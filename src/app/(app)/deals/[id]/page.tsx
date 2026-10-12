@@ -124,6 +124,7 @@ export default async function DealDetailPage({
               }
               existingItems={deal.items.map((i) => ({ productId: i.productId, label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
               quotedValue={deal.value}
+              billingCompany={deal.billingCompany}
               products={[
                 ...productOptions.map((p) => ({ id: p.id, label: p.label, defaultPrice: p.defaultPrice })),
                 // The deal's own products, even ones with no dealer price on file.
@@ -335,6 +336,12 @@ export default async function DealDetailPage({
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Invoice no.</dt>
                   <dd className="text-slate-700">{deal.invoiceNo ?? deal.sourceTxnNo}</dd>
+                </div>
+              )}
+              {deal.billingCompany && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Billed by</dt>
+                  <dd className="text-slate-700">{deal.billingCompany}</dd>
                 </div>
               )}
               {deal.lostReasonCategory && (

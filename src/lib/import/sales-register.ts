@@ -53,6 +53,8 @@ export type TransformedDeal = {
   custName: string;
   custCode: string;
   ownerKey: string;
+  // Billing company from the export's Company / Entity column, if it has one.
+  entity?: string;
 };
 export type TransformedLineItem = {
   sourceKey: string;
@@ -322,6 +324,7 @@ export function transformSalesRegister(inputRows: RawSalesRow[], knownAccounts: 
       custName: first.custName,
       custCode: first.custCode.trim(),
       ownerKey: normalizeSalesmanName(first.salesman),
+      entity: first.entity?.trim() || undefined,
     });
   }
 

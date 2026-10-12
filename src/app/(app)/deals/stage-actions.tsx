@@ -18,6 +18,7 @@ export function StageActions({
   products,
   openWon = false,
   wonInvoice,
+  billingCompany,
   needsAccount = false,
   accounts = [],
 }: {
@@ -36,6 +37,7 @@ export function StageActions({
   // A Won deal entered in the CRM: its invoice no. and date, so its invoices
   // and products can be recorded or split from here.
   wonInvoice?: { invoiceNo: string; closedAt: string };
+  billingCompany?: string | null;
   // No account linked yet: Mark Won first asks for one (pick or create).
   needsAccount?: boolean;
   accounts?: { id: string; label: string }[];
@@ -64,6 +66,7 @@ export function StageActions({
             quotedValue={quotedValue}
             products={products}
             wonInvoice={wonInvoice}
+            billingCompany={billingCompany}
             onConfirm={markWon}
             onCancel={() => setShowWonDialog(false)}
           />
@@ -122,7 +125,14 @@ export function StageActions({
         </button>
         {showLostDialog && <MarkLostDialog onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
         {showWonDialog && !needsAccount && !blockWonReason && (
-          <MarkWonDialog existingItems={existingItems} quotedValue={quotedValue} products={products} onConfirm={markWon} onCancel={() => setShowWonDialog(false)} />
+          <MarkWonDialog
+            existingItems={existingItems}
+            quotedValue={quotedValue}
+            products={products}
+            billingCompany={billingCompany}
+            onConfirm={markWon}
+            onCancel={() => setShowWonDialog(false)}
+          />
         )}
         {showLinkDialog && (
           <LinkAccountDialog

@@ -10,6 +10,7 @@ import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
+import { billingCompanyOf } from "@/lib/billing-company";
 import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms, ContactRole } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -178,6 +179,7 @@ const wonInvoicesSchema = z
     z.object({
       invoiceNo: z.string().trim().min(1).max(60),
       closedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      billingCompany: z.string().optional(),
       items: z.array(z.object({ productId: z.string().min(1), qty: z.number().finite(), unitPrice: z.number().finite() })).min(1),
     }),
   )
@@ -558,7 +560,13 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   revalidatePath("/");
 }
 
-export type WonInvoice = { invoiceNo: string; closedAt: string; items: { productId: string; qty: number; unitPrice: number }[] };
+export type WonInvoice = {
+  invoiceNo: string;
+  closedAt: string;
+  // "Sakuragi" / "Somotex"; blank keeps what the deal has.
+  billingCompany?: string;
+  items: { productId: string; qty: number; unitPrice: number }[];
+};
 
 // Mark Won from the dialog, with the products billed on each invoice. One
 // invoice: this deal is won with those products. Several (the order was
@@ -621,6 +629,8 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   await syncDealValueFromItems(dealId);
   if (alreadyWon) await recordWonInvoice(dealId, first.closedAt, first.invoiceNo);
   else await updateDealStage(dealId, "WON", undefined, undefined, first.closedAt, first.invoiceNo.trim());
+  const companyOf = (inv: WonInvoice) => billingCompanyOf(inv.billingCompany) ?? deal.billingCompany;
+  if (companyOf(first) !== deal.billingCompany) await prisma.deal.update({ where: { id: dealId }, data: { billingCompany: companyOf(first) } });
 
   // ---- each further invoice: its own Won deal, a copy of this one
   for (const inv of rest) {
@@ -644,6 +654,7 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
         accountId: deal.accountId,
         contactId: deal.contactId,
         createdAt: deal.createdAt,
+        billingCompany: companyOf(inv),
         discountApprovedAt: approvedAt && firstUnchanged ? approvedAt : null,
         discountApprovedById: approvedAt && firstUnchanged ? deal.discountApprovedById : null,
         items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
@@ -674,11 +685,11 @@ async function recordWonInvoice(dealId: string, closedAt: string, invoiceNo: str
   await syncSaleLineItemsForDeal(dealId);
 }
 
-export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number; invoiceNo: string; invoiceDate: string };
+export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number; invoiceNo: string; invoiceDate: string; company: string };
 
-// Reads an uploaded sheet of products billed: Date, Invoice No, Item Code,
-// Item Name, Quantity, Rate (Date and Invoice No optional - left blank for
-// a deal not billed yet). Products are matched by code, else by name/model;
+// Reads an uploaded sheet of products billed: Date, Invoice No, Company
+// (Sakuragi / Somotex), Item Code, Item Name, Quantity, Rate (Date, Invoice
+// No and Company optional - left blank for a deal not billed yet). Products are matched by code, else by name/model;
 // unmatched rows are reported rather than created. Rows with an invoice no.
 // are grouped into invoices by Mark Won and the deal form.
 export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: WonSheetRow[]; problems: string[] }> {
@@ -704,6 +715,7 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
   const iRate = col("rate", "basic rate", "unit price", "price", "rate (excl. vat)", "dealer price");
   const iInv = col("invoice no", "invoice no.", "invoice number", "inv no", "inv. no.", "invoice", "bill no", "txn no");
   const iDate = col("date", "invoice date", "bill date", "doc date");
+  const iCompany = col("company", "company name", "billing company", "entity", "billed by");
   if ((iCode === -1 && iModel === -1) || iQty === -1 || iRate === -1) {
     return { rows: [], problems: ["The sheet needs columns: Item Code (or Item Name), Quantity and Rate - plus Date and Invoice No for billed items."] };
   }
@@ -760,7 +772,10 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
       if (known) invoiceDate = known;
       else if (invoiceDate) dateOfInvoice.set(invoiceNo.toLowerCase(), invoiceDate);
     }
-    rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100, invoiceNo, invoiceDate });
+    const rawCompany = String(get(iCompany) ?? "").trim();
+    const company = billingCompanyOf(rawCompany) ?? "";
+    if (rawCompany && !company) problems.push(`Row ${n}: company "${rawCompany}" - use Sakuragi or Somotex`);
+    rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100, invoiceNo, invoiceDate, company });
   });
   // Rows of an invoice whose date was only on a later row.
   for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(r.invoiceNo.toLowerCase()) ?? "";

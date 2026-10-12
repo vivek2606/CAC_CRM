@@ -5,13 +5,15 @@ import { Plus, Trash2, Upload, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { parseWonItemsSheet } from "./actions";
 import { groupSheetInvoices } from "@/lib/sheet-invoices";
+import { BILLING_COMPANIES } from "@/lib/billing-company";
 
 export type WonProductOption = { id: string; label: string; defaultPrice: number | null };
 export type WonExistingItem = { productId: string; label: string; qty: number; unitPrice: number };
-export type WonInvoiceInput = { invoiceNo: string; closedAt: string; items: { productId: string; qty: number; unitPrice: number }[] };
+export type WonInvoiceInput = { invoiceNo: string; closedAt: string; billingCompany: string; items: { productId: string; qty: number; unitPrice: number }[] };
 
 type Row = { key: string; productId: string; qty: string; rate: string };
-type Block = { key: string; invoiceNo: string; closedAt: string; rows: Row[] };
+// company: the billing company ("Sakuragi" / "Somotex").
+type Block = { key: string; invoiceNo: string; closedAt: string; company: string; rows: Row[] };
 
 const naira = (n: number) => `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (v: string) => {
@@ -32,6 +34,7 @@ export function MarkWonDialog({
   onConfirm,
   onCancel,
   wonInvoice,
+  billingCompany,
 }: {
   existingItems: WonExistingItem[];
   quotedValue: number;
@@ -41,6 +44,8 @@ export function MarkWonDialog({
   // Set for a deal that is already Won: its current invoice no. and date,
   // so its invoices and products can be recorded (or split) after the fact.
   wonInvoice?: { invoiceNo: string; closedAt: string };
+  // The deal's billing company, if set - the default for its invoices.
+  billingCompany?: string | null;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const priceById = new Map(products.map((p) => [p.id, p.defaultPrice]));
@@ -49,6 +54,7 @@ export function MarkWonDialog({
       key: newKey(),
       invoiceNo: wonInvoice?.invoiceNo ?? "",
       closedAt: wonInvoice?.closedAt || today,
+      company: billingCompany ?? "",
       rows: existingItems.length
         ? existingItems.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) }))
         : [blankRow()],
@@ -82,6 +88,7 @@ export function MarkWonDialog({
           key: newKey(),
           invoiceNo: inv.invoiceNo,
           closedAt: inv.closedAt || today,
+          company: inv.company || billingCompany || "",
           rows: inv.rows.map((x) => ({ key: newKey(), productId: x.productId, qty: String(x.qty), rate: String(x.unitPrice) })),
         }));
         setBlocks(blocksFromSheet);
@@ -121,7 +128,8 @@ export function MarkWonDialog({
       if (filled.some((r) => num(r.qty) === 0 || num(r.rate) === 0)) return setError(`Every product${label} needs a quantity and a basic rate (use a minus sign for a sales return).`);
       if (!b.invoiceNo.trim()) return setError(`Enter the invoice no.${label}.`);
       if (!b.closedAt) return setError(`Enter the invoice date${label}.`);
-      invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });
+      if (!b.company) return setError(`Pick the company that raised the invoice${label} - Sakuragi or Somotex.`);
+      invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, billingCompany: b.company, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });
     }
     const nos = invoices.map((i) => i.invoiceNo.toLowerCase());
     if (new Set(nos).size !== nos.length) return setError("Each invoice needs a different invoice no.");
@@ -153,6 +161,17 @@ export function MarkWonDialog({
                 <div>
                   <label className="block text-[11px] font-medium text-slate-500 mb-1">Invoice date *</label>
                   <input type="date" value={b.closedAt} max={today} onChange={(e) => setBlock(b.key, { closedAt: e.target.value })} className={input} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 mb-1">Company *</label>
+                  <select value={b.company} onChange={(e) => setBlock(b.key, { company: e.target.value })} className={input}>
+                    <option value="">Pick…</option>
+                    {BILLING_COMPANIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {blocks.length > 1 && (
                   <button
@@ -231,7 +250,7 @@ export function MarkWonDialog({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setBlocks((bs) => [...bs, { key: newKey(), invoiceNo: "", closedAt: bs[bs.length - 1]?.closedAt ?? today, rows: [blankRow()] }])}
+            onClick={() => setBlocks((bs) => [...bs, { key: newKey(), invoiceNo: "", closedAt: bs[bs.length - 1]?.closedAt ?? today, company: bs[bs.length - 1]?.company ?? "", rows: [blankRow()] }])}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Plus className="h-4 w-4" />

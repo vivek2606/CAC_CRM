@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { billingCompanyOf } from "@/lib/billing-company";
 import { requireBackOffice } from "@/lib/rbac";
 import { parseSalesRegisterBuffer } from "@/lib/import/parse-sales-register";
 import { transformSalesRegister, custNameMatchKey } from "@/lib/import/sales-register";
@@ -339,6 +340,8 @@ export async function importSalesRegister(
     sourceDocKey: d.docKey,
     // The register's Txn No is the invoice no.
     invoiceNo: String(d.txnNo),
+    // Only when the export has a Company column - otherwise left as it is.
+    ...(billingCompanyOf(d.entity) ? { billingCompany: billingCompanyOf(d.entity) } : {}),
   }));
 
   // Deals imported before documents were keyed by Txn Code + Txn No only
@@ -425,7 +428,7 @@ export async function importSalesRegister(
     // changed, so a large file doesn't issue one update per invoice.
     const existing = await prisma.deal.findMany({
       where: { sourceDocKey: { in: fileDocKeys } },
-      select: { id: true, sourceDocKey: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true, invoiceNo: true },
+      select: { id: true, sourceDocKey: true, title: true, value: true, closedAt: true, ownerId: true, accountId: true, invoiceNo: true, billingCompany: true },
     });
     const existingByDocKey = new Map(existing.map((d) => [d.sourceDocKey!, d]));
     const updates = [];
@@ -438,7 +441,8 @@ export async function importSalesRegister(
         cur.closedAt?.getTime() !== d.closedAt.getTime() ||
         cur.ownerId !== d.ownerId ||
         cur.accountId !== d.accountId ||
-        cur.invoiceNo !== d.invoiceNo
+        cur.invoiceNo !== d.invoiceNo ||
+        (d.billingCompany != null && cur.billingCompany !== d.billingCompany)
       ) {
         updates.push(
           prisma.deal.update({
@@ -450,6 +454,7 @@ export async function importSalesRegister(
               ownerId: d.ownerId,
               accountId: d.accountId,
               invoiceNo: d.invoiceNo,
+              ...(d.billingCompany != null ? { billingCompany: d.billingCompany } : {}),
               stage: "WON",
               probability: 100,
             },
