@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessOwner, isBackOffice, type SessionUser } from "@/lib/rbac";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 import type { DocumentInput, SalesDocument } from "@/lib/sales-document";
+import { applyQuoteToDeal } from "@/app/(app)/deals/actions";
 
 // Quotations kept from the Quotations builder: each download saves the
 // builder's input under the quote's reference, for a sales person and
@@ -71,11 +72,19 @@ export async function saveQuotation(
     data: input as unknown as Prisma.InputJsonValue,
     ownerId: owner.id,
   };
+  let quoteId: string;
+  let linked: boolean;
   if (existing) {
     if (!canSeeQuotation(user, existing)) return "This reference number belongs to another quotation - start a new one.";
-    await prisma.quotation.update({ where: { id: existing.id }, data: { ...fields, dealId: deal?.id ?? existing.dealId } });
+    const q = await prisma.quotation.update({ where: { id: existing.id }, data: { ...fields, dealId: deal?.id ?? existing.dealId }, select: { id: true, dealId: true } });
+    quoteId = q.id;
+    linked = q.dealId != null;
   } else {
-    await prisma.quotation.create({ data: { ...fields, ref: input.ref, dealId: deal?.id ?? null, createdById: user.id } });
+    const q = await prisma.quotation.create({ data: { ...fields, ref: input.ref, dealId: deal?.id ?? null, createdById: user.id }, select: { id: true } });
+    quoteId = q.id;
+    linked = deal != null;
   }
+  // A deal with no products yet takes the quote's.
+  if (linked) await applyQuoteToDeal(quoteId, true);
   return null;
 }

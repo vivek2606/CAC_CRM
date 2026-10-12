@@ -55,7 +55,7 @@ export const OPEN_DEAL_STAGES: DealStage[] = [
 export const DEAL_STAGE_LABELS: Record<DealStage, string> = {
   QUALIFICATION: "Qualification",
   NEEDS_ANALYSIS: "Needs Analysis",
-  PROPOSAL: "Proposal",
+  PROPOSAL: "Quotation",
   NEGOTIATION: "Negotiation",
   WON: "Won",
   LOST: "Lost",
@@ -82,33 +82,36 @@ export const STALE_DEAL_DAYS = 14;
 // ex-VAT price.
 export const VAT_RATE = 0.075;
 
-export const LOST_REASONS: LostReason[] = [
-  "PRICE_TOO_HIGH",
-  "COMPETITOR",
-  "BUDGET_CANCELLED",
-  "TIMING",
-  "WENT_COLD",
-  "OTHER",
-];
+// Offered when marking a deal Lost, in this order.
+export const LOST_REASONS: LostReason[] = ["PRODUCT_NOT_AVAILABLE", "PAYMENT_TERMS", "COMPETITOR", "PRICE_TOO_HIGH", "TECHNICAL_SPEC", "OTHER"];
+// Every reason, including ones no longer offered (for deals lost before) -
+// for reports.
+export const ALL_LOST_REASONS: LostReason[] = [...LOST_REASONS, "BUDGET_CANCELLED", "TIMING", "WENT_COLD"];
 
 export const LOST_REASON_LABELS: Record<LostReason, string> = {
-  PRICE_TOO_HIGH: "Price too high",
-  COMPETITOR: "Lost to a competitor",
-  BUDGET_CANCELLED: "Budget cut / project cancelled",
-  TIMING: "Bad timing / delayed",
-  WENT_COLD: "Went cold / no response",
-  OTHER: "Other",
+  PRODUCT_NOT_AVAILABLE: "Product not available",
+  PAYMENT_TERMS: "Payment terms",
+  COMPETITOR: "Preferred another brand",
+  PRICE_TOO_HIGH: "Price",
+  TECHNICAL_SPEC: "Technical specification could not be matched",
+  OTHER: "Other reason",
+  BUDGET_CANCELLED: "Budget cut / project cancelled (old)",
+  TIMING: "Bad timing / delayed (old)",
+  WENT_COLD: "Went cold / no response (old)",
 };
 
-// Reuses the first 6 steps of the same validated categorical order used for
-// LEAD_SOURCE_COLORS, so identity colors stay consistent app-wide.
+// Reuses the same validated categorical order used for LEAD_SOURCE_COLORS,
+// so identity colors stay consistent app-wide.
 export const LOST_REASON_COLORS: Record<LostReason, string> = {
-  PRICE_TOO_HIGH: "#3b82f6",
+  PRODUCT_NOT_AVAILABLE: "#8b5cf6",
+  PAYMENT_TERMS: "#14b8a6",
   COMPETITOR: "#f97316",
-  BUDGET_CANCELLED: "#14b8a6",
-  TIMING: "#f59e0b",
-  WENT_COLD: "#ec4899",
+  PRICE_TOO_HIGH: "#3b82f6",
+  TECHNICAL_SPEC: "#ec4899",
   OTHER: "#16a34a",
+  BUDGET_CANCELLED: "#94a3b8",
+  TIMING: "#f59e0b",
+  WENT_COLD: "#64748b",
 };
 
 // Terminal statuses that should be excluded from "active leads" counts.

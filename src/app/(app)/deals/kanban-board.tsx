@@ -8,8 +8,8 @@ import { formatCompactCurrency } from "@/lib/format";
 import { Avatar } from "@/components/ui";
 import { TagChips } from "@/components/tag-chips";
 import { updateDealStage } from "./actions";
-import { MarkLostDialog } from "./mark-lost-dialog";
-import type { DealStage, LostReason } from "@prisma/client";
+import { MarkLostDialog, type LostInput } from "./mark-lost-dialog";
+import type { DealStage } from "@prisma/client";
 
 type DealCard = {
   id: string;
@@ -19,12 +19,18 @@ type DealCard = {
   owner: { name: string; avatarColor: string };
   account: { name: string } | null;
   tags: string[];
+  itemCount: number;
 };
+
+// From the Quotation stage on, a deal should carry its products - moving
+// one there without them asks first (but still allows it).
+const PRODUCT_STAGES: DealStage[] = ["PROPOSAL", "NEGOTIATION"];
 
 export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   const [items, setItems] = useState(deals);
   const [dragId, setDragId] = useState<string | null>(null);
   const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
+  const [noProducts, setNoProducts] = useState<{ dealId: string; stage: DealStage } | null>(null);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -34,9 +40,14 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
   // column here: it would look fine until the next reload, when the page's
   // own query (scoped to open stages) simply wouldn't send it back, making
   // it seem to vanish.
-  function moveDeal(dealId: string, stage: DealStage) {
+  function moveDeal(dealId: string, stage: DealStage, confirmedNoProducts = false) {
     const deal = items.find((d) => d.id === dealId);
     if (!deal || deal.stage === stage) return;
+
+    if (!confirmedNoProducts && PRODUCT_STAGES.includes(stage) && deal.itemCount === 0) {
+      setNoProducts({ dealId, stage });
+      return;
+    }
 
     if (stage === "LOST") {
       setPendingLostDealId(dealId);
@@ -62,7 +73,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     });
   }
 
-  function confirmLost(category: LostReason, note: string, closedAt: string) {
+  function confirmLost({ category, note, lostToBrand, closedAt }: LostInput) {
     const dealId = pendingLostDealId;
     setPendingLostDealId(null);
     if (!dealId) return;
@@ -71,7 +82,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     setItems((prev) => prev.filter((d) => d.id !== dealId));
     startTransition(async () => {
       try {
-        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt);
+        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
       } catch (e) {
         if (deal) setItems((prev) => [...prev, deal]);
         alert(e instanceof Error ? e.message : "Could not update this deal.");
@@ -120,6 +131,9 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
                   <Link href={`/deals/${deal.id}`} className="block">
                     <p className="text-sm font-medium text-slate-800 line-clamp-2">{deal.title}</p>
                     <p className="text-xs text-slate-400 mt-0.5 truncate">{deal.account?.name ?? "No account"}</p>
+                    {PRODUCT_STAGES.includes(deal.stage) && deal.itemCount === 0 && (
+                      <p className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">No products yet</p>
+                    )}
                     <TagChips tags={deal.tags} className="mt-1.5" />
                     <div className="flex items-center justify-between mt-2.5">
                       <span className="text-sm font-semibold text-slate-700">
@@ -152,6 +166,42 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
       })}
     </div>
     {pendingLostDealId && <MarkLostDialog onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />}
+    {noProducts && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setNoProducts(null)}>
+        <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Add the products to this deal?</h2>
+          <p className="text-sm text-slate-600 mb-4">
+            At the {DEAL_STAGE_LABELS[noProducts.stage]} stage the deal should show the products, quantities and rates being quoted. Add them now
+            (or make the quotation from the deal - its products are picked up), or move it anyway and add them later.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const { dealId, stage } = noProducts;
+                setNoProducts(null);
+                moveDeal(dealId, stage, true);
+              }}
+              className="rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2"
+            >
+              Move anyway
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const { dealId, stage } = noProducts;
+                setNoProducts(null);
+                moveDeal(dealId, stage, true);
+                router.push(`/deals/${dealId}/edit#products`);
+              }}
+              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-3.5 py-2"
+            >
+              Move and add products
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }

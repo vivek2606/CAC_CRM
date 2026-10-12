@@ -21,6 +21,7 @@ export default async function DealsPage({
     include: {
       owner: { select: { name: true, avatarColor: true } },
       account: { select: { name: true } },
+      _count: { select: { items: true } },
     },
   });
 
@@ -48,7 +49,7 @@ export default async function DealsPage({
         {isBackOffice(user) && owners.length > 0 && (
           <OwnerFilter owners={owners} value={params.owner ?? ""} />
         )}
-        <KanbanBoard deals={deals} />
+        <KanbanBoard deals={deals.map((d) => ({ ...d, itemCount: d._count.items }))} />
       </div>
     </div>
   );

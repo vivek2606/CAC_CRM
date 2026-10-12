@@ -382,7 +382,11 @@ export function QuotationBuilder({
     rows: d.rows.map((r) =>
       r.kind === "section"
         ? { kind: "section", label: r.label }
-        : { kind: "item", description: r.description, detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0 },
+        : {
+            kind: "item",
+            productId: !r.custom && r.productId && !r.productId.startsWith("tentative:") ? r.productId : undefined,
+            description: r.description,
+            detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0 },
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),

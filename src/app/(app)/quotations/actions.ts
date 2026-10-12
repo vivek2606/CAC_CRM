@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import { canSeeQuotation, resolveQuoteOwner } from "@/lib/saved-quotes";
+import { applyQuoteToDeal } from "../deals/actions";
 import { parseQuoteGrid, type Cell, type ImportedQuote } from "@/lib/import/parse-quote-sheet";
 
 // Issues the next unique quotation reference, with the initials of the
@@ -50,6 +51,8 @@ export async function linkQuotationDeal(quoteId: string, dealId: string | null):
     if (!deal || !canAccessOwner(user, deal.ownerId)) return { error: "Deal not found." };
   }
   await prisma.quotation.update({ where: { id: q.id }, data: { dealId } });
+  // A deal with no products yet takes the quote's.
+  if (dealId) await applyQuoteToDeal(q.id, true);
   revalidatePath("/quotations/saved");
   if (dealId) revalidatePath(`/deals/${dealId}`);
   return {};

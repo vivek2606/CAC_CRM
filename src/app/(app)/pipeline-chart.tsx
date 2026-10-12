@@ -6,7 +6,7 @@ import { formatCompactCurrency, chartUnit } from "@/lib/format";
 const STAGE_BAR_COLORS: Record<string, string> = {
   Qualification: "#94a3b8",
   "Needs Analysis": "#0ea5e9",
-  Proposal: "#f59e0b",
+  Quotation: "#f59e0b",
   Negotiation: "#8b5cf6",
 };
 

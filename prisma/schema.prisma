@@ -63,6 +63,10 @@ enum DealStage {
   LOST
 }
 
+// Offered when marking Lost: PRODUCT_NOT_AVAILABLE, PAYMENT_TERMS,
+// COMPETITOR (preferred another brand), PRICE_TOO_HIGH (price),
+// TECHNICAL_SPEC, OTHER. BUDGET_CANCELLED / TIMING / WENT_COLD are no longer
+// offered - kept for deals lost before.
 enum LostReason {
   PRICE_TOO_HIGH
   COMPETITOR
@@ -70,6 +74,9 @@ enum LostReason {
   TIMING
   WENT_COLD
   OTHER
+  PRODUCT_NOT_AVAILABLE
+  PAYMENT_TERMS
+  TECHNICAL_SPEC
 }
 
 enum ActivityType {
@@ -339,6 +346,8 @@ model Deal {
   // whole reason - kept as-is (not renamed) so no existing data moves.
   lostReasonCategory LostReason?
   lostReason    String?
+  // The brand the customer bought instead, entered when marking Lost.
+  lostToBrand   String?
   // Assigned once, the first time a quote is generated for this deal - kept
   // stable across re-prints even if line items change afterward.
   quoteNumber   Int?        @unique

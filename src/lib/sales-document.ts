@@ -16,6 +16,9 @@ const rowSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("section"), label: z.string().trim().max(200) }),
   z.object({
     kind: z.literal("item"),
+    // The product-list item a line was picked from (none for custom lines such
+    // as installation) - so a saved quote's products can fill its deal.
+    productId: z.string().max(40).optional(),
     description: z.string().trim().max(1000),
     detail: z.string().trim().max(300).default(""), // e.g. "Available" / "In Transit (ETA ...)"
     unit: z.string().trim().max(20).default("No."),

@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ReceiptText, XCircle } from "lucide-react";
 import { updateDealStage, markDealWon } from "./actions";
-import { MarkLostDialog } from "./mark-lost-dialog";
+import { MarkLostDialog, type LostInput } from "./mark-lost-dialog";
 import { LinkAccountDialog } from "./link-account-dialog";
 import { MarkWonDialog, type WonExistingItem, type WonInvoiceInput, type WonProductOption } from "./mark-won-dialog";
-import type { DealStage, LostReason } from "@prisma/client";
+import type { DealStage } from "@prisma/client";
 
 export function StageActions({
   dealId,
@@ -19,6 +19,7 @@ export function StageActions({
   openWon = false,
   wonInvoice,
   billingCompany,
+  competitorBrand,
   pendingInvoices,
   pendingError,
   needsAccount = false,
@@ -40,6 +41,7 @@ export function StageActions({
   // and products can be recorded or split from here.
   wonInvoice?: { invoiceNo: string; closedAt: string };
   billingCompany?: string | null;
+  competitorBrand?: string | null;
   // Invoices from a products sheet not applied yet (see won-plan.ts).
   pendingInvoices?: WonInvoiceInput[];
   pendingError?: string | null;
@@ -97,12 +99,12 @@ export function StageActions({
     });
   }
 
-  function markLost(category: LostReason, note: string, closedAt: string) {
+  function markLost({ category, note, lostToBrand, closedAt }: LostInput) {
     setShowLostDialog(false);
     setError(null);
     startTransition(async () => {
       try {
-        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt);
+        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not mark this deal Lost.");
@@ -130,7 +132,7 @@ export function StageActions({
           <XCircle className="h-4 w-4" />
           Mark Lost
         </button>
-        {showLostDialog && <MarkLostDialog onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
+        {showLostDialog && <MarkLostDialog competitorBrand={competitorBrand} onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
         {showWonDialog && !needsAccount && !blockWonReason && (
           <MarkWonDialog
             existingItems={existingItems}

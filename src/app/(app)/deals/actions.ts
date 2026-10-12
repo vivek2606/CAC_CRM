@@ -348,9 +348,46 @@ export async function deleteDeal(dealId: string) {
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
+  // Its Sales Register lines go with it (they'd otherwise stay counted with
+  // no deal), and the lead it came from is open again.
+  await prisma.saleLineItem.deleteMany({ where: { dealId } });
+  await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { convertedDealId: null, status: "QUALIFIED" } });
+  await clearWonPlan(dealId);
   await prisma.deal.delete({ where: { id: dealId } });
   revalidatePath("/deals");
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/leads");
   redirect("/deals");
+}
+
+// Head / Coordinator: puts a Won or Lost deal entered in the CRM back in the
+// pipeline (Negotiation) - e.g. marked Won or Lost by mistake. Its invoice,
+// lost reason and Sales Register lines are cleared; its products stay.
+// Deals imported from the Sales Register can be deleted instead.
+export async function reopenDeal(dealId: string) {
+  const user = await requireUser();
+  if (!isBackOffice(user)) throw new Error("Only the Head of Sales or the Sales Coordinator can reopen a deal.");
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { stage: true, sourceTxnNo: true } });
+  if (deal.sourceTxnNo != null) throw new Error("This deal comes from the Sales Register - delete it instead, or correct it in the ERP and upload again.");
+  if (deal.stage !== "WON" && deal.stage !== "LOST") return;
+  await prisma.deal.update({
+    where: { id: dealId },
+    data: {
+      stage: "NEGOTIATION",
+      probability: STAGE_DEFAULT_PROBABILITY.NEGOTIATION,
+      closedAt: null,
+      invoiceNo: null,
+      billingCompany: null,
+      lostReasonCategory: null,
+      lostReason: null,
+      lostToBrand: null,
+    },
+  });
+  await syncSaleLineItemsForDeal(dealId);
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/deals");
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/");
 }
 
 export async function updateDealStage(
@@ -364,9 +401,11 @@ export async function updateDealStage(
   // on the forms above.
   closedAtOverride?: string,
   // Required when marking Won - the invoice raised for the deal.
-  invoiceNo?: string
+  invoiceNo?: string,
+  // Marking Lost: the brand the customer bought instead.
+  lostToBrand?: string,
 ) {
-  await setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true);
+  await setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true, lostToBrand);
 }
 
 // updateDealStage, minus the discount check when markDealWon has already
@@ -380,6 +419,7 @@ async function setDealStage(
   closedAtOverride: string | undefined,
   invoiceNo: string | undefined,
   checkDiscount: boolean,
+  lostToBrand?: string,
 ) {
   const user = await requireUser();
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
@@ -415,6 +455,7 @@ async function setDealStage(
       closedAt: isClosed ? parseDateInput(closedAtOverride) : null,
       lostReasonCategory: stage === "LOST" ? (lostReasonCategory ?? existing.lostReasonCategory ?? "OTHER") : null,
       lostReason: stage === "LOST" ? (lostReasonNote ?? null) : null,
+      lostToBrand: stage === "LOST" ? lostToBrand?.trim().slice(0, 80) || null : null,
       invoiceNo: stage === "WON" ? invoiceNo!.trim().slice(0, 60) : existing.invoiceNo,
     },
   });
@@ -864,4 +905,58 @@ export async function linkDealAccount(
   revalidatePath("/deals");
   revalidatePath("/accounts");
   return { accountId };
+}
+
+// Fills a deal's products from a saved quotation linked to it: the lines
+// picked from the product list, with their quantity and rate (ex-VAT) -
+// custom lines such as installation are left out. Only for a deal still in
+// the pipeline; at Mark Won the products can still be changed. With
+// onlyIfEmpty, a deal that already has products is left alone. Also links
+// the deal to the account named on the quote when it has none and the name
+// matches exactly. Returns how many products were set.
+export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Promise<{ count: number; error?: string }> {
+  const user = await requireUser();
+  const q = await prisma.quotation.findUnique({
+    where: { id: quoteId },
+    select: { dealId: true, customerName: true, data: true, deal: { select: { id: true, ownerId: true, stage: true, sourceTxnNo: true, accountId: true, _count: { select: { items: true } } } } },
+  });
+  const deal = q?.deal;
+  if (!q || !deal) return { count: 0, error: "This quotation isn't linked to a deal." };
+  if (!canAccessOwner(user, deal.ownerId)) return { count: 0, error: "You do not have access to this deal." };
+  if (deal.stage === "WON" || deal.stage === "LOST" || deal.sourceTxnNo != null) {
+    return { count: 0, error: "This deal is closed - change its products from Invoices & products instead." };
+  }
+  if (onlyIfEmpty && deal._count.items > 0) return { count: 0 };
+
+  const { documentInputSchema } = await import("@/lib/sales-document");
+  const parsed = documentInputSchema.safeParse(q.data);
+  if (!parsed.success) return { count: 0, error: "This saved quotation can't be read." };
+  const doc = parsed.data;
+  const { getCompanySettings } = await import("@/lib/company-profile");
+  const vatFactor = doc.vatMode === "inclusive" ? 1 + (await getCompanySettings()).vatRatePct / 100 : 1;
+  // Quotes saved before lines carried their product: match the model name.
+  const norm = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const products = await prisma.product.findMany({ select: { id: true, model: true } });
+  const ids = new Set(products.map((p) => p.id));
+  const byModel = new Map<string, string>();
+  for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p.id);
+  const lines = doc.rows
+    .filter((r) => r.kind === "item")
+    .map((r) => (r.kind === "item" ? { productId: r.productId && ids.has(r.productId) ? r.productId : byModel.get(norm(r.description)), qty: r.qty, rate: r.unitPrice } : null))
+    .filter((l): l is { productId: string; qty: number; rate: number } => l != null && Boolean(l.productId) && l.qty > 0 && l.rate > 0)
+    .map((l) => ({ dealId: deal.id, productId: l.productId, qty: l.qty, unitPrice: Math.round((l.rate / vatFactor) * 100) / 100 }));
+  if (lines.length === 0) return { count: 0, error: onlyIfEmpty ? undefined : "No products from the product list on this quotation (only custom lines)." };
+
+  await prisma.dealLineItem.deleteMany({ where: { dealId: deal.id } });
+  await prisma.dealLineItem.createMany({ data: lines });
+  await revokeDiscountApproval(deal.id);
+  await syncDealValueFromItems(deal.id);
+  await notifyDiscountIfNeeded(deal.id);
+  if (!deal.accountId && q.customerName.trim()) {
+    const acc = await prisma.account.findFirst({ where: { name: { equals: q.customerName.trim(), mode: "insensitive" } }, select: { id: true } });
+    if (acc) await prisma.deal.update({ where: { id: deal.id }, data: { accountId: acc.id } });
+  }
+  revalidatePath(`/deals/${deal.id}`);
+  revalidatePath("/deals");
+  return { count: lines.length };
 }

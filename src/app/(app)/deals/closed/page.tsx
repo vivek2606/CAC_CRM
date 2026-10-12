@@ -6,7 +6,7 @@ import { PageHeader, Card, Badge, EmptyState, Avatar, StatCard } from "@/compone
 import { Pagination, parsePage } from "@/components/pagination";
 import { SortableLinkTh } from "@/components/sortable-link-th";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
-import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LOST_REASONS, LOST_REASON_LABELS, LOST_REASON_COLORS } from "@/lib/constants";
+import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, ALL_LOST_REASONS, LOST_REASON_LABELS, LOST_REASON_COLORS } from "@/lib/constants";
 import { WonLostBarChart, type WonLostRow } from "./won-lost-bar-chart";
 import { Percent, Wallet, Receipt, Clock } from "lucide-react";
 import type { DealStage } from "@prisma/client";
@@ -187,7 +187,7 @@ export default async function ClosedDealsPage({
     g.value += d.value;
     lostReasonGroups.set(d.lostReasonCategory, g);
   }
-  const lostReasonData = LOST_REASONS.map((reason) => ({
+  const lostReasonData = ALL_LOST_REASONS.map((reason) => ({
     reason: LOST_REASON_LABELS[reason],
     count: lostReasonGroups.get(reason)?.count ?? 0,
     value: lostReasonGroups.get(reason)?.value ?? 0,

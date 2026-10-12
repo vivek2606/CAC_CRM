@@ -167,10 +167,20 @@ export default async function SalesRegisterPage({
   ];
   // Deals won in the CRM before the invoice was asked for.
   const missingInvoice = await prisma.deal.findMany({
-    where: { stage: "WON", sourceTxnNo: null, invoiceNo: null, ...(all ? {} : { ownerId: user.id }) },
+    // Won in the CRM with the invoice no. or the products billed missing.
+    where: { stage: "WON", sourceTxnNo: null, OR: [{ invoiceNo: null }, { items: { none: {} } }], ...(all ? {} : { ownerId: user.id }) },
     orderBy: { closedAt: "desc" },
     take: 200,
-    select: { id: true, title: true, value: true, closedAt: true, owner: { select: { name: true } }, account: { select: { name: true } } },
+    select: {
+      id: true,
+      title: true,
+      value: true,
+      closedAt: true,
+      invoiceNo: true,
+      _count: { select: { items: true } },
+      owner: { select: { name: true } },
+      account: { select: { name: true } },
+    },
   });
 
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
@@ -229,10 +239,11 @@ export default async function SalesRegisterPage({
           <div className="rounded-xl border border-amber-200 bg-amber-50">
             <div className="px-4 pt-3 pb-2">
               <p className="text-sm font-semibold text-amber-900">
-                {missingInvoice.length} won deal{missingInvoice.length === 1 ? "" : "s"} missing an invoice no.
+                {missingInvoice.length} won deal{missingInvoice.length === 1 ? "" : "s"} with details missing
               </p>
               <p className="text-xs text-amber-800">
-                Marked Won in the CRM before the invoice was asked for. Add each one&apos;s invoice no. and date - the date is when the sale counts.
+                Marked Won without the invoice no. or the products billed. Add the invoice no. and date here, or press Fix to enter the invoices and
+                products (by hand or with the Excel template) - the invoice date is when the sale counts.
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -249,8 +260,17 @@ export default async function SalesRegisterPage({
                       {all && <td className="px-2 py-1.5 whitespace-nowrap text-slate-700">{d.owner.name}</td>}
                       <td className="px-2 py-1.5 whitespace-nowrap text-slate-600">Won {d.closedAt ? formatDate(d.closedAt) : ""}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-700">{formatCurrency(d.value)}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap text-amber-800">
+                        {[!d.invoiceNo && "No invoice no.", d._count.items === 0 && "No products"].filter(Boolean).join(" · ")}
+                      </td>
                       <td className="px-4 py-1.5">
-                        <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} compact />
+                        {d._count.items === 0 ? (
+                          <Link href={`/deals/${d.id}?markWon=1`} className="font-medium text-indigo-700 hover:underline">
+                            Fix
+                          </Link>
+                        ) : (
+                          <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} compact />
+                        )}
                       </td>
                     </tr>
                   ))}

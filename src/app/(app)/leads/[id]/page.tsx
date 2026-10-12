@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
 import { formatCurrency, formatDate, formatDuration } from "@/lib/format";
 import {
@@ -16,7 +17,7 @@ import {
 import { RecordTimeline } from "../../record-timeline";
 import { TagChips } from "@/components/tag-chips";
 import { convertLeadToDeal, deleteLead } from "../actions";
-import { Pencil, ArrowRightLeft, Trash2 } from "lucide-react";
+import { Pencil, ArrowRightLeft } from "lucide-react";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -83,15 +84,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <Pencil className="h-4 w-4" />
               Edit
             </Link>
-            <form action={deleteAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-500 text-sm font-medium px-3 py-2 transition-colors"
-                aria-label="Delete lead"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </form>
+            <ConfirmDeleteButton
+              action={deleteAction}
+              label="Delete lead"
+              message={`Delete the lead "${lead.title}"?${lead.status === "CONVERTED" ? " Its deal stays." : ""} This can't be undone.`}
+            />
           </div>
         }
       />

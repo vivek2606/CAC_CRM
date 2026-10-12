@@ -452,7 +452,7 @@ export function DealForm({
         </div>
 
         {products && (
-          <div className="sm:col-span-2">
+          <div id="products" className="sm:col-span-2 scroll-mt-24">
             <label className="block text-sm font-medium text-slate-700 mb-1">Products (model, quantity, rate)</label>
             {items.length > 0 && (
               <div className="mb-2 space-y-2">

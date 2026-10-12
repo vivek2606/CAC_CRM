@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileDown, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LinkDealButton } from "./link-deal-button";
+import { UseQuoteProductsButton } from "./use-quote-products-button";
 
 export type SavedQuoteRow = {
   id: string;
@@ -20,7 +21,17 @@ const TYPE_LABEL: Record<string, string> = { quote: "Quotation", proforma: "Prof
 
 // Saved quotations with links to download again, open, or revise (a revision
 // gets a new reference number and keeps the deal link).
-export function SavedQuotesTable({ quotes, showDeal = true }: { quotes: SavedQuoteRow[]; showDeal?: boolean }) {
+// dealProducts: on a deal's page while it's in the pipeline - whether it has
+// products already (each quote then gets "Use products").
+export function SavedQuotesTable({
+  quotes,
+  showDeal = true,
+  dealProducts,
+}: {
+  quotes: SavedQuoteRow[];
+  showDeal?: boolean;
+  dealProducts?: { hasProducts: boolean };
+}) {
   const link = "text-indigo-600 hover:text-indigo-500 font-medium";
   return (
     <div className="overflow-x-auto">
@@ -81,6 +92,7 @@ export function SavedQuotesTable({ quotes, showDeal = true }: { quotes: SavedQuo
                   <Link href={`/quotations?quote=${q.id}&revise=1`} className={link} title="Copy into a new quotation with a new reference number">
                     Revise
                   </Link>
+                  {dealProducts && <UseQuoteProductsButton quoteId={q.id} hasProducts={dealProducts.hasProducts} />}
                 </span>
               </td>
             </tr>

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner, visibleOwnerIds } from "@/lib/rbac";
+import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { PageHeader, Card, Badge, Avatar } from "@/components/ui";
@@ -24,8 +25,9 @@ import { SaleLineItemsTable } from "../sale-line-items-table";
 import { StakeholdersSection } from "../stakeholders-section";
 import { ReorderFlag } from "../reorder-flag";
 import { getWonPlan } from "@/lib/won-plan";
+import { ReopenDealButton } from "../reopen-deal-button";
 import { SavedQuotesTable, savedQuoteSelect } from "../../quotations/saved-quotes-table";
-import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
+import { Pencil, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({
   params,
@@ -128,6 +130,7 @@ export default async function DealDetailPage({
               existingItems={deal.items.map((i) => ({ productId: i.productId, label: `${i.product.model} (${i.product.code})`, qty: i.qty, unitPrice: i.unitPrice }))}
               quotedValue={deal.value}
               billingCompany={deal.billingCompany}
+              competitorBrand={deal.competitorBrand}
               pendingInvoices={wonPlan?.invoices.map((i) => ({ ...i, billingCompany: i.billingCompany ?? "" }))}
               pendingError={wonPlan?.error}
               products={[
@@ -138,7 +141,7 @@ export default async function DealDetailPage({
                   .map((i) => ({ id: i.productId, label: `${i.product.model} (${i.product.code})`, defaultPrice: null })),
               ]}
             />
-            {deal.items.length > 0 && (
+            {deal.stage !== "LOST" && (
               <form action={viewQuoteAction}>
                 <button
                   type="submit"
@@ -156,20 +159,39 @@ export default async function DealDetailPage({
               <Pencil className="h-4 w-4" />
               Edit
             </Link>
-            <form action={deleteAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-500 text-sm font-medium px-3 py-2 transition-colors"
-                aria-label="Delete deal"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </form>
+            {isBackOffice(user) && (deal.stage === "WON" || deal.stage === "LOST") && deal.sourceTxnNo == null && (
+              <ReopenDealButton dealId={deal.id} stage={deal.stage} />
+            )}
+            <ConfirmDeleteButton
+              action={deleteAction}
+              label="Delete deal"
+              message={
+                deal.stage === "WON"
+                  ? `Delete "${deal.title}"? It's a won deal - its sales come out of the Sales Register, targets and incentives. This can't be undone.`
+                  : `Delete "${deal.title}"? This can't be undone.`
+              }
+            />
           </div>
         }
       />
 
       <div className="p-6 space-y-6">
+        {(deal.stage === "PROPOSAL" || deal.stage === "NEGOTIATION") && deal.items.length === 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span>
+              <span className="font-semibold">No products on this deal yet.</span> At the {DEAL_STAGE_LABELS[deal.stage]} stage, add the products, quantities
+              and rates being quoted - or make the quotation from this deal and its products are picked up.
+            </span>
+            <span className="ml-auto flex gap-3">
+              <Link href={`/deals/${deal.id}/edit#products`} className="font-medium text-indigo-700 hover:underline">
+                Add products
+              </Link>
+              <Link href={`/quotations?deal=${deal.id}`} className="font-medium text-indigo-700 hover:underline">
+                Make quotation
+              </Link>
+            </span>
+          </div>
+        )}
         {(sp.wonError || wonPlan) && deal.stage !== "WON" && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span className="font-semibold">
@@ -225,7 +247,11 @@ export default async function DealDetailPage({
                 <FileText className="h-4 w-4 text-slate-400" />
                 Quotations ({quotations.length})
               </h2>
-              <SavedQuotesTable quotes={quotations} showDeal={false} />
+              <SavedQuotesTable
+                quotes={quotations}
+                showDeal={false}
+                dealProducts={deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null ? { hasProducts: deal.items.length > 0 } : undefined}
+              />
             </Card>
           )}
 
@@ -358,6 +384,12 @@ export default async function DealDetailPage({
                     {LOST_REASON_LABELS[deal.lostReasonCategory]}
                     {deal.lostReason && <span className="block text-xs text-slate-400 font-normal">{deal.lostReason}</span>}
                   </dd>
+                </div>
+              )}
+              {deal.lostToBrand && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Lost to</dt>
+                  <dd className="text-slate-700">{deal.lostToBrand}</dd>
                 </div>
               )}
               {deal.account && (
