@@ -18,7 +18,14 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.45, right: 0.45, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } },
     views: [{ showGridLines: false }],
   });
-  ws.columns = [{ width: 6 }, { width: 56 }, { width: 7 }, { width: 8 }, { width: 17 }, { width: 19 }];
+  // Supply & installation: an Installation rate column (F) before Amount,
+  // which moves to G. L = last column, A = its letter.
+  const inst = doc.withInstallation;
+  const L = inst ? 7 : 6;
+  const A = inst ? "G" : "F";
+  ws.columns = inst
+    ? [{ width: 6 }, { width: 46 }, { width: 7 }, { width: 8 }, { width: 16 }, { width: 16 }, { width: 19 }]
+    : [{ width: 6 }, { width: 56 }, { width: 7 }, { width: 8 }, { width: 17 }, { width: 19 }];
   const put = (row: number, col: number, value: ExcelJS.CellValue, style: Partial<ExcelJS.Style> = {}) => {
     const cell = ws.getCell(row, col);
     cell.value = value;
@@ -35,10 +42,10 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   const reg = [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`].filter(Boolean).join("  |  ");
   const headLines = [...c.addressLines.filter(Boolean), [c.phone, c.email, c.website].filter(Boolean).join("  |  "), reg].filter(Boolean);
   let r = 1;
-  put(r, 6, c.name, { font: { bold: true, size: 12 }, alignment: { horizontal: "right" } });
-  headLines.forEach((l) => put(++r, 6, l, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } }));
+  put(r, L, c.name, { font: { bold: true, size: 12 }, alignment: { horizontal: "right" } });
+  headLines.forEach((l) => put(++r, L, l, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } }));
   r = Math.max(r, 3);
-  for (let col = 1; col <= 6; col++) ws.getCell(r, col).border = { bottom: { style: "medium", color: { argb: ACCENT } } };
+  for (let col = 1; col <= L; col++) ws.getCell(r, col).border = { bottom: { style: "medium", color: { argb: ACCENT } } };
 
   // To / kind attention (left), document title + details (right)
   r += 2;
@@ -52,15 +59,15 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     put(r, 1, "KIND ATTENTION", { font: { size: 8, bold: true, ...muted } });
     put(++r, 1, doc.attention, { font: { bold: true } });
   }
-  put(top, 6, doc.heading, { font: { bold: true, size: 14, color: { argb: ACCENT } }, alignment: { horizontal: "right" } });
+  put(top, L, doc.heading, { font: { bold: true, size: 14, color: { argb: ACCENT } }, alignment: { horizontal: "right" } });
   const meta: [string, ExcelJS.CellValue, string?][] = [
     ...(doc.ref ? ([["Ref", doc.ref]] as [string, ExcelJS.CellValue][]) : []),
     ["Date", doc.date, "dd mmm yyyy"],
     ...(doc.validUntil ? ([["Valid until", doc.validUntil, "dd mmm yyyy"]] as [string, ExcelJS.CellValue, string][]) : []),
   ];
   meta.forEach(([label, value, fmt], i) => {
-    put(top + 1 + i, 5, label, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } });
-    const cell = put(top + 1 + i, 6, value, { font: { size: 9, bold: true }, alignment: { horizontal: "right" } });
+    put(top + 1 + i, L - 1, label, { font: { size: 9, ...muted }, alignment: { horizontal: "right" } });
+    const cell = put(top + 1 + i, L, value, { font: { size: 9, bold: true }, alignment: { horizontal: "right" } });
     if (fmt) cell.numFmt = fmt;
   });
   r = Math.max(r, top + meta.length);
@@ -72,11 +79,21 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   // Items
   r += 2;
   const headerRow = r;
-  ["#", "Description", "Unit", "Qty", doc.vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)", doc.vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"].forEach((h, i) =>
+  const vi = doc.vatInclusive;
+  [
+    "#",
+    "Description",
+    "Unit",
+    "Qty",
+    ...(inst
+      ? [vi ? "Supply rate incl. VAT (NGN)" : "Supply rate (NGN)", vi ? "Installation rate incl. VAT (NGN)" : "Installation rate (NGN)"]
+      : [vi ? "Rate incl. VAT (NGN)" : "Rate (NGN)"]),
+    vi ? "Amount incl. VAT (NGN)" : "Amount (NGN)",
+  ].forEach((h, i) =>
     put(r, i + 1, h, {
       font: { bold: true, size: 9, color: { argb: "FF1E3A6E" } },
       fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EFF9" } },
-      alignment: { horizontal: i >= 2 ? (i === 2 ? "center" : "right") : "left", vertical: "middle" },
+      alignment: { horizontal: i >= 2 ? (i === 2 ? "center" : "right") : "left", vertical: "middle", wrapText: true },
       border: { top: { style: "thin", color: { argb: "FFB9CBE8" } }, bottom: { style: "thin", color: { argb: "FFB9CBE8" } } },
     }),
   );
@@ -84,11 +101,11 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   const first = r + 1;
   for (const row of doc.rows) {
     r++;
-    for (let col = 1; col <= 6; col++) ws.getCell(r, col).border = rowBorder;
+    for (let col = 1; col <= L; col++) ws.getCell(r, col).border = rowBorder;
     if (row.kind === "section") {
       put(r, 1, row.sn, { font: { bold: true }, border: rowBorder });
       put(r, 2, row.label, { font: { bold: true }, border: rowBorder });
-      for (let col = 1; col <= 6; col++) ws.getCell(r, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      for (let col = 1; col <= L; col++) ws.getCell(r, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
       continue;
     }
     put(r, 1, row.sn, { font: muted, alignment: { vertical: "top" }, border: rowBorder });
@@ -99,38 +116,43 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     put(r, 3, row.unit, { alignment: { horizontal: "center", vertical: "top" }, border: rowBorder });
     put(r, 4, row.qty, { numFmt: "#,##0.##", alignment: { vertical: "top" }, border: rowBorder });
     put(r, 5, row.unitPrice, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
-    put(r, 6, { formula: `D${r}*E${r}`, result: row.amount }, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
+    if (inst) put(r, 6, row.installRate, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
+    put(r, L, { formula: inst ? `D${r}*(E${r}+F${r})` : `D${r}*E${r}`, result: row.amount }, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
   }
   // Spare rows inside the summed range, for items added later in Excel.
   for (let k = 0; k < 3; k++) {
     r++;
-    for (let col = 1; col <= 6; col++) ws.getCell(r, col).border = rowBorder;
-    put(r, 6, { formula: `IF(D${r}="","",D${r}*E${r})`, result: "" }, { numFmt: MONEY, border: rowBorder });
+    for (let col = 1; col <= L; col++) ws.getCell(r, col).border = rowBorder;
+    put(r, L, { formula: inst ? `IF(D${r}="","",D${r}*(E${r}+F${r}))` : `IF(D${r}="","",D${r}*E${r})`, result: "" }, { numFmt: MONEY, border: rowBorder });
   }
   const last = r;
 
   const total = (label: string, value: ExcelJS.CellValue, bold = false) => {
     r++;
-    put(r, 5, label, { font: { bold, ...(bold ? {} : muted) }, alignment: { horizontal: "right" } });
-    return put(r, 6, value, { numFmt: MONEY, font: { bold } });
+    put(r, L - 1, label, { font: { bold, ...(bold ? {} : muted) }, alignment: { horizontal: "right" } });
+    return put(r, L, value, { numFmt: MONEY, font: { bold } });
   };
   r++;
+  if (inst) {
+    total("Supply", { formula: `SUMPRODUCT(D${first}:D${last},E${first}:E${last})`, result: doc.supplyTotal });
+    total("Installation", { formula: `SUMPRODUCT(D${first}:D${last},F${first}:F${last})`, result: doc.installTotal });
+  }
   let grand: ExcelJS.Cell;
   if (doc.vatInclusive) {
     // Rates already include VAT - just the total, no separate VAT line.
-    grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `SUM(F${first}:F${last})`, result: doc.total }, true);
+    grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `SUM(${A}${first}:${A}${last})`, result: doc.total }, true);
   } else {
-    total("Subtotal (excl. VAT)", { formula: `SUM(F${first}:F${last})`, result: doc.subtotal });
+    total("Subtotal (excl. VAT)", { formula: `SUM(${A}${first}:${A}${last})`, result: doc.subtotal });
     const subRow = r;
-    total(`VAT @ ${doc.vatRatePct}%`, { formula: `ROUND(F${subRow}*${doc.vatRatePct / 100},2)`, result: doc.vat });
+    total(`VAT @ ${doc.vatRatePct}%`, { formula: `ROUND(${A}${subRow}*${doc.vatRatePct / 100},2)`, result: doc.vat });
     const vatRow = r;
-    grand = total("Total incl. VAT (NGN)", { formula: `F${subRow}+F${vatRow}`, result: doc.total }, true);
+    grand = total("Total incl. VAT (NGN)", { formula: `${A}${subRow}+${A}${vatRow}`, result: doc.total }, true);
   }
   grand.border = { top: { style: "medium" } };
-  ws.getCell(r, 5).border = { top: { style: "medium" } };
+  ws.getCell(r, L - 1).border = { top: { style: "medium" } };
 
   r += 2;
-  ws.mergeCells(r, 1, r, 6);
+  ws.mergeCells(r, 1, r, L);
   put(r, 1, `Amount in words: ${doc.totalInWords}`, {
     font: { size: 9 },
     alignment: { wrapText: true, vertical: "middle" },
@@ -159,7 +181,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     put(r, 1, "BANK DETAILS FOR PAYMENT", { font: { size: 8, bold: true, ...muted } });
     for (const [label, value] of bank) {
       r++;
-      ws.mergeCells(r, 1, r, 6);
+      ws.mergeCells(r, 1, r, L);
       put(r, 1, {
         richText: [
           { text: `${label}: `, font: { size: 10, color: { argb: "FF64748B" } } },
@@ -172,11 +194,11 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   // Signatory (left), customer acceptance (right)
   r += 2;
   put(r, 1, `For ${c.name}`, { font: { bold: true } });
-  put(r, 5, "Customer acceptance", { font: { bold: true } });
+  put(r, L - 1, "Customer acceptance", { font: { bold: true } });
   r += 3;
-  for (const col of [1, 2, 5, 6]) ws.getCell(r, col).border = { top: { style: "thin" } };
+  for (const col of [1, 2, L - 1, L]) ws.getCell(r, col).border = { top: { style: "thin" } };
   put(r, 1, doc.signatory.name || "Name", { font: { bold: Boolean(doc.signatory.name), ...(doc.signatory.name ? {} : muted) }, border: { top: { style: "thin" } } });
-  put(r, 5, "Name, signature and date", { font: { size: 9, ...muted }, border: { top: { style: "thin" } } });
+  put(r, L - 1, "Name, signature and date", { font: { size: 9, ...muted }, border: { top: { style: "thin" } } });
   if (doc.signatory.designation) put(++r, 1, doc.signatory.designation, { font: { size: 9, ...muted } });
   if (doc.signatory.phone) put(++r, 1, doc.signatory.phone, { font: { size: 9, ...muted } });
 

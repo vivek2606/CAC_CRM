@@ -21,6 +21,9 @@ const rowSchema = z.discriminatedUnion("kind", [
     unit: z.string().trim().max(20).default("No."),
     qty: z.number().finite().min(0),
     unitPrice: z.number().finite().min(0),
+    // Supply & installation quotes: installation per unit, on top of the
+    // supply rate (unitPrice).
+    installRate: z.number().finite().min(0).default(0),
   }),
 ]);
 
@@ -41,6 +44,9 @@ export const documentInputSchema = z.object({
   // Off: the stock status filled in from the product list ("Available",
   // "Not Available", "In Transit (ETA ...)") is left off the document.
   showAvailability: z.boolean().default(true),
+  // Supply & installation: an Installation rate column next to the supply
+  // rate; each line's amount is qty x (supply + installation).
+  withInstallation: z.boolean().default(false),
   // Pre-filled from Company Details, editable per document.
   tin: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(120).default(""),
@@ -55,7 +61,7 @@ export type DocumentInput = z.infer<typeof documentInputSchema>;
 
 export type DocRow =
   | { kind: "section"; label: string; sn: string }
-  | { kind: "item"; sn: string; description: string; detail: string; unit: string; qty: number; unitPrice: number; amount: number };
+  | { kind: "item"; sn: string; description: string; detail: string; unit: string; qty: number; unitPrice: number; installRate: number; amount: number };
 
 export type SalesDocument = {
   type: DocumentType;
@@ -72,6 +78,9 @@ export type SalesDocument = {
   signatory: { name: string; designation: string; phone: string };
   rows: DocRow[];
   vatInclusive: boolean;
+  withInstallation: boolean;
+  supplyTotal: number;
+  installTotal: number;
   subtotal: number;
   vatRatePct: number;
   vat: number;
@@ -88,11 +97,13 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
       if (r.kind === "section") return r.label ? { kind: "section", label: r.label, sn: sns[i] } : null;
       if (!r.description && r.qty === 0) return null;
       const detail = !input.showAvailability && isAvailabilityNote(r.detail) ? "" : r.detail;
-      return { ...r, detail, sn: sns[i], amount: round2(r.qty * r.unitPrice) };
+      const installRate = input.withInstallation ? r.installRate : 0;
+      return { ...r, detail, installRate, sn: sns[i], amount: round2(r.qty * (r.unitPrice + installRate)) };
     })
     .filter((r): r is DocRow => r != null);
   const vatInclusive = input.vatMode === "inclusive";
   const subtotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.amount : 0), 0));
+  const installTotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.qty * r.installRate : 0), 0));
   const vat = vatInclusive ? 0 : round2((subtotal * settings.vatRatePct) / 100);
   const total = round2(subtotal + vat);
   return {
@@ -110,6 +121,9 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     signatory: { name: input.signatoryName, designation: input.signatoryDesignation, phone: input.signatoryPhone },
     rows,
     vatInclusive,
+    withInstallation: input.withInstallation,
+    supplyTotal: round2(subtotal - installTotal),
+    installTotal,
     subtotal,
     vatRatePct: settings.vatRatePct,
     vat,

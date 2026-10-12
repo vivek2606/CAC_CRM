@@ -21,7 +21,8 @@ const rule = "#cbd5e1";
 const accent = "#1e4f9c"; // Sakuragi logo blue
 
 // Column widths (#, Unit, Qty, Rate, Amount fixed; Description flexes).
-const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90 };
+// Supply & installation quotes add an Installation rate column.
+const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72 };
 
 const s = StyleSheet.create({
   // paddingTop leaves room for the continuation header on pages 2+.
@@ -70,33 +71,53 @@ const col = {
   unit: [s.cell, { width: W.unit, textAlign: "center" as const }],
   qty: [s.cell, { width: W.qty, textAlign: "right" as const }],
   rate: [s.cell, { width: W.rate, textAlign: "right" as const }],
+  srate: [s.cell, { width: W.inst, textAlign: "right" as const }],
+  inst: [s.cell, { width: W.inst, textAlign: "right" as const }],
   amt: [s.cell, s.last, { width: W.amt, textAlign: "right" as const }],
 };
 
-function TableHeader({ vatInclusive }: { vatInclusive: boolean }) {
+function TableHeader({ vatInclusive, inst }: { vatInclusive: boolean; inst: boolean }) {
   return (
     <View style={[s.row, s.th]}>
       <Text style={[...col.no, s.thText]}>#</Text>
       <Text style={[...col.desc, s.thText]}>Description</Text>
       <Text style={[...col.unit, s.thText]}>Unit</Text>
       <Text style={[...col.qty, s.thText]}>Qty</Text>
-      <Text style={[...col.rate, s.thText]}>{vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)"}</Text>
+      {inst ? (
+        <>
+          <Text style={[...col.srate, s.thText]}>{vatInclusive ? "Supply rate incl. VAT" : "Supply rate (NGN)"}</Text>
+          <Text style={[...col.inst, s.thText]}>{vatInclusive ? "Installation incl. VAT" : "Installation rate (NGN)"}</Text>
+        </>
+      ) : (
+        <Text style={[...col.rate, s.thText]}>{vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)"}</Text>
+      )}
       <Text style={[...col.amt, s.thText]}>{vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
     </View>
   );
 }
 
 // Empty ruled columns - stretches to fill whatever height is left.
-function EmptyRows({ grow = true }: { grow?: boolean }) {
+function EmptyRows({ grow = true, inst }: { grow?: boolean; inst: boolean }) {
   return (
     <View style={[s.row, grow ? s.filler : { height: 0 }]}>
       <View style={col.no} />
       <View style={col.desc} />
       <View style={col.unit} />
       <View style={col.qty} />
-      <View style={col.rate} />
+      <RateCells inst={inst} />
       <View style={col.amt} />
     </View>
+  );
+}
+
+function RateCells({ inst }: { inst: boolean }) {
+  return inst ? (
+    <>
+      <View style={col.srate} />
+      <View style={col.inst} />
+    </>
+  ) : (
+    <View style={col.rate} />
   );
 }
 
@@ -124,7 +145,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
                     {doc.ref ? ` ${doc.ref}` : ""} (continued)
                   </Text>
                 </View>
-                <TableHeader vatInclusive={doc.vatInclusive} />
+                <TableHeader vatInclusive={doc.vatInclusive} inst={doc.withInstallation} />
               </View>
             ) : null
           }
@@ -190,7 +211,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
         ) : null}
 
         <View style={s.body}>
-          <TableHeader vatInclusive={doc.vatInclusive} />
+          <TableHeader vatInclusive={doc.vatInclusive} inst={doc.withInstallation} />
           {doc.rows.map((r, i) =>
             r.kind === "section" ? (
               <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
@@ -198,7 +219,7 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
                 <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
                 <View style={col.unit} />
                 <View style={col.qty} />
-                <View style={col.rate} />
+                <RateCells inst={doc.withInstallation} />
                 <View style={col.amt} />
               </View>
             ) : (
@@ -210,17 +231,36 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
                 </View>
                 <Text style={col.unit}>{r.unit}</Text>
                 <Text style={col.qty}>{qtyFmt(r.qty)}</Text>
-                <Text style={col.rate}>{money(r.unitPrice)}</Text>
+                {doc.withInstallation ? (
+                  <>
+                    <Text style={col.srate}>{money(r.unitPrice)}</Text>
+                    <Text style={col.inst}>{r.installRate ? money(r.installRate) : "-"}</Text>
+                  </>
+                ) : (
+                  <Text style={col.rate}>{money(r.unitPrice)}</Text>
+                )}
                 <Text style={col.amt}>{money(r.amount)}</Text>
               </View>
             ),
           )}
 
           {/* Empty table down to the bottom block (and above it on a page of its own). */}
-          <EmptyRows />
+          <EmptyRows inst={doc.withInstallation} />
 
           <View style={s.bottom} wrap={false}>
-            <EmptyRows />
+            <EmptyRows inst={doc.withInstallation} />
+            {doc.withInstallation && (
+              <>
+                <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
+                  <Text style={s.totalLabel}>Supply</Text>
+                  <Text style={s.totalValue}>{money(doc.supplyTotal)}</Text>
+                </View>
+                <View style={s.totalRow}>
+                  <Text style={s.totalLabel}>Installation</Text>
+                  <Text style={s.totalValue}>{money(doc.installTotal)}</Text>
+                </View>
+              </>
+            )}
             {doc.vatInclusive ? (
               <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
                 <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total inclusive of VAT (@{doc.vatRatePct}%) (NGN)</Text>

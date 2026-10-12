@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
-import { reserveQuoteRef } from "./actions";
+import { reserveQuoteRef, importQuoteSheet } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
 export type ModelOption = {
@@ -51,7 +51,19 @@ export type QuotePrefill = {
 
 type Row =
   | { uid: string; kind: "section"; label: string }
-  | { uid: string; kind: "item"; custom: boolean; productId: string | null; description: string; detail: string; unit: string; qty: string; unitPrice: string };
+  | {
+      uid: string;
+      kind: "item";
+      custom: boolean;
+      productId: string | null;
+      description: string;
+      detail: string;
+      unit: string;
+      qty: string;
+      unitPrice: string;
+      // Supply & installation quotes only. Optional: older drafts lack it.
+      installRate?: string;
+    };
 
 type Draft = {
   type: DocumentType;
@@ -69,6 +81,8 @@ type Draft = {
   vatMode: "separate" | "inclusive";
   // Optional so drafts saved before this setting existed read as "on".
   showAvailability?: boolean;
+  // Supply & installation: adds an Installation rate column.
+  withInstallation?: boolean;
   tin: string;
   bankName: string;
   accountName: string;
@@ -173,12 +187,14 @@ export function QuotationBuilder({
           unit: r.unit,
           qty: String(r.qty),
           unitPrice: String(r.unitPrice),
+          installRate: r.installRate ? String(r.installRate) : "",
         };
       }),
       terms: [...x.terms],
       validityDays: String(x.validityDays),
       vatMode: x.vatMode,
       showAvailability: x.showAvailability,
+      withInstallation: x.withInstallation,
       tin: x.tin,
       bankName: x.bankName,
       accountName: x.accountName,
@@ -224,6 +240,8 @@ export function QuotationBuilder({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<"pdf" | "xlsx" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState<{ summary: string; details: string[] } | null>(null);
   const hasSavedDraft = useHasSavedDraft();
 
   // Keep the work in the browser so leaving the page doesn't lose it.
@@ -289,6 +307,55 @@ export function QuotationBuilder({
     setError(null);
   };
 
+  // A quotation made in Excel: its items come in as rows here (products
+  // matched to the list print in the standard format), plus the customer.
+  const importExcel = async (file: File) => {
+    setError(null);
+    setImportNote(null);
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await importQuoteSheet(fd);
+      const items = res.rows.filter((r) => r.kind === "item");
+      if (items.length === 0) return setError(res.problems[0] ?? "No items found in the sheet.");
+      const rows: Row[] = res.rows.map((r): Row => {
+        if (r.kind === "section") return { uid: uid(), kind: "section", label: r.label };
+        const opt = r.productId ? optionById.get(r.productId) : undefined;
+        return opt
+          ? { uid: uid(), kind: "item", custom: false, productId: opt.id, description: opt.model, detail: opt.availability, unit: r.unit, qty: String(r.qty), unitPrice: String(r.unitPrice), installRate: r.installRate ? String(r.installRate) : "" }
+          : { uid: uid(), kind: "item", custom: true, productId: null, description: r.description, detail: "", unit: r.unit, qty: String(r.qty), unitPrice: String(r.unitPrice), installRate: r.installRate ? String(r.installRate) : "" };
+      });
+      const hasItems = d.rows.some((r) => r.kind === "item" && r.description.trim());
+      const replace = !hasItems || window.confirm("Replace the items already in this quotation?\n\nOK = replace them, Cancel = add the imported items below.");
+      const defaultTitle = "SUPPLY OF AIR-CONDITIONING EQUIPMENT";
+      update({
+        rows: replace ? rows : [...d.rows, ...rows],
+        ...(res.to && !d.to.trim() ? { to: res.to } : {}),
+        ...(res.attention && !d.attention.trim() ? { attention: res.attention } : {}),
+        ...(res.title && (!d.title.trim() || d.title === defaultTitle) ? { title: res.title } : {}),
+        ...(res.vatInclusive != null ? { vatMode: res.vatInclusive ? "inclusive" : "separate" } : {}),
+        // Installation column: as in the sheet, kept on when adding to a quote that has it.
+        withInstallation: res.withInstallation || (!replace && d.withInstallation === true),
+      });
+      const matched = rows.filter((r) => r.kind === "item" && !r.custom).length;
+      const unmatched = res.rows.filter((r, i) => r.kind === "item" && rows[i].kind === "item" && (rows[i] as { custom: boolean }).custom);
+      setImportNote({
+        summary: `Imported ${items.length} item${items.length === 1 ? "" : "s"} from ${file.name}: ${matched} matched to the product list${
+          unmatched.length ? `, ${unmatched.length} added as custom items` : ""
+        }. Check the rates, quantities and VAT setting before downloading.`,
+        details: [
+          ...unmatched.map((r) => `Not in the product list (custom item): ${r.kind === "item" ? r.sourceText || r.description : ""}`),
+          ...res.problems,
+        ],
+      });
+    } catch {
+      setError("Couldn't import the file.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const sns = serialNumbers(d.rows);
   const showAvailability = d.showAvailability !== false;
   const inclusive = d.vatMode === "inclusive";
@@ -296,7 +363,11 @@ export function QuotationBuilder({
   const round2 = (n: number) => Math.round(n * 100) / 100;
   // The suggested dealer rate is ex-VAT; in inclusive mode it's shown with VAT.
   const suggested = (rate: number) => (inclusive ? round2(rate * vatFactor) : rate);
-  const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.unitPrice) * 100) / 100 : 0), 0);
+  const withInstallation = d.withInstallation === true;
+  // Line amount: qty x rate, plus installation on supply & installation quotes.
+  const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (num(r.unitPrice) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
+  const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
+  const installTotal = withInstallation ? d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.installRate ?? "") * 100) / 100 : 0), 0) : 0;
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
 
@@ -311,12 +382,13 @@ export function QuotationBuilder({
     rows: d.rows.map((r) =>
       r.kind === "section"
         ? { kind: "section", label: r.label }
-        : { kind: "item", description: r.description, detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice) },
+        : { kind: "item", description: r.description, detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0 },
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
     vatMode: d.vatMode,
     showAvailability: showAvailability,
+    withInstallation,
     tin: d.tin,
     bankName: d.bankName,
     accountName: d.accountName,
@@ -493,7 +565,15 @@ export function QuotationBuilder({
                     const f = mode === "inclusive" ? vatFactor : 1 / vatFactor;
                     update({
                       vatMode: mode,
-                      rows: d.rows.map((r) => (r.kind === "item" && r.unitPrice.trim() !== "" ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r)),
+                      rows: d.rows.map((r) =>
+                        r.kind === "item"
+                          ? {
+                              ...r,
+                              unitPrice: r.unitPrice.trim() !== "" ? String(round2(num(r.unitPrice) * f)) : r.unitPrice,
+                              installRate: (r.installRate ?? "").trim() !== "" ? String(round2(num(r.installRate ?? "") * f)) : r.installRate,
+                            }
+                          : r,
+                      ),
                     });
                   }}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium ${d.vatMode === mode ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
@@ -511,11 +591,20 @@ export function QuotationBuilder({
               />
               Show product availability on the document
             </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={withInstallation}
+                onChange={(e) => update({ withInstallation: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Supply &amp; installation (adds an installation rate column)
+            </label>
           </div>
         </div>
         {/* Phones: one card per line, with big quantity / rate boxes. */}
         <div className="md:hidden divide-y divide-slate-100 border-t border-slate-100">
-          {d.rows.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">Add products, custom items or a section heading below.</p>}
+          {d.rows.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">Add products, custom items or a section heading below - or import a quotation made in Excel.</p>}
           {d.rows.map((r, i) => {
             const tools = (
               <div className="flex items-center gap-1">
@@ -542,7 +631,7 @@ export function QuotationBuilder({
               );
             }
             const opt = r.productId ? optionById.get(r.productId) : undefined;
-            const amount = num(r.qty) * num(r.unitPrice);
+            const amount = lineAmount(r);
             const big = "w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500";
             return (
               <div key={r.uid} className="space-y-2 px-4 py-3">
@@ -595,9 +684,15 @@ export function QuotationBuilder({
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
-                    <input inputMode="decimal" enterKeyHint="done" value={r.unitPrice} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={big} />
+                    <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={big} />
                   </label>
                 </div>
+                {withInstallation && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Installation rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
+                    <input inputMode="decimal" enterKeyHint="done" value={r.installRate ?? ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { installRate: e.target.value })} className={big} />
+                  </label>
+                )}
                 <p className="text-right text-sm text-slate-600">
                   Amount <span className="font-semibold text-slate-900 tabular-nums">{naira(amount)}</span>
                 </p>
@@ -613,7 +708,10 @@ export function QuotationBuilder({
                 <th className="px-3 py-2 min-w-[320px]">Model / description</th>
                 <th className="px-3 py-2 w-24">Unit</th>
                 <th className="px-3 py-2 w-24 text-right">Qty</th>
-                <th className="px-3 py-2 w-40 text-right">{inclusive ? "Rate incl. VAT (₦)" : "Rate excl. VAT (₦)"}</th>
+                <th className="px-3 py-2 w-40 text-right">
+                  {withInstallation ? "Supply rate" : "Rate"} {inclusive ? "incl." : "excl."} VAT (₦)
+                </th>
+                {withInstallation && <th className="px-3 py-2 w-36 text-right">Installation rate (₦)</th>}
                 <th className="px-3 py-2 w-36 text-right">Amount (₦)</th>
                 <th className="px-2 py-2 w-24" />
               </tr>
@@ -622,7 +720,7 @@ export function QuotationBuilder({
               {d.rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-sm text-slate-500">
-                    Add products from the list, custom items (installation, piping…) or a section heading.
+                    Add products from the list, custom items (installation, piping…) or a section heading - or import a quotation made in Excel.
                   </td>
                 </tr>
               )}
@@ -657,7 +755,7 @@ export function QuotationBuilder({
                   );
                 }
                 const opt = r.productId ? optionById.get(r.productId) : undefined;
-                const amount = num(r.qty) * num(r.unitPrice);
+                const amount = lineAmount(r);
                 return (
                   <tr key={r.uid}>
                     <td className="px-3 py-2 align-top text-slate-500 pt-4">{sns[i]}</td>
@@ -715,6 +813,11 @@ export function QuotationBuilder({
                         </p>
                       )}
                     </td>
+                    {withInstallation && (
+                      <td className="px-3 py-2 align-top">
+                        <input inputMode="decimal" value={r.installRate ?? ""} onChange={(e) => setRow(r.uid, { installRate: e.target.value })} className={`${input} text-right`} />
+                      </td>
+                    )}
                     <td className="px-3 py-2 align-top pt-4 text-right tabular-nums font-medium text-slate-800">{naira(amount)}</td>
                     {controls}
                   </tr>
@@ -753,9 +856,57 @@ export function QuotationBuilder({
             <Heading className="h-4 w-4" />
             Add section heading
           </button>
+          <label
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 ${importing ? "opacity-60" : ""}`}
+            title="Upload a quotation made in Excel - its items are brought in here in the standard format"
+          >
+            <FileUp className="h-4 w-4" />
+            {importing ? "Importing…" : "Import from Excel"}
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              disabled={importing}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) importExcel(f);
+              }}
+            />
+          </label>
         </div>
+        {importNote && (
+          <div className="mx-4 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <div className="flex items-start gap-2">
+              <p className="flex-1">{importNote.summary}</p>
+              <button type="button" onClick={() => setImportNote(null)} aria-label="Dismiss" className="text-emerald-700 hover:text-emerald-900">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {importNote.details.length > 0 && (
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-amber-800">
+                {importNote.details.slice(0, 15).map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+                {importNote.details.length > 15 && <li>…and {importNote.details.length - 15} more</li>}
+              </ul>
+            )}
+          </div>
+        )}
         <div className="border-t border-slate-100 p-4">
           <div className="ml-auto w-full max-w-sm space-y-1 text-sm">
+            {withInstallation && (
+              <>
+                <div className="flex justify-between text-slate-500">
+                  <span>Supply</span>
+                  <span className="tabular-nums">{naira(subtotal - installTotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>Installation</span>
+                  <span className="tabular-nums">{naira(installTotal)}</span>
+                </div>
+              </>
+            )}
             {!inclusive && (
               <>
                 <div className="flex justify-between text-slate-600">
