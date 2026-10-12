@@ -14,6 +14,7 @@ import { Target, TrendingUp, Wallet, ArrowRight, UserPlus, XCircle } from "lucid
 import { getYtdSummary, achievementPct } from "@/lib/ytd";
 import { getProjectBillings } from "@/lib/project-billing";
 import { getLeadStats } from "@/lib/lead-stats";
+import { getMonthSales } from "@/lib/month-sales";
 
 const TREND_MONTHS = 6;
 const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -119,6 +120,12 @@ export default async function DashboardPage() {
   const leadMix: ShareBarRow[] = (["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "UNQUALIFIED"] as LeadStatus[])
     .map((st) => ({ label: LEAD_STATUS_LABELS[st], count: leadCount.get(st) ?? 0, value: 0, fill: LEAD_STATUS_CHART_COLORS[st] }))
     .filter((row) => row.count > 0);
+  const monthSales = await getMonthSales(ownerIds, thisMonth, nextMonth, repIds);
+  const monthLast = new Date(nextMonth.getTime() - 86400000).toISOString().slice(0, 10);
+  const registerLink = (extra: Record<string, string>) =>
+    `/reports/sales-register?${new URLSearchParams({ from: thisMonth.toISOString().slice(0, 10), to: monthLast, ...extra })}`;
+  const catTotal = monthSales.categories.reduce((t, c) => t + c.value, 0);
+  const monthName = thisMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   const trendTarget = trend.reduce((s, r) => s + r.target, 0);
   const trendSales = trend.reduce((s, r) => s + r.actual, 0);
 
@@ -235,6 +242,118 @@ export default async function DashboardPage() {
             </div>
           </div>
         </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {team && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-slate-900">Sales by sales person, {monthName}</h2>
+                <Link href={registerLink({})} className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                  Sales Register <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                      <th className="font-medium">Sales person</th>
+                      <th className="font-medium text-right">Target</th>
+                      <th className="font-medium text-right">Product sales</th>
+                      <th className="font-medium text-right">Project billing</th>
+                      <th className="font-medium text-right">Total</th>
+                      <th className="font-medium text-right">Achieved</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {monthSales.people.map((r) => {
+                      const p = achievementPct(r.sales, r.target);
+                      return (
+                        <tr key={r.userId} className="text-slate-700">
+                          <td>
+                            <Link href={registerLink({ rep: r.userId })} className="font-medium text-indigo-700 hover:underline">
+                              {r.name}
+                            </Link>
+                          </td>
+                          <td className="text-right tabular-nums">{formatCurrency(r.target)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(r.productSales)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(r.projectSales)}</td>
+                          <td className="text-right tabular-nums font-semibold text-slate-900">{formatCurrency(r.sales)}</td>
+                          <td className={`text-right tabular-nums font-medium ${p == null ? "text-slate-400" : p >= 100 ? "text-emerald-700" : p >= 80 ? "text-amber-700" : "text-rose-700"}`}>
+                            {pctText(p)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    {(() => {
+                      const t = monthSales.people.reduce(
+                        (a, r) => ({ target: a.target + r.target, product: a.product + r.productSales, project: a.project + r.projectSales, sales: a.sales + r.sales }),
+                        { target: 0, product: 0, project: 0, sales: 0 },
+                      );
+                      return (
+                        <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
+                          <td>Total</td>
+                          <td className="text-right tabular-nums">{formatCurrency(t.target)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(t.product)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(t.project)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(t.sales)}</td>
+                          <td className="text-right tabular-nums">{pctText(achievementPct(t.sales, t.target))}</td>
+                        </tr>
+                      );
+                    })()}
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
+          )}
+          <Card className={`p-5 ${team ? "" : "lg:col-span-2"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-900">Sales by product category, {monthName}</h2>
+              <Link href={registerLink({})} className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                Sales Register <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {monthSales.categories.length === 0 ? (
+              <EmptyState title="No sales yet this month" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                      <th className="font-medium">Product category</th>
+                      <th className="font-medium text-right">Qty</th>
+                      <th className="font-medium text-right">Sales value</th>
+                      <th className="font-medium text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {monthSales.categories.map((c) => (
+                      <tr key={c.category} className="text-slate-700">
+                        <td>
+                          <Link href={registerLink({ category: c.category })} className="font-medium text-indigo-700 hover:underline">
+                            {c.category}
+                          </Link>
+                        </td>
+                        <td className="text-right tabular-nums">{c.qty ? c.qty.toLocaleString("en-NG", { maximumFractionDigits: 2 }) : "—"}</td>
+                        <td className="text-right tabular-nums">{formatCurrency(c.value)}</td>
+                        <td className="text-right tabular-nums">{catTotal ? `${((c.value / catTotal) * 100).toFixed(1)}%` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
+                      <td>Total</td>
+                      <td className="text-right tabular-nums">{monthSales.categories.reduce((t, c) => t + c.qty, 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}</td>
+                      <td className="text-right tabular-nums">{formatCurrency(catTotal)}</td>
+                      <td className="text-right tabular-nums">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <Card className="p-4">
