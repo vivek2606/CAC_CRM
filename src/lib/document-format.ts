@@ -74,3 +74,21 @@ export function nairaInWords(amount: number): string {
 export function isAvailabilityNote(detail: string): boolean {
   return /^(available|not available|in transit)\b/i.test(detail.trim());
 }
+
+// Quotation references: SNIL/CAC/LAG/<initials>/<year>/<running no.>, issued by the server (see quote-ref.ts).
+export const QUOTE_REF_PREFIX = "SNIL/CAC/LAG";
+
+// Initials of the person making the quote: first and last name
+// ("Chris Mokobia" -> CM; a single name gives its first two letters).
+export function nameInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "XX";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+// Whether a reference was issued by nextQuoteRef (drafts from before this
+// change carry the old date-based reference and get a new number).
+export function isIssuedQuoteRef(ref: string): boolean {
+  return /^SNIL\/CAC\/LAG\/[A-Z]{1,3}\/\d{4}\/\d{4,}$/.test(ref.trim());
+}

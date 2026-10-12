@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
-import { nairaInWords, serialNumbers, defaultRef, isAvailabilityNote } from "@/lib/document-format";
+import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef } from "@/lib/document-format";
+import { reserveQuoteRef } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
 export type ModelOption = {
@@ -44,7 +45,6 @@ type Draft = {
   type: DocumentType;
   companyKey: string;
   ref: string;
-  refEdited: boolean;
   date: string;
   to: string;
   attention: string;
@@ -130,8 +130,8 @@ export function QuotationBuilder({
     return {
       type: "quote",
       companyKey: co.key,
-      ref: defaultRef(co.refPrefix, signatory.name, new Date(`${date}T00:00:00`)),
-      refEdited: false,
+      // A unique reference is issued on the first download (see download()).
+      ref: "",
       date,
       to: fromDeal?.to ?? "",
       attention: fromDeal?.attention ?? "",
@@ -172,12 +172,7 @@ export function QuotationBuilder({
   const update = (patch: Partial<Draft>) => {
     setDirty(true);
     setD((cur) => {
-      const next = { ...cur, ...patch };
-      // Ref follows the company prefix and date until typed over.
-      if (!next.refEdited && (patch.companyKey !== undefined || patch.date !== undefined)) {
-        next.ref = defaultRef(companyFor(next.companyKey).refPrefix, signatory.name, new Date(`${next.date}T00:00:00`));
-      }
-      return next;
+      return { ...cur, ...patch };
     });
   };
   const setRow = (id: string, patch: Partial<Row>) => update({ rows: d.rows.map((r) => (r.uid === id ? ({ ...r, ...patch } as Row) : r)) });
@@ -231,10 +226,10 @@ export function QuotationBuilder({
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
 
-  const payload = (): DocumentInput => ({
+  const payload = (ref: string): DocumentInput => ({
     type: d.type,
     companyKey: d.companyKey,
-    ref: d.ref,
+    ref,
     date: d.date,
     to: d.to,
     attention: d.attention,
@@ -262,7 +257,14 @@ export function QuotationBuilder({
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
     setBusy(format);
     try {
-      const res = await fetch(`/quotations/${format}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload()) });
+      // The first download issues this quote's unique reference; later
+      // downloads of the same quote keep it.
+      let ref = d.ref;
+      if (!isIssuedQuoteRef(ref)) {
+        ref = await reserveQuoteRef();
+        update({ ref });
+      }
+      const res = await fetch(`/quotations/${format}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(ref)) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't create the file.");
@@ -324,7 +326,12 @@ export function QuotationBuilder({
           </div>
           <div>
             <label className={label}>Ref no.</label>
-            <input value={d.ref} onChange={(e) => update({ ref: e.target.value, refEdited: true })} className={input} />
+            <p
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 truncate"
+              title="Unique reference, issued automatically on the first download"
+            >
+              {isIssuedQuoteRef(d.ref) ? d.ref : <span className="text-slate-400">Issued on first download</span>}
+            </p>
           </div>
           <div>
             <label className={label}>Date</label>
