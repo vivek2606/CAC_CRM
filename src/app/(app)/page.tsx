@@ -20,9 +20,10 @@ import { Sparkline } from "./sparkline";
 import { GaugeChart } from "@/components/gauge-chart";
 import { ShareStackedBar, type ShareBarRow } from "@/components/share-stacked-bar";
 import { PipelineWaterfallChart, type WaterfallStep } from "./pipeline-waterfall-chart";
-import { Target, TrendingUp, Wallet, Trophy, ArrowRight, AlertTriangle, CalendarRange, Gauge } from "lucide-react";
+import { Target, TrendingUp, Wallet, Trophy, ArrowRight, AlertTriangle, CalendarRange, Gauge, UserPlus, Coins, Percent, XCircle } from "lucide-react";
 import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
 import { getProjectBillings } from "@/lib/project-billing";
+import { getLeadStats } from "@/lib/lead-stats";
 
 const SPARKLINE_MONTHS = 6;
 
@@ -85,6 +86,9 @@ export default async function DashboardPage() {
   const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const sparklineStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SPARKLINE_MONTHS - 1), 1));
   const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+
+  const leadStats = await getLeadStats(ownerIds, now);
+  const leadTrend = leadStats.newLastMonth > 0 ? Math.round(((leadStats.newThisMonth - leadStats.newLastMonth) / leadStats.newLastMonth) * 100) : null;
 
   const [
     openDeals,
@@ -447,6 +451,101 @@ export default async function DashboardPage() {
             accent="amber"
           />
         </div>
+
+        {/* Leads and losses */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="New Leads This Month"
+            value={String(leadStats.newThisMonth)}
+            sub={
+              <>
+                {leadStats.newLastMonth} last month
+                {leadTrend != null && (
+                  <span className={leadTrend >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                    {" "}
+                    · {leadTrend >= 0 ? "+" : ""}
+                    {leadTrend}%
+                  </span>
+                )}
+              </>
+            }
+            icon={<UserPlus className="h-4 w-4 text-sky-500" />}
+            accent="sky"
+          />
+          <StatCard
+            label="Active Lead Value"
+            value={formatCompactCurrency(leadStats.activeValue)}
+            sub={`Estimated, ${leadStats.activeCount} active lead${leadStats.activeCount === 1 ? "" : "s"} - not in the deal pipeline`}
+            icon={<Coins className="h-4 w-4 text-indigo-500" />}
+            accent="indigo"
+          />
+          <StatCard
+            label="Lead Conversion, 90 Days"
+            value={leadStats.conversionPct == null ? "—" : `${leadStats.conversionPct}%`}
+            sub={
+              leadStats.created90 === 0
+                ? "No leads in the last 90 days"
+                : `${leadStats.converted90} of ${leadStats.created90} leads became deals${leadStats.avgDaysToDeal != null ? ` · avg ${leadStats.avgDaysToDeal} day${leadStats.avgDaysToDeal === 1 ? "" : "s"} to deal` : ""}`
+            }
+            icon={<Percent className="h-4 w-4 text-emerald-500" />}
+            accent="emerald"
+          />
+          <StatCard
+            label="Lost This Month"
+            value={String(leadStats.lostThisMonth)}
+            sub={
+              <>
+                {formatCompactCurrency(leadStats.lostThisMonthValue)} ·{" "}
+                <Link href={`/deals/closed?stage=LOST&month=${monthValue(targetMonth)}`} className="text-indigo-600 hover:text-indigo-700">
+                  view lost deals
+                </Link>
+              </>
+            }
+            icon={<XCircle className="h-4 w-4 text-rose-500" />}
+            accent="rose"
+          />
+        </div>
+
+        {isBackOffice(user) && leadStats.byPerson.length > 0 && (
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-900">Leads by sales person</h2>
+              <Link href="/leads" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                All leads <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="font-medium">Sales person</th>
+                    <th className="font-medium text-right">New this month</th>
+                    <th className="font-medium text-right">Last month</th>
+                    <th className="font-medium text-right">Active leads</th>
+                    <th className="font-medium text-right">Active lead value</th>
+                    <th className="font-medium text-right">Converted, 90 days</th>
+                    <th className="font-medium text-right">Conversion</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leadStats.byPerson.map((r) => (
+                    <tr key={r.userId} className="text-slate-700">
+                      <td className="font-medium text-slate-800">{r.name}</td>
+                      <td className="text-right tabular-nums">{r.newThisMonth}</td>
+                      <td className="text-right tabular-nums text-slate-500">{r.newLastMonth}</td>
+                      <td className="text-right tabular-nums">{r.active}</td>
+                      <td className="text-right tabular-nums">{formatCurrency(r.activeValue)}</td>
+                      <td className="text-right tabular-nums">
+                        {r.converted90} of {r.created90}
+                      </td>
+                      <td className="text-right tabular-nums">{r.created90 ? `${Math.round((r.converted90 / r.created90) * 100)}%` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-5">
           <div className="flex items-center justify-between mb-3">

@@ -5,7 +5,7 @@ import { PageHeader, NewButton } from "@/components/ui";
 import { OPEN_DEAL_STAGES } from "@/lib/constants";
 import { KanbanBoard } from "./kanban-board";
 import { OwnerFilter } from "./owner-filter";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, XCircle } from "lucide-react";
 
 export default async function DealsPage({
   searchParams,
@@ -46,6 +46,13 @@ export default async function DealsPage({
         description="Drag deals between stages to update their status"
         action={
           <div className="flex items-center gap-3">
+            <Link
+              href="/deals/closed?stage=LOST"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-700 text-sm font-medium px-3.5 py-2 transition-colors"
+            >
+              <XCircle className="h-4 w-4" />
+              Lost deals
+            </Link>
             <Link
               href="/deals/closed"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
