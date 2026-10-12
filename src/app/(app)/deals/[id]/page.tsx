@@ -206,7 +206,7 @@ export default async function DealDetailPage({
             <p className="text-sm text-amber-800">
               <span className="font-semibold">This won deal has no invoice no.</span> Add the invoice raised for it:
             </p>
-            <InvoiceEntry dealId={deal.id} closedAt={deal.closedAt.toISOString().slice(0, 10)} />
+            <InvoiceEntry dealId={deal.id} closedAt={deal.closedAt.toISOString().slice(0, 10)} billingCompany={deal.billingCompany} />
           </div>
         )}
         {deal.tags.length > 0 && <TagChips tags={deal.tags} />}

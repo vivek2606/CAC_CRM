@@ -303,6 +303,10 @@ export async function updateDeal(dealId: string, formData: FormData) {
       contactId: toNullable(parsed.contactId),
       ownerId,
       closedAt: isClosed ? existing.closedAt : null,
+      // A won deal's billing company: corrected here by the Head / Coordinator.
+      ...(existing.stage === "WON" && isBackOffice(user) && billingCompanyOf(String(formData.get("billingCompany") ?? ""))
+        ? { billingCompany: billingCompanyOf(String(formData.get("billingCompany"))) }
+        : {}),
       // A won deal's invoice no. can be corrected here (blank keeps it).
       invoiceNo:
         existing.stage === "WON" && typeof formData.get("invoiceNo") === "string" && String(formData.get("invoiceNo")).trim()
@@ -614,7 +618,7 @@ export async function setDealConsiderForReorder(dealId: string, considerForReord
 // Add (or correct) the invoice on a deal already won in the CRM - for deals
 // marked Won before the invoice was asked for. The invoice date becomes the
 // date the sale counts (closedAt), so its line items move with it.
-export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string) {
+export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string, company?: string) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, sourceTxnNo: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
@@ -623,7 +627,9 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   const no = invoiceNo.trim();
   if (!no) throw new Error("Enter the invoice no.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new Error("Enter the invoice date.");
-  await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate) } });
+  const billingCompany = billingCompanyOf(company);
+  if (!billingCompany) throw new Error("Pick the company that raised the invoice - Sakuragi or Somotex.");
+  await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate), billingCompany } });
   await syncSaleLineItemsForDeal(dealId);
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");

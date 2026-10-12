@@ -63,6 +63,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
           <DealForm
             action={action}
             isHead={isBackOffice(user)}
+            canEditCompany={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
             accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
             contacts={contacts.map((c) => ({
@@ -94,6 +95,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
                 : null,
               tags: deal.tags,
               createdAt: deal.createdAt.toISOString().slice(0, 10),
+              billingCompany: deal.billingCompany,
             }}
             productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}
             products={productOptions}

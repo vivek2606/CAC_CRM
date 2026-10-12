@@ -177,6 +177,8 @@ export default async function SalesRegisterPage({
       value: true,
       closedAt: true,
       invoiceNo: true,
+      billingCompany: true,
+      accountId: true,
       _count: { select: { items: true } },
       owner: { select: { name: true } },
       account: { select: { name: true } },
@@ -262,6 +264,11 @@ export default async function SalesRegisterPage({
                       <td className="px-2 py-1.5 whitespace-nowrap text-right tabular-nums text-slate-700">{formatCurrency(d.value)}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap text-amber-800">
                         {[!d.invoiceNo && "No invoice no.", d._count.items === 0 && "No products"].filter(Boolean).join(" · ")}
+                        {!d.accountId && (
+                          <Link href={`/deals/${d.id}/edit`} className="ml-1 font-medium text-indigo-700 hover:underline">
+                            No account - link it
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-1.5">
                         {d._count.items === 0 ? (
@@ -273,7 +280,7 @@ export default async function SalesRegisterPage({
                             <span className="text-slate-500">Ask the Sales Coordinator to add the products</span>
                           )
                         ) : (
-                          <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} compact />
+                          <InvoiceEntry dealId={d.id} closedAt={(d.closedAt ?? new Date()).toISOString().slice(0, 10)} billingCompany={d.billingCompany} compact />
                         )}
                       </td>
                     </tr>

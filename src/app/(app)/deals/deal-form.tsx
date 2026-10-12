@@ -43,6 +43,7 @@ export function DealForm({
   productsTotal = null,
   initialItems = [],
   requireItems = false,
+  canEditCompany = false,
   dealId,
 }: {
   action: (formData: FormData) => void;
@@ -72,6 +73,7 @@ export function DealForm({
     expectedDeliveryDate?: string | null;
     invoiceNo?: string | null;
     createdAt?: string;
+    billingCompany?: string | null;
     tags?: string[];
   };
   submitLabel: string;
@@ -82,6 +84,8 @@ export function DealForm({
   initialItems?: LineItemRow[];
   // A won deal must keep at least one product billed.
   requireItems?: boolean;
+  // Head / Coordinator: the billing company of a won deal can be corrected.
+  canEditCompany?: boolean;
   // Edit form: lets the products sheet download pre-filled with this deal's list.
   dealId?: string;
 }) {
@@ -359,6 +363,21 @@ export function DealForm({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
+
+        {defaultValues?.stage === "WON" && canEditCompany && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Billed by</label>
+            <select
+              name="billingCompany"
+              defaultValue={defaultValues?.billingCompany ?? ""}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Not recorded</option>
+              <option value="Sakuragi">Sakuragi</option>
+              <option value="Somotex">Somotex</option>
+            </select>
+          </div>
+        )}
 
         {defaultValues?.stage === "WON" && (
           <div>
