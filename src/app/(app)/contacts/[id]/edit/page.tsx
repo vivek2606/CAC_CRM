@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ContactForm } from "../../contact-form";
 import { updateContact } from "../../actions";
@@ -8,7 +8,6 @@ import { updateContact } from "../../actions";
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
-  const ownerIds = await visibleOwnerIds(user);
 
   const contact = await prisma.contact.findUnique({ where: { id } });
   if (!contact) notFound();

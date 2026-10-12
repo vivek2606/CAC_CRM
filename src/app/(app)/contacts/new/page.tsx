@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { ContactForm } from "../contact-form";
 import { createContact } from "../actions";
 
 export default async function NewContactPage() {
   const user = await requireUser();
-  const ownerIds = await visibleOwnerIds(user);
 
   const [owners, accounts] = await Promise.all([
     isBackOffice(user)
