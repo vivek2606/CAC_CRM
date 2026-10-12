@@ -36,7 +36,7 @@ const KIND_COLOR: Record<WaterfallStep["kind"], string> = {
 // else in the app, even though they reduce the pipeline number, since a
 // waterfall's color job is "is this movement good or bad," not the sign
 // of the number.
-export function PipelineWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
+export function PipelineWaterfallChart({ steps, height = 260 }: { steps: WaterfallStep[]; height?: number }) {
   const rows = steps.reduce<{ rows: WaterfallRow[]; running: number }>(
     (acc, s) => {
       if (s.kind === "total") {
@@ -58,7 +58,7 @@ export function PipelineWaterfallChart({ steps }: { steps: WaterfallStep[] }) {
   };
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={rows} margin={{ top: 24, right: 16, left: 0, bottom: 0 }}>
         <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={false} tickLine={false} />
         <YAxis

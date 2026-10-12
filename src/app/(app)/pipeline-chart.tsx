@@ -10,11 +10,11 @@ const STAGE_BAR_COLORS: Record<string, string> = {
   Negotiation: "#8b5cf6",
 };
 
-export function PipelineChart({ data }: { data: { stage: string; value: number; count: number }[] }) {
+export function PipelineChart({ data, height = 260 }: { data: { stage: string; value: number; count: number }[]; height?: number }) {
   // Bare whole numbers on the bars, in the same unit as the value axis.
   const { label, axisTick } = chartUnit(data.map((r) => r.value));
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
         <XAxis dataKey="stage" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
         <YAxis

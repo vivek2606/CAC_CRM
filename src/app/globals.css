@@ -94,3 +94,23 @@ main table:not(.text-xs):not(.text-\[11px\]) :is(th, td):last-child {
 main table:not(.text-xs):not(.text-\[11px\]) th {
   font-size: 0.65rem;
 }
+
+/* Smaller, crisper type across the app. Sizes are rem-based, so a 15px
+   root trims every text size (and spacing in step) by about 6%. Faint grey
+   secondary text is darkened a shade so small text stays easy to read. */
+html {
+  font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.text-slate-400 {
+  color: #64748b;
+}
+.text-slate-500 {
+  color: #556274;
+}
+main table:not(.text-xs):not(.text-\[11px\]) th {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}

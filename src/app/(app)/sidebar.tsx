@@ -105,7 +105,15 @@ function roleLabel(role: string): string {
 export function sectionFor(pathname: string, role: SessionUser["role"]): { href: string; label: string } | null {
   const path = pathname.split("?")[0];
   const under = (base: string) => path === base || path.startsWith(base + "/");
-  const navPath = under("/contacts") ? "/accounts" : under("/activities") ? "/leads" : under("/targets") ? "/incentives" : path;
+  const navPath = under("/contacts")
+    ? "/accounts"
+    : under("/activities")
+      ? "/leads"
+      : under("/targets")
+        ? "/incentives"
+        : under("/deals/closed")
+          ? "/reports/sales-register"
+          : path;
   const items = role === "HEAD" || role === "COORDINATOR" ? [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS] : NAV_ITEMS;
   return (
     items

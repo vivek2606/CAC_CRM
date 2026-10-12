@@ -1,22 +1,17 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
-import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { PageHeader, Card } from "@/components/ui";
 import { PerfTabs } from "@/components/perf-tabs";
 import { ForecastTable, type ForecastRow } from "./forecast-table";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
-import { TargetChart } from "@/components/target-chart";
-import { TargetTrendChart, type TargetTrendRow } from "./target-trend-chart";
 import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { CategoryChart } from "../reports/category-chart";
-import { EQUIPMENT_TYPE_LABELS } from "@/lib/constants";
 import { GaugeChart } from "@/components/gauge-chart";
 import { getYtdSummary, achievementPct, growthPct } from "@/lib/ytd";
 import { getProjectBillings } from "@/lib/project-billing";
 import { YtdRepChart, type YtdRepChartRow, type YtdRepSeries } from "./ytd-rep-chart";
 
-const TREND_MONTHS = 12;
 
 function shortMonthLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
@@ -64,17 +59,8 @@ export default async function TargetsPage({
   const selectedRepId = isBackOffice(user) ? (params.rep && params.rep !== "all" ? params.rep : null) : user.id;
   const reps = selectedRepId ? allReps.filter((r) => r.id === selectedRepId) : allReps;
   const repIds = reps.map((r) => r.id);
-
-  // Trend window: the last TREND_MONTHS calendar months ending at the
-  // current real-world month - independent of the month picker above, so
-  // switching months to inspect one in detail doesn't shift the trend.
   const now = new Date();
-  const trendMonths = Array.from({ length: TREND_MONTHS }, (_, i) => {
-    const idx = now.getUTCMonth() - (TREND_MONTHS - 1 - i);
-    return new Date(Date.UTC(now.getUTCFullYear(), idx, 1));
-  });
-  const trendStart = trendMonths[0];
-  const trendEnd = new Date(Date.UTC(trendMonths[TREND_MONTHS - 1].getUTCFullYear(), trendMonths[TREND_MONTHS - 1].getUTCMonth() + 1, 1));
+
 
   // Year-to-date window: Jan 1 of the selected month's year through the end
   // of the selected month. Always covers the whole department (allReps),
@@ -92,34 +78,11 @@ export default async function TargetsPage({
       : [];
   const serviceUserIds = serviceUsers.map((u) => u.id);
 
-  const [targets, wonDeals, trendTargets, trendDeals, categoryLineItems, unitemizedCategoryDeals, ytdTargets, ytdDeals, ytdSummary] = await Promise.all([
+  const [targets, wonDeals, ytdTargets, ytdDeals, ytdSummary] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month } }),
     prisma.deal.findMany({
       where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: month, lt: nextMonth } },
       select: { ownerId: true, value: true },
-    }),
-    prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: trendMonths } } }),
-    prisma.deal.findMany({
-      where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: trendStart, lt: trendEnd } },
-      select: { value: true, closedAt: true },
-    }),
-    // Category mix behind this month's actual - reuses the same product
-    // categories as the Sales by Category report.
-    prisma.saleLineItem.findMany({
-      where: { ownerId: { in: repIds }, month: { gte: month, lt: nextMonth } },
-      select: { value: true, product: { select: { category: true } } },
-    }),
-    // Deals won without a product breakup fall back to their Equipment
-    // Type field, same as the Sales by Category report.
-    prisma.deal.findMany({
-      where: {
-        ownerId: { in: repIds },
-        stage: "WON",
-        closedAt: { gte: month, lt: nextMonth },
-        items: { none: {} },
-        equipmentType: { not: null },
-      },
-      select: { value: true, equipmentType: true },
     }),
     prisma.target.findMany({
       where: { userId: { in: allRepIds }, month: { in: ytdMonths } },
@@ -137,9 +100,8 @@ export default async function TargetsPage({
     getYtdSummary(selectedRepId ? { kind: "rep", userId: selectedRepId } : { kind: "department" }, month),
   ]);
   // Project & Service billing counts toward achievement alongside Won deals.
-  const [monthProjects, trendProjects, ytdProjects] = await Promise.all([
+  const [monthProjects, ytdProjects] = await Promise.all([
     getProjectBillings({ in: repIds }, month, nextMonth),
-    getProjectBillings({ in: repIds }, trendStart, trendEnd),
     getProjectBillings(isBackOffice(user) ? { notIn: serviceUserIds } : user.id, ytdStart, nextMonth),
   ]);
   const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
@@ -180,41 +142,6 @@ export default async function TargetsPage({
   const totalTarget = rows.reduce((s, r) => s + r.target, 0);
   const totalActual = rows.reduce((s, r) => s + r.actual, 0);
 
-  const trendTargetByMonth = new Map<string, number>();
-  for (const t of trendTargets) {
-    const key = monthValue(t.month);
-    trendTargetByMonth.set(key, (trendTargetByMonth.get(key) ?? 0) + t.targetValue);
-  }
-  const trendActualByMonth = new Map<string, number>();
-  for (const d of trendDeals) {
-    if (!d.closedAt) continue;
-    const key = monthValue(new Date(Date.UTC(d.closedAt.getUTCFullYear(), d.closedAt.getUTCMonth(), 1)));
-    trendActualByMonth.set(key, (trendActualByMonth.get(key) ?? 0) + d.value);
-  }
-  for (const p of trendProjects) {
-    const key = monthValue(new Date(Date.UTC(p.docDate.getUTCFullYear(), p.docDate.getUTCMonth(), 1)));
-    trendActualByMonth.set(key, (trendActualByMonth.get(key) ?? 0) + p.value);
-  }
-  const trendRows: TargetTrendRow[] = trendMonths.map((m) => {
-    const key = monthValue(m);
-    return {
-      month: shortMonthLabel(m),
-      target: trendTargetByMonth.get(key) ?? 0,
-      actual: trendActualByMonth.get(key) ?? 0,
-    };
-  });
-
-  const categoryByName = new Map<string, number>();
-  for (const li of categoryLineItems) {
-    categoryByName.set(li.product.category, (categoryByName.get(li.product.category) ?? 0) + li.value);
-  }
-  for (const d of unitemizedCategoryDeals) {
-    const key = EQUIPMENT_TYPE_LABELS[d.equipmentType!];
-    categoryByName.set(key, (categoryByName.get(key) ?? 0) + d.value);
-  }
-  const categoryRows = Array.from(categoryByName.entries())
-    .map(([category, value]) => ({ category, value }))
-    .sort((a, b) => b.value - a.value);
 
   // YTD rows: each core rep, then "Others" (Head only, and only when it has
   // something to show).
@@ -351,37 +278,6 @@ export default async function TargetsPage({
             <ForecastTable rows={forecastRows} monthLabel={monthLabel(month)} isCurrent={isCurrentMonth} monthParam={monthStr} />
           </Card>
         )}
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Target vs. Actual, per sales rep</h2>
-          <TargetChart data={rows} />
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-sm font-semibold text-slate-900">Monthly trend</h2>
-              <span className="text-xs text-slate-400">Last {TREND_MONTHS} months</span>
-            </div>
-            <p className="text-xs text-slate-500 mb-3">Target vs. actual sales, {scopeLabel}.</p>
-            <TargetTrendChart data={trendRows} />
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-sm font-semibold text-slate-900">This month&apos;s sales by category</h2>
-              <Link href="/reports/sales-register" className="text-xs text-indigo-600 hover:text-indigo-700">
-                Full category report →
-              </Link>
-            </div>
-            <p className="text-xs text-slate-500 mb-3">{monthLabel(month)}, {scopeLabel}.</p>
-            {categoryRows.length === 0 ? (
-              <EmptyState title="No sales recorded this month" />
-            ) : (
-              <CategoryChart data={categoryRows} />
-            )}
-          </Card>
-        </div>
 
         <Card>
           <div className="flex items-center justify-end p-4 pb-0">

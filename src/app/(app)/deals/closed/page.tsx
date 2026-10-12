@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
+import { RegisterTabs } from "@/components/register-tabs";
 import { PageHeader, Card, Badge, EmptyState, Avatar, StatCard } from "@/components/ui";
 import { Pagination, parsePage } from "@/components/pagination";
 import { SortableLinkTh } from "@/components/sortable-link-th";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
 import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, LOST_REASONS, LOST_REASON_LABELS, LOST_REASON_COLORS } from "@/lib/constants";
 import { WonLostBarChart, type WonLostRow } from "./won-lost-bar-chart";
-import { CategoryChart } from "../../reports/category-chart";
-import { LostReasonChart } from "../../reports/lost-reason-chart";
 import { Percent, Wallet, Receipt, Clock } from "lucide-react";
 import type { DealStage } from "@prisma/client";
 
@@ -121,24 +120,18 @@ export default async function ClosedDealsPage({
     closedAt: { gte: trendStart, lt: trendEnd },
   };
 
-  const [insightDeals, wonLineItems] = await Promise.all([
-    prisma.deal.findMany({
-      where: insightsWhere,
-      select: {
-        value: true,
-        stage: true,
-        closedAt: true,
-        createdAt: true,
-        ownerId: true,
-        lostReasonCategory: true,
-        owner: { select: { name: true } },
-      },
-    }),
-    prisma.dealLineItem.findMany({
-      where: { deal: { ownerId: ownerFilter, stage: "WON", closedAt: { gte: trendStart, lt: trendEnd } } },
-      select: { qty: true, unitPrice: true, product: { select: { category: true } } },
-    }),
-  ]);
+  const insightDeals = await prisma.deal.findMany({
+    where: insightsWhere,
+    select: {
+      value: true,
+      stage: true,
+      closedAt: true,
+      createdAt: true,
+      ownerId: true,
+      lostReasonCategory: true,
+      owner: { select: { name: true } },
+    },
+  });
 
   // Imported returns are negative-value Won entries: they count toward the
   // value totals (sales are net of returns) but not as deals won.
@@ -184,22 +177,6 @@ export default async function ClosedDealsPage({
     .map((o) => ({ name: o.name.split(" ")[0], won: wonByRep.get(o.id) ?? 0, lost: lostByRep.get(o.id) ?? 0 }))
     .sort((a, b) => b.won - a.won);
 
-  // Product category-wise: Won value by category, last 12 months - grouped
-  // by category rather than individual product/model, which read as a long,
-  // messy list of near-identical SKU strings. Only deals with itemized line
-  // items are represented (see DealLineItem), so a deal won without a
-  // product breakup won't appear here.
-  const categoryTotals = new Map<string, { qty: number; value: number }>();
-  for (const li of wonLineItems) {
-    const key = li.product.category;
-    const g = categoryTotals.get(key) ?? { qty: 0, value: 0 };
-    g.qty += li.qty;
-    g.value += li.qty * li.unitPrice;
-    categoryTotals.set(key, g);
-  }
-  const productRows = Array.from(categoryTotals.entries())
-    .map(([category, v]) => ({ category, value: v.value, qty: v.qty }))
-    .sort((a, b) => b.value - a.value);
 
   // Why we lose, last 12 months - same categorization as Team Reports.
   const lostReasonGroups = new Map<string, { count: number; value: number }>();
@@ -222,10 +199,11 @@ export default async function ClosedDealsPage({
   return (
     <div>
       <PageHeader
-        title="Closed Deals"
-        description={`${totalCount} won or lost deal${totalCount === 1 ? "" : "s"}`}
+        title="Sales Register"
+        description={`Won & lost deals - ${totalCount} closed deal${totalCount === 1 ? "" : "s"}, with win rate, deal size, sales cycle and lost reasons`}
       />
       <div className="p-6 space-y-6">
+        <RegisterTabs active="deals" />
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-slate-900">Insights</h2>
@@ -290,45 +268,35 @@ export default async function ClosedDealsPage({
                 {lostReasonData.length === 0 ? (
                   <p className="text-sm text-slate-400 py-6 text-center">No lost deals with a reason yet.</p>
                 ) : (
-                  <LostReasonChart data={lostReasonData} />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="font-medium">Reason</th>
+                          <th className="font-medium text-right">Deals</th>
+                          <th className="font-medium text-right">Value lost</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {lostReasonData.map((r) => (
+                          <tr key={r.reason} className="text-slate-700">
+                            <td>
+                              <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: r.fill }} />
+                              {r.reason}
+                            </td>
+                            <td className="text-right tabular-nums">{r.count}</td>
+                            <td className="text-right tabular-nums">{formatCurrency(r.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </Card>
             )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-1">Won value by product category</h3>
-              <p className="text-xs text-slate-400 mb-3">Won deals with itemized products only.</p>
-              {productRows.length === 0 ? (
-                <p className="text-sm text-slate-400 py-6 text-center">No itemized won deals in the last {TREND_MONTHS} months.</p>
-              ) : (
-                <>
-                  <CategoryChart data={productRows} />
-                  <div className="overflow-x-auto mt-3">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-left uppercase tracking-wide text-slate-400">
-                          <th className="px-2 py-1.5 font-medium">Category</th>
-                          <th className="px-2 py-1.5 font-medium">Qty</th>
-                          <th className="px-2 py-1.5 font-medium">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {productRows.map((p) => (
-                          <tr key={p.category}>
-                            <td className="px-2 py-1.5 text-slate-700">{p.category}</td>
-                            <td className="px-2 py-1.5 text-slate-600">{p.qty}</td>
-                            <td className="px-2 py-1.5 text-slate-600">{formatCurrency(p.value)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </Card>
-
             {isBackOffice(user) && !params.owner && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-slate-900 mb-1">Why we lose</h3>
@@ -336,7 +304,29 @@ export default async function ClosedDealsPage({
                 {lostReasonData.length === 0 ? (
                   <p className="text-sm text-slate-400 py-6 text-center">No lost deals with a reason yet.</p>
                 ) : (
-                  <LostReasonChart data={lostReasonData} />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="font-medium">Reason</th>
+                          <th className="font-medium text-right">Deals</th>
+                          <th className="font-medium text-right">Value lost</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {lostReasonData.map((r) => (
+                          <tr key={r.reason} className="text-slate-700">
+                            <td>
+                              <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: r.fill }} />
+                              {r.reason}
+                            </td>
+                            <td className="text-right tabular-nums">{r.count}</td>
+                            <td className="text-right tabular-nums">{formatCurrency(r.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </Card>
             )}

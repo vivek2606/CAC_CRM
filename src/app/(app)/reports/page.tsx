@@ -7,31 +7,20 @@ import {
   OPEN_DEAL_STAGES,
   CLOSED_LEAD_STATUSES,
   DEAL_STAGES,
-  DEAL_STAGE_LABELS,
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   LEAD_SOURCE_COLORS,
-  LOST_REASONS,
-  LOST_REASON_LABELS,
-  LOST_REASON_COLORS,
   END_USE_SEGMENTS,
   END_USE_SEGMENT_LABELS,
   END_USE_SEGMENT_COLORS,
 } from "@/lib/constants";
-import { RepComparisonChart } from "./rep-chart";
 import { RepMonthHeatmap, type HeatmapRow } from "@/components/rep-month-heatmap";
-import { TargetChart, type TargetChartRow } from "@/components/target-chart";
-import { GaugeChart } from "@/components/gauge-chart";
+import type { TargetChartRow } from "@/components/target-chart";
 import { StageValueChart, type StageValueRow } from "./stage-value-chart";
 import { ProbabilityExposureChart } from "./probability-exposure-chart";
-import { ConversionFunnel } from "./conversion-funnel";
-import { ActivityLeaderboardChart, type ActivityLeaderboardRow } from "./activity-leaderboard-chart";
-import { LeadSourceChart } from "./lead-source-chart";
-import { LostReasonChart } from "./lost-reason-chart";
-import { ShareStackedBar } from "@/components/share-stacked-bar";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { getProjectBillings, sumByOwner } from "@/lib/project-billing";
-import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Phone, Swords, Zap } from "lucide-react";
+import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Swords, Zap } from "lucide-react";
 
 function startOfQuarter(date: Date): Date {
   const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
@@ -223,9 +212,6 @@ export default async function ReportsPage() {
   const teamUncontactedDeals = repStats.reduce((s, r) => s + r.uncontactedDeals, 0);
 
   const tableRows = othersStats ? [...repStats, othersStats] : repStats;
-  const chartData = tableRows
-    .map((r) => ({ name: r.name.split(" ")[0], open: r.openValue, won: r.wonQuarterValue }))
-    .sort((a, b) => b.won - a.won);
 
   // Rep x month heatmap: each active rep's Won value for the last 6
   // calendar months, so a stretch of hot or cold months per rep is
@@ -287,10 +273,6 @@ export default async function ReportsPage() {
   });
   const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
   const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
-  // Pipeline coverage ratio - see the same computation on the Dashboard for
-  // the reasoning behind using raw open pipeline, not the weighted forecast.
-  const remainingDeptTarget = Math.max(totalTarget - totalActualForTarget, 0);
-  const deptCoverage = remainingDeptTarget > 0 ? teamOpenValue / remainingDeptTarget : null;
 
   // New accounts opened, per rep per month = the customer code first used to
   // close a deal in that month, i.e. each account counts exactly once, in
@@ -411,41 +393,7 @@ export default async function ReportsPage() {
   // logged call reaches Connected. Distinct from the pending/completed task
   // counts in the summary table below, which don't break down by type or
   // outcome.
-  const activityLeaderboardData: ActivityLeaderboardRow[] = repStats.map((r) => ({
-    name: r.name.split(" ")[0],
-    ...r.activityTypeCounts,
-  }));
-  const connectRateRows = repStats
-    .map((r) => ({ id: r.id, name: r.name.split(" ")[0], avatarColor: r.avatarColor, connectRate: r.connectRate, calls: r.activityTypeCounts.CALL }))
-    .sort((a, b) => (b.connectRate ?? -1) - (a.connectRate ?? -1));
 
-  // 3. Conversion funnel: every lead -> qualified -> converted to a deal -> won.
-  const totalLeadsCount = teamLeads.length;
-  const qualifiedLeadsCount = teamLeads.filter((l) => l.status === "QUALIFIED" || l.status === "CONVERTED").length;
-  const convertedLeadsCount = teamLeads.filter((l) => l.status === "CONVERTED").length;
-  const wonFromLeadsCount = teamLeads.filter((l) => l.convertedDeal?.stage === "WON").length;
-  const leadFunnelStages = [
-    { label: "Total Leads", value: totalLeadsCount },
-    { label: "Qualified", value: qualifiedLeadsCount },
-    { label: "Converted to Deal", value: convertedLeadsCount },
-    { label: "Won", value: wonFromLeadsCount },
-  ];
-
-  // 3b. Deal value funnel: value of deals that have reached each stage or
-  // later (cumulative, so it narrows monotonically like a real funnel -
-  // a deal sitting in Negotiation has necessarily passed every stage before it).
-  const DEAL_FUNNEL_STAGE_ORDER: (typeof DEAL_STAGES)[number][] = [
-    "QUALIFICATION",
-    "NEEDS_ANALYSIS",
-    "PROPOSAL",
-    "NEGOTIATION",
-    "WON",
-  ];
-  const dealValueFunnelStages = DEAL_FUNNEL_STAGE_ORDER.map((stage, idx) => {
-    const laterStages = new Set(DEAL_FUNNEL_STAGE_ORDER.slice(idx));
-    const value = teamDeals.filter((d) => laterStages.has(d.stage)).reduce((s, d) => s + d.value, 0);
-    return { label: DEAL_STAGE_LABELS[stage], value };
-  });
 
   // 4. Lead source ROI - conversion rate and actual closed-won revenue by
   // source, not just raw lead volume/potential value, so "which source
@@ -474,25 +422,6 @@ export default async function ReportsPage() {
     .filter((row) => row.count > 0)
     .sort((a, b) => b.wonRevenue - a.wonRevenue);
 
-  // 5. Why we lose: only deals closed as LOST after this feature shipped
-  // have a category - older LOST deals predate it and just don't appear.
-  const lostDeals = teamDeals.filter((d) => d.stage === "LOST" && d.lostReasonCategory);
-  const lostReasonGroups = new Map<string, { count: number; value: number }>();
-  for (const deal of lostDeals) {
-    const key = deal.lostReasonCategory!;
-    const g = lostReasonGroups.get(key) ?? { count: 0, value: 0 };
-    g.count += 1;
-    g.value += deal.value;
-    lostReasonGroups.set(key, g);
-  }
-  const lostReasonData = LOST_REASONS.map((reason) => ({
-    reason: LOST_REASON_LABELS[reason],
-    count: lostReasonGroups.get(reason)?.count ?? 0,
-    value: lostReasonGroups.get(reason)?.value ?? 0,
-    fill: LOST_REASON_COLORS[reason],
-  }))
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count);
 
   // 5b. Win rate against each named competitor - competitorBrand is
   // freeform text (not an enum, since reps type whatever's actually being
@@ -626,68 +555,6 @@ export default async function ReportsPage() {
         </div>
 
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Open pipeline vs. won this quarter</h2>
-          <RepComparisonChart data={chartData} />
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 p-5">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-sm font-semibold text-slate-900">Target vs. Actual, per sales rep</h2>
-              <Link href="/targets" className="text-xs text-indigo-600 hover:text-indigo-700">
-                Full Targets page →
-              </Link>
-            </div>
-            <p className="text-xs text-slate-400 mb-3">This calendar month.</p>
-            <TargetChart data={targetRows} />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Department target this month</h2>
-            <p className="text-xs text-slate-400 mb-3">Whole team, combined.</p>
-            {totalTarget === 0 && totalActualForTarget === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No targets set for this month.</p>
-            ) : (
-              <div className="flex flex-col items-center justify-center">
-                <GaugeChart
-                  value={totalActualForTarget}
-                  target={totalTarget}
-                  valueLabel={formatCompactCurrency(totalActualForTarget)}
-                  targetLabel={formatCompactCurrency(totalTarget)}
-                />
-                <p className="mt-2 text-xs text-slate-500 text-center">
-                  {deptCoverage != null
-                    ? `${deptCoverage.toFixed(1)}x pipeline coverage vs. remaining target`
-                    : "Target met for this month"}
-                </p>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Quota attainment, per rep</h2>
-          <p className="text-xs text-slate-400 mb-3">Same target/actual as the chart above, one gauge per rep.</p>
-          {targetRows.every((r) => r.target === 0 && r.actual === 0) ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No targets set for this month.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {targetRows.map((r) => (
-                <div key={r.name} className="flex flex-col items-center">
-                  <GaugeChart
-                    value={r.actual}
-                    target={r.target}
-                    valueLabel={formatCompactCurrency(r.actual)}
-                    targetLabel={formatCompactCurrency(r.target)}
-                  />
-                  <p className="text-sm font-medium text-slate-700 -mt-1">{r.name}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">New accounts opened, last 6 months</h2>
           <p className="text-xs text-slate-400 mb-3">Each rep&apos;s new accounts per month - spot who&apos;s prospecting and when.</p>
           {newAccountsHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
@@ -741,85 +608,76 @@ export default async function ReportsPage() {
           <ProbabilityExposureChart data={probabilityExposureData} />
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Activity leaderboard</h2>
-            <p className="text-xs text-slate-400 mb-3">Calls, emails, and meetings each rep has logged this quarter.</p>
-            {activityLeaderboardData.every((r) => r.CALL + r.EMAIL + r.MEETING + r.TASK === 0) ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No activity logged this quarter yet.</p>
-            ) : (
-              <ActivityLeaderboardChart data={activityLeaderboardData} />
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Phone className="h-3.5 w-3.5 text-slate-400" />
-              <h2 className="text-sm font-semibold text-slate-900">Call connect rate</h2>
-            </div>
-            <p className="text-xs text-slate-400 mb-3">Share of logged calls that reached Connected, this quarter.</p>
-            {connectRateRows.every((r) => r.calls === 0) ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No calls logged this quarter yet.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {connectRateRows.map((r) => (
-                  <li key={r.id} className="flex items-center gap-3">
-                    <Avatar name={r.name} color={r.avatarColor} size={6} />
-                    <span className="text-sm text-slate-700 w-16 shrink-0 truncate">{r.name}</span>
-                    <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                      {r.connectRate != null && (
-                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${r.connectRate}%` }} />
-                      )}
-                    </div>
-                    <span className="text-xs font-medium text-slate-500 w-24 text-right shrink-0">
-                      {r.connectRate != null
-                        ? `${r.connectRate}% (${r.calls} calls)`
-                        : r.calls === 0
-                          ? "No calls logged"
-                          : "No outcomes recorded"}
-                    </span>
-                  </li>
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-sm font-semibold text-slate-900">Activity this quarter</h2>
+            <Link href="/leads?tab=activities" className="text-xs text-indigo-600 hover:text-indigo-700">
+              Activities →
+            </Link>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">Calls, emails, meetings and tasks each sales person logged, and how often a call reached Connected.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                  <th className="font-medium">Sales person</th>
+                  <th className="font-medium text-right">Calls</th>
+                  <th className="font-medium text-right">Emails</th>
+                  <th className="font-medium text-right">Meetings</th>
+                  <th className="font-medium text-right">Tasks</th>
+                  <th className="font-medium text-right">Call connect rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {repStats.map((r) => (
+                  <tr key={r.id} className="text-slate-700">
+                    <td>
+                      <Link href={`/deals?owner=${r.id}`} className="font-medium text-indigo-700 hover:underline">
+                        {r.name}
+                      </Link>
+                    </td>
+                    <td className="text-right tabular-nums">{r.activityTypeCounts.CALL}</td>
+                    <td className="text-right tabular-nums">{r.activityTypeCounts.EMAIL}</td>
+                    <td className="text-right tabular-nums">{r.activityTypeCounts.MEETING}</td>
+                    <td className="text-right tabular-nums">{r.activityTypeCounts.TASK}</td>
+                    <td className="text-right tabular-nums">{r.connectRate == null ? "—" : `${r.connectRate}%`}</td>
+                  </tr>
                 ))}
-              </ul>
-            )}
-          </Card>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead conversion funnel</h2>
-            <p className="text-xs text-slate-400 mb-3">Every lead&apos;s journey from first contact to a won deal.</p>
-            <ConversionFunnel stages={leadFunnelStages} />
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Deal value funnel</h2>
-            <p className="text-xs text-slate-400 mb-3">Value of deals that have reached each stage or further.</p>
-            <ConversionFunnel stages={dealValueFunnelStages} formatValue={formatCompactCurrency} />
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source ROI</h2>
-            <p className="text-xs text-slate-400 mb-3">Closed-won revenue and conversion rate by where the lead came from.</p>
-            {leadSourceData.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
-            ) : (
-              <LeadSourceChart data={leadSourceData} />
-            )}
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Why we lose</h2>
-            <p className="text-xs text-slate-400 mb-3">Reasons given when a deal is marked Lost.</p>
-            {lostReasonData.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No lost deals with a reason yet.</p>
-            ) : (
-              <LostReasonChart data={lostReasonData} />
-            )}
-          </Card>
-        </div>
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source ROI</h2>
+          <p className="text-xs text-slate-400 mb-3">Leads, conversion to deals and won revenue by where the lead came from. Lost reasons: Sales Register &gt; Won &amp; lost deals.</p>
+          {leadSourceData.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="font-medium">Source</th>
+                    <th className="font-medium text-right">Leads</th>
+                    <th className="font-medium text-right">Converted to deal</th>
+                    <th className="font-medium text-right">Won revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leadSourceData.map((r) => (
+                    <tr key={r.source} className="text-slate-700">
+                      <td className="font-medium text-slate-800">{r.source}</td>
+                      <td className="text-right tabular-nums">{r.count}</td>
+                      <td className="text-right tabular-nums">{r.conversionRate}%</td>
+                      <td className="text-right tabular-nums">{formatCurrency(r.wonRevenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
 
         <Card className="p-5">
           <div className="flex items-center gap-1.5 mb-1">
@@ -832,21 +690,28 @@ export default async function ReportsPage() {
           {competitorData.length === 0 ? (
             <p className="text-sm text-slate-400 py-6 text-center">No closed deals with a competing brand recorded yet.</p>
           ) : (
-            <ul className="space-y-2.5">
-              {competitorData.map((c) => (
-                <li key={c.label} className="flex items-center gap-3">
-                  <span className="text-sm text-slate-700 w-32 shrink-0 truncate" title={c.label}>
-                    {c.label}
-                  </span>
-                  <div className="flex-1 h-2 rounded-full bg-rose-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${c.winRate}%` }} />
-                  </div>
-                  <span className="text-xs font-medium text-slate-500 w-40 text-right shrink-0">
-                    {c.winRate}% won ({c.won}-{c.lost})
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="font-medium">Competing brand</th>
+                    <th className="font-medium text-right">Won</th>
+                    <th className="font-medium text-right">Lost</th>
+                    <th className="font-medium text-right">Win rate</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {competitorData.map((c) => (
+                    <tr key={c.label} className="text-slate-700">
+                      <td className="font-medium text-slate-800">{c.label}</td>
+                      <td className="text-right tabular-nums">{c.won}</td>
+                      <td className="text-right tabular-nums">{c.lost}</td>
+                      <td className={`text-right tabular-nums font-medium ${c.winRate >= 50 ? "text-emerald-700" : "text-rose-700"}`}>{c.winRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
@@ -856,7 +721,28 @@ export default async function ReportsPage() {
           {segmentData.length === 0 ? (
             <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
           ) : (
-            <ShareStackedBar data={segmentData} />
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="font-medium">Segment</th>
+                    <th className="font-medium text-right">Deals</th>
+                    <th className="font-medium text-right">Value</th>
+                    <th className="font-medium text-right">Share of deals</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {segmentData.map((r) => (
+                    <tr key={r.label} className="text-slate-700">
+                      <td className="font-medium text-slate-800">{r.label}</td>
+                      <td className="text-right tabular-nums">{r.count}</td>
+                      <td className="text-right tabular-nums">{formatCurrency(r.value)}</td>
+                      <td className="text-right tabular-nums">{Math.round((r.count / segmentData.reduce((t, x) => t + x.count, 0)) * 100)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
@@ -918,16 +804,22 @@ export default async function ReportsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Avatar name={r.name} color={r.avatarColor} size={7} />
-                      <span className={r.id === "others" ? "font-medium text-slate-500 italic" : "font-medium text-slate-800"}>
-                        {r.name}
-                      </span>
+                      {r.id === "others" ? (
+                        <span className="font-medium text-slate-500 italic">{r.name}</span>
+                      ) : (
+                        <Link href={`/deals?owner=${r.id}`} className="font-medium text-indigo-700 hover:underline">
+                          {r.name}
+                        </Link>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    {formatCurrency(r.openValue)} <span className="text-slate-400">({r.openCount})</span>
+                    {r.id === "others" ? formatCurrency(r.openValue) : <Link href={`/deals?owner=${r.id}`} className="hover:text-indigo-700 hover:underline">{formatCurrency(r.openValue)}</Link>}{" "}
+                    <span className="text-slate-400">({r.openCount})</span>
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    {formatCurrency(r.wonQuarterValue)} <span className="text-slate-400">({r.wonQuarterCount})</span>
+                    {r.id === "others" ? formatCurrency(r.wonQuarterValue) : <Link href={`/deals/closed?stage=WON&owner=${r.id}`} className="hover:text-indigo-700 hover:underline">{formatCurrency(r.wonQuarterValue)}</Link>}{" "}
+                    <span className="text-slate-400">({r.wonQuarterCount})</span>
                   </td>
                   <td className="px-4 py-3 text-slate-700">{r.winRate}%</td>
                   <td className="px-4 py-3 text-slate-700">{r.activeLeads}</td>

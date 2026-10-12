@@ -6,6 +6,7 @@ import { InvoiceEntry } from "../../deals/invoice-entry";
 import { formatCurrency, formatDate } from "@/lib/format";
 import Link from "next/link";
 import { ResyncCategoryButton } from "../resync-category-button";
+import { RegisterTabs } from "@/components/register-tabs";
 
 // Line-by-line sales register: every product line sold (from the Sales
 // Register import and deals won in the CRM) plus Project & Service billing,
@@ -170,6 +171,7 @@ export default async function SalesRegisterPage({
     <div>
       <PageHeader title="Sales Register" description={description} />
       <div className="p-4 space-y-3">
+        <RegisterTabs active="lines" />
         <form className="flex flex-wrap items-end gap-3" action="/reports/sales-register">
           <PeriodFields from={iso(from)} to={iso(to)} />
           {all && (

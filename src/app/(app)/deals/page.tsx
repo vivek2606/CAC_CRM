@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton } from "@/components/ui";
 import { OPEN_DEAL_STAGES } from "@/lib/constants";
 import { KanbanBoard } from "./kanban-board";
 import { OwnerFilter } from "./owner-filter";
-import { BarChart3, XCircle } from "lucide-react";
 
 export default async function DealsPage({
   searchParams,
@@ -17,17 +15,14 @@ export default async function DealsPage({
   const params = await searchParams;
   const ownerFilter = { in: params.owner ? [params.owner] : ownerIds };
 
-  const [deals, closedCount] = await Promise.all([
-    prisma.deal.findMany({
-      where: { ownerId: ownerFilter, stage: { in: OPEN_DEAL_STAGES } },
-      orderBy: { updatedAt: "desc" },
-      include: {
-        owner: { select: { name: true, avatarColor: true } },
-        account: { select: { name: true } },
-      },
-    }),
-    prisma.deal.count({ where: { ownerId: ownerFilter, stage: { in: ["WON", "LOST"] } } }),
-  ]);
+  const deals = await prisma.deal.findMany({
+    where: { ownerId: ownerFilter, stage: { in: OPEN_DEAL_STAGES } },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      owner: { select: { name: true, avatarColor: true } },
+      account: { select: { name: true } },
+    },
+  });
 
   // The current 6 active core sales reps, plus Sikiru (Service Manager) -
   // not the full historical SALES_MANAGER-role roster.
@@ -45,23 +40,8 @@ export default async function DealsPage({
         title="Pipeline"
         description="Drag deals between stages to update their status"
         action={
-          <div className="flex items-center gap-3">
-            <Link
-              href="/deals/closed?stage=LOST"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-700 text-sm font-medium px-3.5 py-2 transition-colors"
-            >
-              <XCircle className="h-4 w-4" />
-              Lost deals
-            </Link>
-            <Link
-              href="/deals/closed"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"
-            >
-              <BarChart3 className="h-4 w-4" />
-              {closedCount} Closed Deal{closedCount === 1 ? "" : "s"} & Insights
-            </Link>
-            <NewButton href="/deals/new" label="New Deal" />
-          </div>
+          // Won & lost deals and their insights: Sales Register > Won & lost deals.
+          <NewButton href="/deals/new" label="New Deal" />
         }
       />
       <div className="p-6">
