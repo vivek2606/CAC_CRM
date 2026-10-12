@@ -250,7 +250,7 @@ export function DealForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Lead date</label>
           <input
             name="createdAt"
             type="date"
@@ -258,7 +258,7 @@ export function DealForm({
             defaultValue={defaultValues?.createdAt ?? today}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <p className="mt-1 text-xs text-slate-400">Defaults to today - backdate if logging this later than it happened.</p>
+          <p className="mt-1 text-xs text-slate-400">When the enquiry first came in - defaults to today, backdate it if you&apos;re entering the deal later. Counts from this date in the reports (sales cycle, monthly figures).</p>
         </div>
 
         <div>

@@ -45,7 +45,7 @@ export default async function DealDetailPage({
       contact: { select: { id: true, firstName: true, lastName: true } },
       activities: { orderBy: { createdAt: "desc" } },
       notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, avatarColor: true } } } },
-      sourceLead: { select: { id: true, title: true } },
+      sourceLead: { select: { id: true, title: true, createdAt: true } },
       items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
       lineItems: { orderBy: { docDate: "asc" }, include: { product: { select: { code: true, model: true } } } },
       discountApprovedBy: { select: { name: true } },
@@ -370,10 +370,17 @@ export default async function DealDetailPage({
                   </dd>
                 </div>
               )}
+              {/* A converted deal's own date is when it was converted; the lead date is the lead's. */}
               <div className="flex justify-between">
-                <dt className="text-slate-500">Created</dt>
-                <dd className="text-slate-700">{formatDate(deal.createdAt)}</dd>
+                <dt className="text-slate-500">Lead date</dt>
+                <dd className="text-slate-700">{formatDate(deal.sourceLead?.createdAt ?? deal.createdAt)}</dd>
               </div>
+              {deal.sourceLead && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Converted to deal</dt>
+                  <dd className="text-slate-700">{formatDate(deal.createdAt)}</dd>
+                </div>
+              )}
               {deal.stage !== "WON" && deal.stage !== "LOST" && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">First contacted</dt>

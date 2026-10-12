@@ -204,7 +204,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 </div>
               )}
               <div className="flex justify-between">
-                <dt className="text-slate-500">Created</dt>
+                <dt className="text-slate-500">Lead date</dt>
                 <dd className="text-slate-700">{formatDate(lead.createdAt)}</dd>
               </div>
               {lead.status !== "CONVERTED" && (
