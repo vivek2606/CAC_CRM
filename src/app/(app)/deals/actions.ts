@@ -171,6 +171,41 @@ const dealLineItemSchema = z.object({
 
 // The New Deal form serializes its optional product rows as a JSON array in
 // a hidden "lineItems" field - parse it defensively since it's client-built.
+// Invoices from a products sheet uploaded on the deal form (Date / Invoice
+// No filled in): the saved deal is then marked Won with them.
+const wonInvoicesSchema = z
+  .array(
+    z.object({
+      invoiceNo: z.string().trim().min(1).max(60),
+      closedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      items: z.array(z.object({ productId: z.string().min(1), qty: z.number().finite(), unitPrice: z.number().finite() })).min(1),
+    }),
+  )
+  .max(50);
+function parseWonInvoices(raw: FormDataEntryValue | null): WonInvoice[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const r = wonInvoicesSchema.safeParse(JSON.parse(raw));
+    return r.success ? r.data : [];
+  } catch {
+    return [];
+  }
+}
+
+// After a save from the deal form: mark it Won with the sheet's invoices.
+// A problem (e.g. a discount needing approval) leaves the deal saved and
+// says why on its page, where Mark Won can finish it.
+async function applySheetInvoices(dealId: string, formData: FormData): Promise<string | null> {
+  const invoices = parseWonInvoices(formData.get("wonInvoices"));
+  if (invoices.length === 0) return null;
+  try {
+    await markDealWon(dealId, invoices);
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : "Couldn't mark the deal Won.";
+  }
+}
+
 function parseLineItems(raw: FormDataEntryValue | undefined): z.infer<typeof dealLineItemSchema>[] {
   if (typeof raw !== "string" || raw.trim() === "") return [];
   let items: unknown;
@@ -218,9 +253,10 @@ export async function createDeal(formData: FormData) {
   });
   await syncDealValueFromItems(deal.id);
   if (lineItems.length > 0) await notifyDiscountIfNeeded(deal.id);
+  const wonError = await applySheetInvoices(deal.id, formData);
 
   revalidatePath("/deals");
-  redirect(`/deals/${deal.id}`);
+  redirect(wonError ? `/deals/${deal.id}?wonError=${encodeURIComponent(wonError)}` : `/deals/${deal.id}`);
 }
 
 export async function updateDeal(dealId: string, formData: FormData) {
@@ -292,10 +328,11 @@ export async function updateDeal(dealId: string, formData: FormData) {
   }
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
+  const wonError = await applySheetInvoices(dealId, formData);
 
   revalidatePath("/deals");
   revalidatePath(`/deals/${dealId}`);
-  redirect(`/deals/${dealId}`);
+  redirect(wonError ? `/deals/${dealId}?wonError=${encodeURIComponent(wonError)}` : `/deals/${dealId}`);
 }
 
 export async function deleteDeal(dealId: string) {
@@ -637,11 +674,13 @@ async function recordWonInvoice(dealId: string, closedAt: string, invoiceNo: str
   await syncSaleLineItemsForDeal(dealId);
 }
 
-export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number };
+export type WonSheetRow = { productId: string; label: string; qty: number; unitPrice: number; invoiceNo: string; invoiceDate: string };
 
-// Reads an uploaded sheet of products billed (Product Code and/or Model,
-// Qty, Rate) for the Mark Won dialog. Products are matched by code, else by
-// model; unmatched rows are reported rather than created.
+// Reads an uploaded sheet of products billed: Date, Invoice No, Item Code,
+// Item Name, Quantity, Rate (Date and Invoice No optional - left blank for
+// a deal not billed yet). Products are matched by code, else by name/model;
+// unmatched rows are reported rather than created. Rows with an invoice no.
+// are grouped into invoices by Mark Won and the deal form.
 export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: WonSheetRow[]; problems: string[] }> {
   await requireUser();
   const file = formData.get("file");
@@ -657,22 +696,43 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
   const ws = wb.worksheets[0];
   if (!ws) return { rows: [], problems: ["The file has no worksheets."] };
   const headers: string[] = [];
-  ws.getRow(1).eachCell({ includeEmpty: true }, (c, i) => (headers[i] = String(cellValue(c.value) ?? "").trim().toLowerCase()));
+  ws.getRow(1).eachCell({ includeEmpty: true }, (c, i) => (headers[i] = String(cellValue(c.value) ?? "").trim().toLowerCase().replace(/\s+/g, " ")));
   const col = (...names: string[]) => headers.findIndex((h) => h != null && names.includes(h));
-  const iCode = col("product code", "item code", "code");
-  const iModel = col("model", "product", "item name", "description");
-  const iQty = col("qty", "quantity");
+  const iCode = col("item code", "product code", "code", "item no", "item no.");
+  const iModel = col("item name", "model", "product", "product name", "item", "description");
+  const iQty = col("quantity", "qty", "qty.");
   const iRate = col("rate", "basic rate", "unit price", "price", "rate (excl. vat)", "dealer price");
+  const iInv = col("invoice no", "invoice no.", "invoice number", "inv no", "inv. no.", "invoice", "bill no", "txn no");
+  const iDate = col("date", "invoice date", "bill date", "doc date");
   if ((iCode === -1 && iModel === -1) || iQty === -1 || iRate === -1) {
-    return { rows: [], problems: ["The sheet needs columns: Product Code (or Model), Qty and Rate."] };
+    return { rows: [], problems: ["The sheet needs columns: Item Code (or Item Name), Quantity and Rate - plus Date and Invoice No for billed items."] };
   }
   const products = await prisma.product.findMany({ select: { id: true, code: true, model: true } });
   const norm = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const byCode = new Map(products.map((p) => [p.code.toUpperCase(), p]));
   const byModel = new Map<string, (typeof products)[number]>();
   for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p);
+  const iso = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  // Excel dates come as dates or serial numbers; typed ones as dd/mm/yyyy,
+  // dd-mm-yyyy, yyyy-mm-dd or "12 Sep 2026".
+  const toDate = (v: unknown): string | null => {
+    if (v == null || v === "") return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : iso(v);
+    if (typeof v === "number") return v > 20000 && v < 80000 ? iso(new Date(Math.round((v - 25569) * 86400000))) : null;
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return iso(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+    m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+    if (m) {
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      return +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31 ? iso(new Date(Date.UTC(y, +m[2] - 1, +m[1]))) : null;
+    }
+    const d = new Date(`${t} UTC`);
+    return isNaN(d.getTime()) ? null : iso(d);
+  };
   const rows: WonSheetRow[] = [];
   const problems: string[] = [];
+  const dateOfInvoice = new Map<string, string>();
   ws.eachRow({ includeEmpty: false }, (row, n) => {
     if (n === 1) return;
     const get = (i: number) => (i === -1 ? null : cellValue(row.getCell(i).value));
@@ -688,8 +748,25 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     if (!Number.isFinite(qty) || !Number.isFinite(rate) || qty === 0 || rate === 0) {
       return void problems.push(`Row ${n}: enter a quantity and a rate other than 0 (${p.model})`);
     }
-    rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100 });
+    const rawInv = get(iInv);
+    const invoiceNo = rawInv == null ? "" : String(rawInv).trim();
+    const rawDate = get(iDate);
+    let invoiceDate = toDate(rawDate) ?? "";
+    if (rawDate != null && String(rawDate).trim() && !invoiceDate) problems.push(`Row ${n}: couldn't read the date "${String(rawDate)}" - use dd/mm/yyyy`);
+    if (invoiceNo) {
+      // One date per invoice: the first row's.
+      const known = dateOfInvoice.get(invoiceNo.toLowerCase());
+      if (known && invoiceDate && known !== invoiceDate) problems.push(`Row ${n}: invoice ${invoiceNo} has another date above - used ${known}`);
+      if (known) invoiceDate = known;
+      else if (invoiceDate) dateOfInvoice.set(invoiceNo.toLowerCase(), invoiceDate);
+    }
+    rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100, invoiceNo, invoiceDate });
   });
+  // Rows of an invoice whose date was only on a later row.
+  for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(r.invoiceNo.toLowerCase()) ?? "";
+  if (rows.some((r) => r.invoiceNo) && rows.some((r) => !r.invoiceNo)) {
+    problems.push("Some rows have an invoice no. and some don't - fill in the invoice no. on every row");
+  }
   return { rows, problems };
 }
 

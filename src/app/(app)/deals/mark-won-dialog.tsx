@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Plus, Trash2, Upload, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { parseWonItemsSheet } from "./actions";
+import { groupSheetInvoices } from "@/lib/sheet-invoices";
 
 export type WonProductOption = { id: string; label: string; defaultPrice: number | null };
 export type WonExistingItem = { productId: string; label: string; qty: number; unitPrice: number };
@@ -73,6 +74,27 @@ export function MarkWonDialog({
       const fd = new FormData();
       fd.set("file", file);
       const res = await parseWonItemsSheet(fd);
+      const sheetInvoices = groupSheetInvoices(res.rows);
+      if (sheetInvoices.length > 0) {
+        // The sheet says which invoice each line was billed on: one block per invoice.
+        setError(null);
+        const blocksFromSheet = sheetInvoices.map((inv) => ({
+          key: newKey(),
+          invoiceNo: inv.invoiceNo,
+          closedAt: inv.closedAt || today,
+          rows: inv.rows.map((x) => ({ key: newKey(), productId: x.productId, qty: String(x.qty), rate: String(x.unitPrice) })),
+        }));
+        setBlocks(blocksFromSheet);
+        const undated = sheetInvoices.filter((i) => !i.closedAt).map((i) => i.invoiceNo);
+        setUploadNote({
+          block: blocksFromSheet[0].key,
+          text:
+            `${sheetInvoices.length} invoice${sheetInvoices.length === 1 ? "" : "s"} with ${res.rows.length} product line${res.rows.length === 1 ? "" : "s"} taken from the sheet - check and confirm.` +
+            (undated.length ? ` No date for ${undated.join(", ")} - set to today, change it.` : "") +
+            (res.problems.length ? ` Not added: ${res.problems.join("; ")}` : ""),
+        });
+        return;
+      }
       if (res.rows.length) {
         setError(null);
         setBlocks((bs) =>

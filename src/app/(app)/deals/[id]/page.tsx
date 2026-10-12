@@ -31,7 +31,7 @@ export default async function DealDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ markWon?: string }>;
+  searchParams: Promise<{ markWon?: string; wonError?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -114,7 +114,7 @@ export default async function DealDetailPage({
               dealId={deal.id}
               stage={deal.stage}
               blockWonReason={deal.stage === "WON" ? null : stageActionsBlockReason}
-              openWon={sp.markWon === "1"}
+              openWon={sp.markWon === "1" || (Boolean(sp.wonError) && deal.stage !== "WON")}
               needsAccount={!deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"}
               accounts={allAccounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
               wonInvoice={
@@ -164,6 +164,12 @@ export default async function DealDetailPage({
       />
 
       <div className="p-6 space-y-6">
+        {sp.wonError && deal.stage !== "WON" && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span className="font-semibold">The deal was saved, but not marked Won:</span> {sp.wonError} Fix that, then use Mark Won - you can upload the
+            same sheet there and it fills in each invoice.
+          </div>
+        )}
         {deal.stage === "WON" && !deal.invoiceNo && deal.sourceTxnNo == null && deal.closedAt && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-sm text-amber-800">

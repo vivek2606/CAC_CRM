@@ -17,6 +17,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
 import { CompletenessBar } from "@/components/completeness-bar";
 import { parseWonItemsSheet } from "./actions";
+import { groupSheetInvoices, type SheetInvoice } from "@/lib/sheet-invoices";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
 
 type Option = { id: string; label: string };
@@ -142,19 +143,25 @@ export function DealForm({
     : undefined;
   const [uploadNote, setUploadNote] = useState<string | null>(null);
   const [uploading, startUpload] = useTransition();
+  // Invoices from an uploaded sheet with Date / Invoice No filled in: on
+  // save the deal is marked Won with them (each further invoice becomes its
+  // own won deal, as in Mark Won). Dropped if the products are edited by hand.
+  const [sheetInvoices, setSheetInvoices] = useState<SheetInvoice[]>([]);
 
   function uploadSheet(file: File) {
     startUpload(async () => {
       const fd = new FormData();
       fd.set("file", file);
       const res = await parseWonItemsSheet(fd);
+      const invoices = groupSheetInvoices(res.rows);
+      setSheetInvoices(invoices);
       if (res.rows.length) {
         setFormError(null);
         setUploadedOptions((prev) => [
           ...prev,
           ...res.rows.map((r) => ({ id: r.productId, label: r.label, defaultPrice: null, availableQty: null, inTransitLabel: null })),
         ]);
-        applyItems(res.rows.map((r) => ({ productId: r.productId, qty: String(r.qty), unitPrice: String(r.unitPrice) })));
+        applyItems(res.rows.map((r) => ({ productId: r.productId, qty: String(r.qty), unitPrice: String(r.unitPrice) })), true);
       }
       setUploadNote(
         (res.rows.length
@@ -169,8 +176,12 @@ export function DealForm({
     return rows.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitPrice) || 0), 0);
   }
 
-  function applyItems(rows: LineItemRow[]) {
+  function applyItems(rows: LineItemRow[], fromSheet = false) {
     setItems(rows);
+    if (!fromSheet && sheetInvoices.length) {
+      setSheetInvoices([]);
+      setUploadNote("Products changed by hand - the invoices from the sheet won't be applied. Mark the deal Won from its page, or upload the sheet again.");
+    }
     const hasProduct = rows.some((r) => r.productId);
     if (hasProduct) setValue(String(itemsTotal(rows)));
   }
@@ -203,6 +214,17 @@ export function DealForm({
     <form
       action={action}
       onSubmit={(e) => {
+        if (sheetInvoices.length && defaultValues?.stage !== "WON" && !new FormData(e.currentTarget).get("accountId")) {
+          e.preventDefault();
+          setFormError("Pick the account - it's needed to mark the deal Won with the invoices from the sheet.");
+          return;
+        }
+        const undated = sheetInvoices.filter((i) => !i.closedAt).map((i) => i.invoiceNo);
+        if (undated.length) {
+          e.preventDefault();
+          setFormError(`No date for invoice ${undated.join(", ")} - fill in the Date column in the sheet and upload it again.`);
+          return;
+        }
         if (!requireItems) return;
         if (validItems.length === 0 || validItems.some((r) => !Number(r.unitPrice))) {
           e.preventDefault();
@@ -212,6 +234,19 @@ export function DealForm({
       className="space-y-5 max-w-2xl"
     >
       <input type="hidden" name="lineItems" value={JSON.stringify(validItems)} />
+      {sheetInvoices.length > 0 && (
+        <input
+          type="hidden"
+          name="wonInvoices"
+          value={JSON.stringify(
+            sheetInvoices.map((inv) => ({
+              invoiceNo: inv.invoiceNo,
+              closedAt: inv.closedAt,
+              items: inv.rows.map((r) => ({ productId: r.productId, qty: r.qty, unitPrice: r.unitPrice })),
+            })),
+          )}
+        />
+      )}
       {products && <input type="hidden" name="lineItemsPresent" value="1" />}
       <CompletenessBar fields={completenessFields} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -502,9 +537,30 @@ export function DealForm({
               {dealId && initialItems.length ? "Download current list (.xlsx)" : "Download template"}
             </a>
             <p className="mt-1 text-xs text-slate-400">
-              Sheet columns: Product Code (or Model), Qty, Rate (excl. VAT). Uploading replaces the list above.
+              Sheet columns: Date, Invoice No, Item Code, Item Name, Quantity, Rate (excl. VAT). Leave Date and Invoice No blank if it isn&apos;t billed yet.
+              Uploading replaces the list above.
             </p>
             {uploadNote && <p className="mt-1 text-xs text-slate-600">{uploadNote}</p>}
+            {sheetInvoices.length > 0 && (
+              <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                <p className="font-medium">
+                  {sheetInvoices.length} invoice{sheetInvoices.length === 1 ? "" : "s"} in the sheet - on save this deal is marked Won with{" "}
+                  {sheetInvoices.length === 1 ? "it" : "them"}
+                  {sheetInvoices.length > 1 ? " (the first stays on this deal, each other one becomes its own won deal)" : ""}:
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {sheetInvoices.map((inv) => (
+                    <li key={inv.invoiceNo}>
+                      Invoice {inv.invoiceNo} · {inv.closedAt ? new Date(`${inv.closedAt}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : <span className="text-red-600">no date</span>} ·{" "}
+                      {inv.rows.length} line{inv.rows.length === 1 ? "" : "s"} · {formatCurrency(inv.rows.reduce((t, r) => t + r.qty * r.unitPrice, 0))}
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" onClick={() => setSheetInvoices([])} className="mt-1 font-medium underline">
+                  Don&apos;t mark Won - just keep the products
+                </button>
+              </div>
+            )}
             {validItems.length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
                 Products total: <span className="font-medium text-slate-700">{formatCurrency(itemsTotal(validItems))}</span>
