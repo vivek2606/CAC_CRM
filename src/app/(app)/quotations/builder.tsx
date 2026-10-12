@@ -37,6 +37,16 @@ export type DealPrefill = {
   rows: { productId: string | null; description: string; detail: string; unit: string; qty: number; unitPrice: number }[];
 };
 
+// A saved quotation reopened in the builder: as it was (same reference -
+// downloading again updates it), or as a revision (a new reference).
+export type QuotePrefill = {
+  dealId: string | null;
+  dealTitle: string | null;
+  ref: string;
+  revisionOf: string | null;
+  data: DocumentInput;
+};
+
 type Row =
   | { uid: string; kind: "section"; label: string }
   | { uid: string; kind: "item"; custom: boolean; productId: string | null; description: string; detail: string; unit: string; qty: string; unitPrice: string };
@@ -109,6 +119,7 @@ export function QuotationBuilder({
   validityDays,
   signatory,
   fromDeal,
+  fromQuote,
   isHead,
 }: {
   options: ModelOption[];
@@ -119,12 +130,59 @@ export function QuotationBuilder({
   validityDays: number;
   signatory: { name: string; designation: string; phone: string };
   fromDeal: DealPrefill | null;
+  fromQuote: QuotePrefill | null;
   isHead: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const companyFor = (key: string) => companies.find((c) => c.key === key) ?? companies[0];
 
+  // The deal a downloaded quote is saved against.
+  const linkedDealId = fromDeal?.dealId ?? fromQuote?.dealId ?? null;
+  const prefilled = fromDeal != null || fromQuote != null;
+
+  const fromSaved = (q: QuotePrefill): Draft => {
+    const x = q.data;
+    const byModel = new Map(options.map((o) => [o.model.trim().toLowerCase(), o.id]));
+    return {
+      type: x.type,
+      companyKey: companyFor(x.companyKey).key,
+      ref: q.ref,
+      date: q.revisionOf ? todayIso() : x.date,
+      to: x.to,
+      attention: x.attention,
+      title: x.title,
+      rows: x.rows.map((r, i): Row => {
+        if (r.kind === "section") return { uid: `q${i}`, kind: "section", label: r.label };
+        const productId = byModel.get(r.description.trim().toLowerCase()) ?? null;
+        return {
+          uid: `q${i}`,
+          kind: "item",
+          custom: !productId,
+          productId,
+          description: r.description,
+          // A revision picks up today's stock status for listed products.
+          detail: q.revisionOf && productId ? (optionById.get(productId)?.availability ?? r.detail) : r.detail,
+          unit: r.unit,
+          qty: String(r.qty),
+          unitPrice: String(r.unitPrice),
+        };
+      }),
+      terms: [...x.terms],
+      validityDays: String(x.validityDays),
+      vatMode: x.vatMode,
+      showAvailability: x.showAvailability,
+      tin: x.tin,
+      bankName: x.bankName,
+      accountName: x.accountName,
+      accountNumber: x.accountNumber,
+      signatoryName: q.revisionOf ? signatory.name : x.signatoryName,
+      signatoryDesignation: q.revisionOf ? signatory.designation : x.signatoryDesignation,
+      signatoryPhone: q.revisionOf ? signatory.phone : x.signatoryPhone,
+    };
+  };
+
   const fresh = (): Draft => {
+    if (fromQuote) return fromSaved(fromQuote);
     const co = companyFor(defaultCompany);
     const date = todayIso();
     return {
@@ -161,13 +219,13 @@ export function QuotationBuilder({
 
   // Keep the work in the browser so leaving the page doesn't lose it.
   useEffect(() => {
-    if (!dirty || fromDeal) return;
+    if (!dirty || prefilled) return;
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
     } catch {
       // storage full / blocked - the draft just isn't kept
     }
-  }, [d, dirty, fromDeal]);
+  }, [d, dirty, prefilled]);
 
   const update = (patch: Partial<Draft>) => {
     setDirty(true);
@@ -264,7 +322,7 @@ export function QuotationBuilder({
         ref = await reserveQuoteRef();
         update({ ref });
       }
-      const res = await fetch(`/quotations/${format}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(ref)) });
+      const res = await fetch(`/quotations/${format}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload(ref), dealId: linkedDealId }) });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't create the file.");
@@ -290,7 +348,23 @@ export function QuotationBuilder({
 
   return (
     <div className="space-y-5">
-      {!dirty && !fromDeal && hasSavedDraft && (
+      {fromQuote && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
+          {fromQuote.revisionOf
+            ? `Revision of ${fromQuote.revisionOf} - it gets a new reference number when downloaded.`
+            : `Saved quotation ${fromQuote.ref} - downloading again keeps this number and saves any changes.`}
+          {fromQuote.dealId && (
+            <>
+              {" "}
+              Deal:{" "}
+              <Link href={`/deals/${fromQuote.dealId}`} className="font-medium underline">
+                {fromQuote.dealTitle}
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+      {!dirty && !prefilled && hasSavedDraft && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
           You have an unfinished document saved in this browser.
           <button type="button" onClick={restoreDraft} className="font-medium underline">
@@ -760,8 +834,8 @@ export function QuotationBuilder({
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="ml-auto flex flex-wrap gap-2">
-          {fromDeal && (
-            <Link href={`/deals/${fromDeal.dealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">
+          {linkedDealId && (
+            <Link href={`/deals/${linkedDealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">
               Back to deal
             </Link>
           )}

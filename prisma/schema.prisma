@@ -165,6 +165,7 @@ model User {
   stockReceipts StockReceipt[] @relation("StockReceiptCreator")
   inTransitOrders InTransitOrder[] @relation("InTransitCreator")
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
+  quotations    Quotation[] @relation("QuotationCreator")
 }
 
 model Target {
@@ -385,6 +386,7 @@ model Deal {
   lineItems     SaleLineItem[]
   items         DealLineItem[]
   contactRoles  DealContactRole[]
+  quotations    Quotation[]
 
   @@index([sourceTxnNo])
 }
@@ -687,4 +689,29 @@ model ProjectBilling {
   createdAt DateTime @default(now())
 
   @@index([ownerId, month])
+}
+
+// A quotation / proforma invoice / bill of quantity as downloaded from the
+// Quotations builder. The builder's input is kept (not the PDF), so the
+// same document can be downloaded again or revised. One row per reference
+// number; downloading the same quote again updates it.
+model Quotation {
+  id           String   @id @default(cuid())
+  ref          String   @unique
+  type         String   // quote / proforma / boq
+  customerName String
+  total        Float    @default(0)
+  data         Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dealId       String?
+  deal         Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  createdById  String
+  createdBy    User     @relation("QuotationCreator", fields: [createdById], references: [id])
+
+  @@index([dealId])
+  @@index([createdById])
+  @@index([createdAt])
 }

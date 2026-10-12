@@ -10,17 +10,22 @@ import {
   getLatestPriceByProduct,
   getQuotableProducts,
 } from "@/lib/pricing";
-import { QuotationBuilder, type DealPrefill, type ModelOption } from "./builder";
+import { documentInputSchema } from "@/lib/sales-document";
+import { canSeeQuotation } from "@/lib/saved-quotes";
+import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
+import { QuotationTabs } from "./quotation-tabs";
 
 // Quotation / proforma invoice / BOQ builder: pick models, quantities and
 // (editable) ex-VAT rates; the PDF / Excel add VAT and the total in words.
-// Opened from a deal (?deal=) it starts with that deal's customer and items.
+// Opened from a deal (?deal=) it starts with that deal's customer and items;
+// opened from a saved quotation (?quote=, &revise=1 for a new number) it
+// starts with that quotation.
 
 const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string }> }) {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string }> }) {
   const user = await requireUser();
-  const { deal: dealId } = await searchParams;
+  const { deal: dealId, quote: quoteId, revise } = await searchParams;
   const [settings, products, prices, stock, inTransit, tentative, me] = await Promise.all([
     getCompanySettings(),
     getQuotableProducts(),
@@ -110,19 +115,40 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     }
   }
 
+  let fromQuote: QuotePrefill | null = null;
+  if (quoteId) {
+    const q = await prisma.quotation.findUnique({ where: { id: quoteId }, include: { deal: { select: { id: true, title: true, ownerId: true } } } });
+    const data = q && canSeeQuotation(user, q) ? documentInputSchema.safeParse(q.data) : null;
+    if (q && data?.success) {
+      const isRevision = revise === "1";
+      fromQuote = {
+        dealId: q.deal?.id ?? null,
+        dealTitle: q.deal?.title ?? null,
+        ref: isRevision ? "" : q.ref,
+        revisionOf: isRevision ? q.ref : null,
+        data: data.data,
+      };
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Quotations"
+        action={<QuotationTabs active={fromQuote ? "saved" : "new"} />}
         description={
-          fromDeal
+          fromQuote
+            ? fromQuote.revisionOf
+              ? `Revising ${fromQuote.revisionOf}`
+              : `Saved quotation ${fromQuote.ref}`
+            : fromDeal
             ? `For the deal: ${fromDeal.title}`
             : "Prepare a quotation, proforma invoice or bill of quantity - download as PDF, or Excel to edit later"
         }
       />
       <div className="p-6">
         <QuotationBuilder
-          key={dealId ?? "new"}
+          key={fromQuote ? `${quoteId}-${revise ?? ""}` : (dealId ?? "new")}
           options={options}
           companies={settings.companies.map((c) => ({
             key: c.key,
@@ -138,7 +164,8 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           defaultTerms={defaultTermsLines(settings)}
           validityDays={settings.quoteValidityDays}
           signatory={{ name: me?.name ?? user.name ?? "", designation: me?.title ?? "", phone: me?.phone ?? "" }}
-          fromDeal={fromDeal}
+          fromDeal={fromQuote ? null : fromDeal}
+          fromQuote={fromQuote}
           isHead={user.role === "HEAD"}
         />
       </div>

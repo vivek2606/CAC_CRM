@@ -23,6 +23,7 @@ import { DealItemsSection } from "../deal-items-section";
 import { SaleLineItemsTable } from "../sale-line-items-table";
 import { StakeholdersSection } from "../stakeholders-section";
 import { ReorderFlag } from "../reorder-flag";
+import { SavedQuotesTable, savedQuoteSelect } from "../../quotations/saved-quotes-table";
 import { Pencil, Trash2, FileText, ShieldCheck } from "lucide-react";
 
 export default async function DealDetailPage({
@@ -72,7 +73,7 @@ export default async function DealDetailPage({
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
   const ownerIds = await visibleOwnerIds(user);
-  const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts] = await Promise.all([
+  const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts, quotations] = await Promise.all([
     getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
@@ -81,6 +82,7 @@ export default async function DealDetailPage({
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true },
     }),
+    prisma.quotation.findMany({ where: { dealId: deal.id }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,
@@ -202,6 +204,16 @@ export default async function DealDetailPage({
               </>
             )}
           </Card>
+
+          {quotations.length > 0 && (
+            <Card className="p-5">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-slate-400" />
+                Quotations ({quotations.length})
+              </h2>
+              <SavedQuotesTable quotes={quotations} showDeal={false} />
+            </Card>
+          )}
 
           {discount && discount.discountPct > 0.5 && (
             <Card className="p-5">
