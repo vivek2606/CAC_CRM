@@ -115,6 +115,18 @@ main table:not(.text-xs):not(.text-\[11px\]) th {
   letter-spacing: 0.04em;
 }
 
+/* Table text a step bolder for readability: plain cells go from normal to
+   medium, medium (headers, links, names) to semibold. Cells already
+   semibold or bold keep their weight. */
+main table td:not([class*="font-"]) {
+  font-weight: 500;
+}
+main table .font-medium,
+main table th.font-medium,
+main table th:not([class*="font-"]) {
+  font-weight: 600;
+}
+
 /* Phones: iOS zooms the page into any field with text under 16px - keep
    form fields at 16px on small screens so typing doesn't jump the view. */
 @media (max-width: 767px) {
