@@ -59,6 +59,10 @@ export type ImportSummary = {
   // these months with no invoice no. (can't be matched - check them).
   crmInvoicesSkipped: string[];
   crmWithoutInvoice: number;
+  // Company column: how many invoices got their company, and values that
+  // aren't recognisably Sakuragi or Somotex (left without one).
+  companiesRecorded: number;
+  unrecognisedCompanies: string[];
 };
 
 export type ImportState = { error?: string; summary?: ImportSummary };
@@ -590,6 +594,8 @@ export async function importSalesRegister(
       rowsAfterUpTo,
       crmInvoicesSkipped,
       crmWithoutInvoice,
+      companiesRecorded: result.deals.filter((d) => billingCompanyOf(d.entity)).length,
+      unrecognisedCompanies: [...new Set(result.deals.filter((d) => d.entity && !billingCompanyOf(d.entity)).map((d) => d.entity!))].slice(0, 20),
     },
   };
 }

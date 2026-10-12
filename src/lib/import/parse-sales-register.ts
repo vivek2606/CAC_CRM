@@ -39,9 +39,12 @@ export async function parseSalesRegisterBuffer(
     throw new Error(`Missing expected column(s): ${missing.join(", ")}`);
   }
 
-  // Optional billing company column (Somotex / Sakuragi), any of these names.
-  const ENTITY_COLUMNS = ["company", "company name", "entity", "billing company", "billing entity", "legal entity"];
-  const entityIdx = headers.findIndex((h) => h != null && ENTITY_COLUMNS.includes(h.toLowerCase()));
+  // Optional billing company column (Somotex / Sakuragi), any of these names
+  // - spacing, capitals and underscores ignored ("billingEntity", "Billing
+  // Entity", "BILLING_ENTITY").
+  const ENTITY_COLUMNS = ["company", "companyname", "entity", "billingcompany", "billingentity", "legalentity", "billedby"];
+  const squash = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
+  const entityIdx = headers.findIndex((h) => h != null && ENTITY_COLUMNS.includes(squash(h)));
 
   const rows: RawSalesRow[] = [];
   let skippedRows = 0;
