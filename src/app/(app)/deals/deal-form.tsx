@@ -577,8 +577,8 @@ export function DealForm({
                 </p>
                 <ul className="mt-1 space-y-0.5">
                   {sheetInvoices.map((inv) => (
-                    <li key={`${inv.company}|${inv.invoiceNo}`}>
-                      Invoice {inv.invoiceNo} · {inv.company || <span className="text-red-600">no company</span>} · {inv.closedAt ? new Date(`${inv.closedAt}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : <span className="text-red-600">no date</span>} ·{" "}
+                    <li key={`${inv.company}|${inv.type}|${inv.invoiceNo}`}>
+                      {inv.type === "return" ? "Sales return" : "Invoice"} {inv.invoiceNo} · {inv.company || <span className="text-red-600">no company</span>} · {inv.closedAt ? new Date(`${inv.closedAt}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : <span className="text-red-600">no date</span>} ·{" "}
                       {inv.rows.length} line{inv.rows.length === 1 ? "" : "s"} · {formatCurrency(inv.rows.reduce((t, r) => t + r.qty * r.unitPrice, 0))}
                     </li>
                   ))}

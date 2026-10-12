@@ -135,11 +135,11 @@ export async function importSalesRegister(
   // Invoices already entered in the CRM as won sales would be counted twice
   // if imported on top: those documents are left out of this upload (and
   // listed), the rest are imported. Matched on the invoice no. (the file's
-  // Txn No) and the billing company when both are known - Sakuragi and
-  // Somotex number their invoices separately.
+  // Txn No), its type (sale / sales return) and the billing company when
+  // both are known - each company numbers its sales and returns separately.
   const crmWon = await prisma.deal.findMany({
     where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: rangeStart, lt: rangeEnd } },
-    select: { invoiceNo: true, billingCompany: true, title: true },
+    select: { invoiceNo: true, billingCompany: true, title: true, value: true },
   });
   const crmWithoutInvoice = crmWon.filter((d) => !d.invoiceNo?.trim()).length;
   const skippedDocKeys = new Set<string>();
@@ -147,7 +147,11 @@ export async function importSalesRegister(
   for (const d of result.deals) {
     const company = billingCompanyOf(d.entity);
     const hit = crmWon.find(
-      (c) => c.invoiceNo?.trim().toLowerCase() === String(d.txnNo) && (!c.billingCompany || !company || c.billingCompany === company),
+      (c) =>
+        c.invoiceNo?.trim().toLowerCase() === String(d.txnNo) &&
+        // A sale and a sales return can share a number.
+        c.value < 0 === d.value < 0 &&
+        (!c.billingCompany || !company || c.billingCompany === company),
     );
     if (hit) {
       skippedDocKeys.add(d.docKey);

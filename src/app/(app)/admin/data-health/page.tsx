@@ -87,6 +87,8 @@ export default async function DataHealthPage() {
         (b) =>
           b.id !== a.id &&
           (a.sourceTxnNo == null || b.sourceTxnNo == null) &&
+          // A sale and a sales return can share a number.
+          (a.value < 0) === (b.value < 0) &&
           (!a.billingCompany || !b.billingCompany || a.billingCompany === b.billingCompany),
       ),
     );
@@ -135,7 +137,7 @@ export default async function DataHealthPage() {
 
         <Card className="p-5" >
           <h2 id="dup" className="text-sm font-semibold text-slate-900 scroll-mt-24">Same invoice recorded twice</h2>
-          <p className="mb-3 text-xs text-slate-500">Counted twice in sales, targets and incentives. Keep one and delete or correct the other (wrong number or company).</p>
+          <p className="mb-3 text-xs text-slate-500">The same invoice no., company and type (sale or sales return) on two sales - counted twice in sales, targets and incentives. Keep one and delete or correct the other.</p>
           {duplicates.length === 0 ? (
             <p className="text-sm text-emerald-700">None.</p>
           ) : (

@@ -11,6 +11,7 @@ import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
 import { billingCompanyOf } from "@/lib/billing-company";
+import { invoiceKey, invoiceTypeOf, type InvoiceType } from "@/lib/invoice-key";
 import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
 import { binDeal } from "@/lib/recycle-bin";
 
@@ -307,7 +308,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
     const newNo = String(formData.get("invoiceNo") ?? "").trim() || existing.invoiceNo;
     const newCompany = (isBackOffice(user) && billingCompanyOf(String(formData.get("billingCompany") ?? ""))) || existing.billingCompany;
     if (newNo && (newNo !== existing.invoiceNo || newCompany !== existing.billingCompany)) {
-      const clash = await invoiceClash([{ invoiceNo: newNo, company: newCompany }], [dealId]);
+      const clash = await invoiceClash([{ invoiceNo: newNo, company: newCompany, type: invoiceTypeOf(existing.value) }], [dealId]);
       if (clash) redirect(`/deals/${dealId}/edit?error=${encodeURIComponent(clash)}`);
     }
   }
@@ -666,7 +667,7 @@ export async function setDealConsiderForReorder(dealId: string, considerForReord
 // date the sale counts (closedAt), so its line items move with it.
 export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string, company?: string) {
   const user = await requireUser();
-  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, sourceTxnNo: true } });
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, sourceTxnNo: true, value: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   if (deal.stage !== "WON") throw new Error("Only a won deal has an invoice.");
   if (deal.sourceTxnNo != null) throw new Error("This sale came from the Sales Register - its invoice no. is the register's Txn No.");
@@ -675,7 +676,7 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new Error("Enter the invoice date.");
   const billingCompany = billingCompanyOf(company);
   if (!billingCompany) throw new Error("Pick the company that raised the invoice - Sakuragi or Somotex.");
-  const clash = await invoiceClash([{ invoiceNo: no, company: billingCompany }], [dealId]);
+  const clash = await invoiceClash([{ invoiceNo: no, company: billingCompany, type: invoiceTypeOf(deal.value) }], [dealId]);
   if (clash) throw new Error(clash);
   await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate), billingCompany } });
   await logDealChange(dealId, user.id, `Invoice no. set: ${no} (${billingCompany}), dated ${invoiceDate}.`);
@@ -688,10 +689,14 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
 
 // An invoice already recorded on another won deal - entered in the CRM or
 // imported from the Sales Register - would count the sale twice. Same
-// number and the same company (or either company not recorded) is a clash;
-// Sakuragi and Somotex number separately, so different companies aren't.
-// Returns a message naming the deal, or null.
-async function invoiceClash(invoices: { invoiceNo: string; company: string | null }[], excludeDealIds: string[]): Promise<string | null> {
+// number, same type (sale / sales return) and the same company (or either
+// company not recorded) is a clash; each company numbers its sales and its
+// returns separately (see invoice-key.ts). Returns a message naming the
+// deal, or null.
+async function invoiceClash(
+  invoices: { invoiceNo: string; company: string | null; type: InvoiceType }[],
+  excludeDealIds: string[],
+): Promise<string | null> {
   const nos = [...new Set(invoices.map((i) => i.invoiceNo.trim()).filter(Boolean))];
   if (nos.length === 0) return null;
   const others = await prisma.deal.findMany({
@@ -700,17 +705,18 @@ async function invoiceClash(invoices: { invoiceNo: string; company: string | nul
       id: { notIn: excludeDealIds },
       OR: [{ invoiceNo: { in: nos, mode: "insensitive" } }, { sourceTxnNo: { in: nos.filter((n) => /^\d+$/.test(n)).map(Number) } }],
     },
-    select: { id: true, title: true, invoiceNo: true, sourceTxnNo: true, billingCompany: true },
+    select: { id: true, title: true, value: true, invoiceNo: true, sourceTxnNo: true, billingCompany: true },
   });
   for (const inv of invoices) {
     const no = inv.invoiceNo.trim().toLowerCase();
     const hit = others.find(
       (o) =>
         ((o.invoiceNo ?? "").toLowerCase() === no || String(o.sourceTxnNo ?? "") === no) &&
+        invoiceTypeOf(o.value) === inv.type &&
         (!o.billingCompany || !inv.company || o.billingCompany === inv.company),
     );
     if (hit) {
-      return `Invoice ${inv.invoiceNo.trim()}${inv.company ? ` (${inv.company})` : ""} is already recorded on "${hit.title}"${
+      return `${inv.type === "return" ? "Sales return" : "Invoice"} ${inv.invoiceNo.trim()}${inv.company ? ` (${inv.company})` : ""} is already recorded on "${hit.title}"${
         hit.billingCompany ? ` (${hit.billingCompany})` : ""
       } - entering it again would count the sale twice. Correct that deal instead${
         !hit.billingCompany && inv.company ? `, or if it was billed by the other company, set its Billed by first` : ""
@@ -752,9 +758,10 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   if (nos.some((n) => !n)) throw new Error("Enter the invoice no. for every invoice.");
   // Sakuragi and Somotex number their invoices separately, so the same
   // number can come up once per company.
-  const invoiceKey = (i: WonInvoice) => `${billingCompanyOf(i.billingCompany) ?? ""}|${i.invoiceNo.trim().toLowerCase()}`;
-  if (new Set(invoices.map(invoiceKey)).size !== invoices.length) {
-    throw new Error("Each invoice needs a different invoice no. (the same number is fine once for Sakuragi and once for Somotex).");
+  const totalOf = (i: WonInvoice) => i.items.reduce((t, x) => t + x.qty * x.unitPrice, 0);
+  const keyOf = (i: WonInvoice) => invoiceKey(billingCompanyOf(i.billingCompany), invoiceTypeOf(totalOf(i)), i.invoiceNo);
+  if (new Set(invoices.map(keyOf)).size !== invoices.length) {
+    throw new Error("Each invoice needs a different invoice no. (the same number is fine once per company, and once as a sale and once as a sales return).");
   }
   if (invoices.some((i) => !/^\d{4}-\d{2}-\d{2}$/.test(i.closedAt))) throw new Error("Enter the invoice date for every invoice.");
   for (const [n, inv] of invoices.entries()) {
@@ -770,7 +777,7 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
   }
   if (alreadyWon && !deal.accountId) throw new Error("Link this deal to an account first (Edit) - every won sale needs its account.");
   const clash = await invoiceClash(
-    invoices.map((i) => ({ invoiceNo: i.invoiceNo, company: billingCompanyOf(i.billingCompany) ?? deal.billingCompany })),
+    invoices.map((i) => ({ invoiceNo: i.invoiceNo, company: billingCompanyOf(i.billingCompany) ?? deal.billingCompany, type: invoiceTypeOf(totalOf(i)) })),
     [dealId],
   );
   if (clash) throw new Error(clash);
@@ -828,7 +835,7 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
     const value = round2(inv.items.reduce((t, i) => t + i.qty * i.unitPrice, 0));
     const copy = await prisma.deal.create({
       data: {
-        title: `${deal.title} - Inv ${inv.invoiceNo.trim()}${
+        title: `${deal.title} - ${invoiceTypeOf(totalOf(inv)) === "return" ? "Return" : "Inv"} ${inv.invoiceNo.trim()}${
           invoices.filter((o) => o.invoiceNo.trim().toLowerCase() === inv.invoiceNo.trim().toLowerCase()).length > 1 && companyOf(inv) ? ` (${companyOf(inv)})` : ""
         }`,
         customerName: deal.customerName,
@@ -967,9 +974,9 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     const company = billingCompanyOf(rawCompany) ?? "";
     if (rawCompany && !company) problems.push(`Row ${n}: company "${rawCompany}" - use Sakuragi or Somotex`);
     if (invoiceNo) {
-      // One date per invoice - an invoice being its company + number (the
-      // two companies number their invoices separately): the first row's.
-      const key = `${company}|${invoiceNo.toLowerCase()}`;
+      // One date per invoice - an invoice being its company + type (sale /
+      // sales return) + number (see invoice-key.ts): the first row's.
+      const key = invoiceKey(company, invoiceTypeOf(qty * rate), invoiceNo);
       const known = dateOfInvoice.get(key);
       if (known && invoiceDate && known !== invoiceDate) problems.push(`Row ${n}: invoice ${invoiceNo} has another date above - used ${known}`);
       if (known) invoiceDate = known;
@@ -978,7 +985,7 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     rows.push({ productId: p.id, label: `${p.model} (${p.code})`, qty, unitPrice: Math.round(rate * 100) / 100, invoiceNo, invoiceDate, company });
   });
   // Rows of an invoice whose date was only on a later row.
-  for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(`${r.company}|${r.invoiceNo.toLowerCase()}`) ?? "";
+  for (const r of rows) if (r.invoiceNo && !r.invoiceDate) r.invoiceDate = dateOfInvoice.get(invoiceKey(r.company, invoiceTypeOf(r.qty * r.unitPrice), r.invoiceNo)) ?? "";
   if (rows.some((r) => r.invoiceNo) && rows.some((r) => !r.invoiceNo)) {
     problems.push("Some rows have an invoice no. and some don't - fill in the invoice no. on every row");
   }

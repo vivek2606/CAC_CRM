@@ -6,6 +6,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { parseWonItemsSheet } from "./actions";
 import { groupSheetInvoices } from "@/lib/sheet-invoices";
 import { BILLING_COMPANIES } from "@/lib/billing-company";
+import { invoiceKey, invoiceTypeOf } from "@/lib/invoice-key";
 
 export type WonProductOption = { id: string; label: string; defaultPrice: number | null };
 export type WonExistingItem = { productId: string; label: string; qty: number; unitPrice: number };
@@ -145,9 +146,11 @@ export function MarkWonDialog({
       if (!b.company) return setError(`Pick the company that raised the invoice${label} - Sakuragi or Somotex.`);
       invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, billingCompany: b.company, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });
     }
-    // The same number is fine once per company - they number separately.
-    const keys = invoices.map((i) => `${i.billingCompany}|${i.invoiceNo.toLowerCase()}`);
-    if (new Set(keys).size !== keys.length) return setError("Each invoice needs a different invoice no. (the same number is fine once for Sakuragi and once for Somotex).");
+    // The same number is fine once per company and type (sale / sales
+    // return) - they're numbered separately.
+    const keys = invoices.map((i) => invoiceKey(i.billingCompany, invoiceTypeOf(i.items.reduce((t, x) => t + x.qty * x.unitPrice, 0)), i.invoiceNo));
+    if (new Set(keys).size !== keys.length)
+      return setError("Each invoice needs a different invoice no. (the same number is fine once per company, and once as a sale and once as a sales return).");
     onConfirm(invoices);
   };
 
