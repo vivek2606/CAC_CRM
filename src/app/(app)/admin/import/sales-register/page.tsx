@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireBackOffice } from "@/lib/rbac";
-import { prisma } from "@/lib/prisma";
 import { PageHeader, Card } from "@/components/ui";
 import { ImportForm } from "./import-form";
 
@@ -8,21 +7,11 @@ export const maxDuration = 60;
 
 export default async function ImportPage() {
   await requireBackOffice();
-  // Default "Import up to": the month before the first Won deal entered in
-  // the CRM (imported deals carry a register Txn No; CRM ones don't).
-  const firstCrmWon = await prisma.deal.findFirst({
-    where: { stage: "WON", sourceTxnNo: null, closedAt: { not: null } },
-    orderBy: { closedAt: "asc" },
-    select: { closedAt: true },
-  });
-  const crmFrom = firstCrmWon?.closedAt
-    ? new Date(Date.UTC(firstCrmWon.closedAt.getUTCFullYear(), firstCrmWon.closedAt.getUTCMonth(), 1))
-    : null;
-  const lastRegisterMonth = crmFrom ? new Date(Date.UTC(crmFrom.getUTCFullYear(), crmFrom.getUTCMonth() - 1, 1)) : null;
-  const defaultUpTo = lastRegisterMonth
-    ? `${lastRegisterMonth.getUTCFullYear()}-${String(lastRegisterMonth.getUTCMonth() + 1).padStart(2, "0")}`
-    : "";
-  const crmFromLabel = crmFrom?.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) ?? null;
+  // The whole file is imported by default: invoices already entered in the
+  // CRM are matched one by one and left out (see the import action), so
+  // months with CRM sales no longer need cutting off.
+  const defaultUpTo = "";
+  const crmFromLabel = null;
 
   return (
     <div>
@@ -76,9 +65,8 @@ export default async function ImportPage() {
             </li>
             <li>
               To correct a register uploaded earlier, tick <span className="font-medium">Replace existing data</span>{" "}
-              and upload the corrected file. Set <span className="font-medium">Import rows up to</span> to the last month
-              billed from the register - months whose deals are entered in the CRM are then left out of the file
-              (otherwise the upload is refused, so nothing is counted twice).
+              and upload the corrected file. Invoices already entered in the CRM as won sales are recognised by their
+              invoice no. and company and left out, so nothing is counted twice - they&apos;re listed after the upload.
             </li>
             <li>This can take a minute for a large file. Don&apos;t close the tab while it&apos;s running.</li>
           </ul>

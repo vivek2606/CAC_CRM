@@ -44,7 +44,7 @@ export function ImportForm({ defaultUpTo, crmFromLabel }: { defaultUpTo: string;
           <span className="text-xs text-slate-500">
             {crmFromLabel
               ? `Rows after this month are left out - sales from ${crmFromLabel} are entered in the CRM.`
-              : "Rows after this month are left out. Clear it to import the whole file."}
+              : "Optional - rows after this month are left out. Leave it empty to import the whole file."}
           </span>
         </div>
         <label className="flex items-start gap-2 text-sm text-slate-700">
@@ -130,6 +130,27 @@ export function ImportForm({ defaultUpTo, crmFromLabel }: { defaultUpTo: string;
               {state.summary.replacedRange &&
                 ` Rebuilt ${state.summary.lineItemsCreated} line items in place of ${state.summary.lineItemsReplaced} previously imported ones.`}
             </p>
+            {state.summary.crmInvoicesSkipped.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <p className="font-medium">
+                  {state.summary.crmInvoicesSkipped.length} invoice{state.summary.crmInvoicesSkipped.length === 1 ? " was" : "s were"} already entered in the
+                  CRM - left out of this upload so they aren&apos;t counted twice:
+                </p>
+                <ul className="mt-1 list-disc pl-5">
+                  {state.summary.crmInvoicesSkipped.slice(0, 20).map((x) => (
+                    <li key={x}>{x}</li>
+                  ))}
+                  {state.summary.crmInvoicesSkipped.length > 20 && <li>…and {state.summary.crmInvoicesSkipped.length - 20} more</li>}
+                </ul>
+              </div>
+            )}
+            {state.summary.crmWithoutInvoice > 0 && (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {state.summary.crmWithoutInvoice} won sale{state.summary.crmWithoutInvoice === 1 ? "" : "s"} entered in the CRM in these months{" "}
+                {state.summary.crmWithoutInvoice === 1 ? "has" : "have"} no invoice no., so {state.summary.crmWithoutInvoice === 1 ? "it" : "they"} couldn&apos;t
+                be matched against the file - add the invoice no. (Data health page) and upload again, or check for double counting.
+              </p>
+            )}
             {state.summary.demoAccountsRemoved.length > 0 && (
               <p className="text-xs text-slate-400 mt-1">
                 Removed unused demo accounts: {state.summary.demoAccountsRemoved.join(", ")}

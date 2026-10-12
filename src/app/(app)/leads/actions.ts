@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { binLead } from "@/lib/recycle-bin";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
@@ -163,6 +164,8 @@ export async function deleteLead(leadId: string) {
     throw new Error("You do not have access to this lead.");
   }
 
+  // Into the recycle bin first (restorable for 30 days).
+  await binLead(leadId, user.id);
   await prisma.lead.delete({ where: { id: leadId } });
   revalidatePath("/leads");
   redirect("/leads");

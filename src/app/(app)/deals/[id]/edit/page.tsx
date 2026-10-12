@@ -6,8 +6,15 @@ import { DealForm } from "../../deal-form";
 import { updateDeal } from "../../actions";
 import { getAvailableStockByProduct, getInTransitByProduct, getLatestPriceByProduct, getQuotableProducts, inTransitLabel } from "@/lib/pricing";
 
-export default async function EditDealPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditDealPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { id } = await params;
+  const { error: saveError } = await searchParams;
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 
@@ -59,6 +66,7 @@ export default async function EditDealPage({ params }: { params: Promise<{ id: s
     <div>
       <PageHeader title={`Edit: ${deal.title}`} />
       <div className="p-6">
+        {saveError && <p className="mb-4 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Not saved: {saveError}</p>}
         <Card className="p-6">
           <DealForm
             action={action}

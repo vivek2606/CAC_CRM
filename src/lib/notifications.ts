@@ -11,6 +11,8 @@ export type NotificationGroup = { key: string; label: string; count: number; hre
 export type Notifications = { total: number; groups: NotificationGroup[]; pushKey?: string | null };
 
 const STALE_DAYS = 14;
+// A quotation on an open deal with no activity since: follow it up.
+const QUOTE_FOLLOW_UP_DAYS = 7;
 const SHOW = 5;
 const day = 86400000;
 const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -29,7 +31,8 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   const groups: NotificationGroup[] = [];
   const who = (name: string) => (team ? ` · ${name}` : "");
 
-  const [tasks, pastClose, quiet, noInvoice] = await Promise.all([
+  const quoteBefore = new Date(now.getTime() - QUOTE_FOLLOW_UP_DAYS * day);
+  const [tasks, pastClose, quiet, noInvoice, quotes] = await Promise.all([
     prisma.activity.findMany({
       where: { ownerId: user.id, status: "PENDING", dueAt: { lt: endOfToday } },
       orderBy: { dueAt: "asc" },
@@ -57,6 +60,18 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       where: { ...own, stage: "WON", sourceTxnNo: null, invoiceNo: null },
       select: { id: true, title: true, owner: { select: { name: true } } },
       take: 200,
+    }),
+    // The latest quotation per open deal, sent 7+ days ago, with no
+    // activity on the deal since.
+    prisma.quotation.findMany({
+      where: {
+        ...(team ? {} : { ownerId: user.id }),
+        updatedAt: { lt: quoteBefore, gte: new Date(now.getTime() - 60 * day) },
+        deal: { stage: { notIn: ["WON", "LOST"] }, activities: { none: { createdAt: { gte: quoteBefore } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { ref: true, updatedAt: true, dealId: true, deal: { select: { title: true } }, owner: { select: { name: true } } },
+      take: 300,
     }),
   ]);
 
@@ -90,6 +105,22 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       count: quiet.length,
       href: "/deals",
       items: quiet.slice(0, SHOW).map((d) => ({ label: d.title, sub: `Last touched ${fmt(d.updatedAt)}${who(d.owner.name)}`, href: `/deals/${d.id}` })),
+    });
+  }
+  // One reminder per deal (its latest quotation).
+  const seenDeals = new Set<string>();
+  const followUps = quotes.filter((q) => q.dealId && !seenDeals.has(q.dealId) && seenDeals.add(q.dealId));
+  if (followUps.length) {
+    groups.push({
+      key: "quoteFollowUp",
+      label: `Quotations with no follow-up for ${QUOTE_FOLLOW_UP_DAYS}+ days`,
+      count: followUps.length,
+      href: "/quotations/saved",
+      items: followUps.slice(0, SHOW).map((q) => ({
+        label: q.deal?.title ?? q.ref,
+        sub: `${q.ref} sent ${fmt(q.updatedAt)}${who(q.owner.name)}`,
+        href: `/deals/${q.dealId}`,
+      })),
     });
   }
   if (noInvoice.length) {

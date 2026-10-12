@@ -12,6 +12,19 @@ import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
 import { billingCompanyOf } from "@/lib/billing-company";
 import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
+import { binDeal } from "@/lib/recycle-bin";
+
+// Change log: a note on the deal, by whoever made the change, for changes
+// to a won deal's invoice, company, account and products (shown on the
+// deal's timeline).
+async function logDealChange(dealId: string, authorId: string, text: string) {
+  try {
+    await prisma.note.create({ data: { body: `✎ ${text}`, authorId, dealId } });
+  } catch (e) {
+    console.error("logDealChange", e);
+  }
+}
+const naira = (n: number) => `₦${n.toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
 import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms, ContactRole } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -289,6 +302,16 @@ export async function updateDeal(dealId: string, formData: FormData) {
   const isClosed = existing.stage === "WON" || existing.stage === "LOST";
   const stage = isClosed ? existing.stage : parsed.stage;
 
+  // A won deal's invoice no. / company changed here mustn't duplicate another sale.
+  if (existing.stage === "WON" && existing.sourceTxnNo == null) {
+    const newNo = String(formData.get("invoiceNo") ?? "").trim() || existing.invoiceNo;
+    const newCompany = (isBackOffice(user) && billingCompanyOf(String(formData.get("billingCompany") ?? ""))) || existing.billingCompany;
+    if (newNo && (newNo !== existing.invoiceNo || newCompany !== existing.billingCompany)) {
+      const clash = await invoiceClash([{ invoiceNo: newNo, company: newCompany }], [dealId]);
+      if (clash) redirect(`/deals/${dealId}/edit?error=${encodeURIComponent(clash)}`);
+    }
+  }
+
   await prisma.deal.update({
     where: { id: dealId },
     data: {
@@ -340,6 +363,21 @@ export async function updateDeal(dealId: string, formData: FormData) {
   }
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
+  // Change log for a won deal: what changed in its sale.
+  if (existing.stage === "WON") {
+    const after = await prisma.deal.findUnique({
+      where: { id: dealId },
+      select: { invoiceNo: true, billingCompany: true, accountId: true, value: true, account: { select: { name: true } } },
+    });
+    if (after) {
+      const changes: string[] = [];
+      if (after.invoiceNo !== existing.invoiceNo) changes.push(`invoice no. ${existing.invoiceNo ?? "-"} → ${after.invoiceNo ?? "-"}`);
+      if (after.billingCompany !== existing.billingCompany) changes.push(`company ${existing.billingCompany ?? "not recorded"} → ${after.billingCompany ?? "not recorded"}`);
+      if (after.accountId !== existing.accountId) changes.push(`account → ${after.account?.name ?? "none"}`);
+      if (Math.abs(after.value - existing.value) >= 0.01) changes.push(`value ${naira(existing.value)} → ${naira(after.value)}`);
+      if (changes.length) await logDealChange(dealId, user.id, `Edited: ${changes.join("; ")}.`);
+    }
+  }
   const wonError = await applySheetInvoices(dealId, formData);
 
   revalidatePath("/deals");
@@ -352,8 +390,10 @@ export async function deleteDeal(dealId: string) {
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
-  // Its Sales Register lines go with it (they'd otherwise stay counted with
-  // no deal), and the lead it came from is open again.
+  // Into the recycle bin first (restorable for 30 days). Its Sales Register
+  // lines go with it (they'd otherwise stay counted with no deal), and the
+  // lead it came from is open again.
+  await binDeal(dealId, user.id);
   await prisma.saleLineItem.deleteMany({ where: { dealId } });
   await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { convertedDealId: null, status: "QUALIFIED" } });
   await clearWonPlan(dealId);
@@ -388,6 +428,7 @@ export async function reopenDeal(dealId: string) {
     },
   });
   await syncSaleLineItemsForDeal(dealId);
+  await logDealChange(dealId, user.id, `Reopened (was ${deal.stage === "WON" ? "Won" : "Lost"}) - back to Negotiation.`);
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/deals");
   revalidatePath("/reports/sales-register");
@@ -505,6 +546,10 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
   assertCanEditItems(user, deal.stage);
 
   const parsed = dealLineItemSchema.parse(Object.fromEntries(formData.entries()));
+  if (deal.stage === "WON") {
+    const p = await prisma.product.findUnique({ where: { id: parsed.productId }, select: { model: true } });
+    await logDealChange(dealId, user.id, `Product added: ${p?.model ?? "product"} - ${parsed.qty} x ${naira(parsed.unitPrice)}.`);
+  }
 
   await prisma.dealLineItem.create({
     data: { dealId, productId: parsed.productId, qty: parsed.qty, unitPrice: parsed.unitPrice },
@@ -523,7 +568,8 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   assertCanEditItems(user, deal.stage);
 
-  await prisma.dealLineItem.delete({ where: { id: lineItemId } });
+  const removed = await prisma.dealLineItem.delete({ where: { id: lineItemId }, include: { product: { select: { model: true } } } });
+  if (deal.stage === "WON") await logDealChange(dealId, user.id, `Product removed: ${removed.product.model} - ${removed.qty} x ${naira(removed.unitPrice)}.`);
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
@@ -629,12 +675,49 @@ export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new Error("Enter the invoice date.");
   const billingCompany = billingCompanyOf(company);
   if (!billingCompany) throw new Error("Pick the company that raised the invoice - Sakuragi or Somotex.");
+  const clash = await invoiceClash([{ invoiceNo: no, company: billingCompany }], [dealId]);
+  if (clash) throw new Error(clash);
   await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate), billingCompany } });
+  await logDealChange(dealId, user.id, `Invoice no. set: ${no} (${billingCompany}), dated ${invoiceDate}.`);
   await syncSaleLineItemsForDeal(dealId);
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");
   revalidatePath("/deals");
   revalidatePath("/");
+}
+
+// An invoice already recorded on another won deal - entered in the CRM or
+// imported from the Sales Register - would count the sale twice. Same
+// number and the same company (or either company not recorded) is a clash;
+// Sakuragi and Somotex number separately, so different companies aren't.
+// Returns a message naming the deal, or null.
+async function invoiceClash(invoices: { invoiceNo: string; company: string | null }[], excludeDealIds: string[]): Promise<string | null> {
+  const nos = [...new Set(invoices.map((i) => i.invoiceNo.trim()).filter(Boolean))];
+  if (nos.length === 0) return null;
+  const others = await prisma.deal.findMany({
+    where: {
+      stage: "WON",
+      id: { notIn: excludeDealIds },
+      OR: [{ invoiceNo: { in: nos, mode: "insensitive" } }, { sourceTxnNo: { in: nos.filter((n) => /^\d+$/.test(n)).map(Number) } }],
+    },
+    select: { id: true, title: true, invoiceNo: true, sourceTxnNo: true, billingCompany: true },
+  });
+  for (const inv of invoices) {
+    const no = inv.invoiceNo.trim().toLowerCase();
+    const hit = others.find(
+      (o) =>
+        ((o.invoiceNo ?? "").toLowerCase() === no || String(o.sourceTxnNo ?? "") === no) &&
+        (!o.billingCompany || !inv.company || o.billingCompany === inv.company),
+    );
+    if (hit) {
+      return `Invoice ${inv.invoiceNo.trim()}${inv.company ? ` (${inv.company})` : ""} is already recorded on "${hit.title}"${
+        hit.billingCompany ? ` (${hit.billingCompany})` : ""
+      } - entering it again would count the sale twice. Correct that deal instead${
+        !hit.billingCompany && inv.company ? `, or if it was billed by the other company, set its Billed by first` : ""
+      }.`;
+    }
+  }
+  return null;
 }
 
 export type WonInvoice = {
@@ -681,6 +764,16 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
       throw new Error(`Every product${label} needs a model, a quantity and a basic rate (negative for a return).`);
     }
   }
+  // Every invoice says which company raised it, and none is already recorded.
+  if (invoices.some((i) => !billingCompanyOf(i.billingCompany) && !deal.billingCompany)) {
+    throw new Error("Pick the company (Sakuragi or Somotex) for every invoice.");
+  }
+  if (alreadyWon && !deal.accountId) throw new Error("Link this deal to an account first (Edit) - every won sale needs its account.");
+  const clash = await invoiceClash(
+    invoices.map((i) => ({ invoiceNo: i.invoiceNo, company: billingCompanyOf(i.billingCompany) ?? deal.billingCompany })),
+    [dealId],
+  );
+  if (clash) throw new Error(clash);
   const productIds = [...new Set(invoices.flatMap((i) => i.items.map((x) => x.productId)))];
   if ((await prisma.product.count({ where: { id: { in: productIds } } })) !== productIds.length) {
     throw new Error("A product picked no longer exists - pick it again.");
@@ -769,6 +862,10 @@ export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
     await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value: total } });
   }
   await clearWonPlan(dealId);
+  const invSummary = invoices
+    .map((i) => `${i.invoiceNo.trim()} (${companyOf(i) ?? "company not recorded"}) ${i.closedAt}: ${i.items.length} line${i.items.length === 1 ? "" : "s"}, ${naira(i.items.reduce((t, x) => t + x.qty * x.unitPrice, 0))}`)
+    .join("; ");
+  await logDealChange(dealId, user.id, `${alreadyWon ? "Invoices & products changed" : "Marked Won"} - ${invSummary}${rest.length ? " (each further invoice is its own won deal)" : ""}.`);
   revalidatePath("/deals");
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");
@@ -991,7 +1088,7 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
 // [from, to] - to clear a muddled month and enter it again. Each goes the
 // way deleteDeal does: its Sales Register lines too, and its lead reopened.
 export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: string): Promise<{ deleted: number }> {
-  await requireHead();
+  const head = await requireHead();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Pick the period.");
   const start = new Date(`${from}T00:00:00Z`);
   const end = new Date(new Date(`${to}T00:00:00Z`).getTime() + 86400000);
@@ -1001,6 +1098,7 @@ export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: 
   });
   const ids = deals.map((d) => d.id);
   if (ids.length === 0) return { deleted: 0 };
+  for (const id of ids) await binDeal(id, head.id);
   await prisma.saleLineItem.deleteMany({ where: { dealId: { in: ids } } });
   await prisma.lead.updateMany({ where: { convertedDealId: { in: ids } }, data: { convertedDealId: null, status: "QUALIFIED" } });
   await prisma.appSetting.deleteMany({ where: { key: { in: ids.map((id) => `won-plan:${id}`) } } });

@@ -54,6 +54,11 @@ export type ImportSummary = {
   // "Import up to" month, and how many file rows after it were left out.
   upToLabel: string | null;
   rowsAfterUpTo: number;
+  // Invoices in the file already entered in the CRM - left out so they
+  // aren't counted twice ("<no> (<company>) - <deal>"), and CRM sales in
+  // these months with no invoice no. (can't be matched - check them).
+  crmInvoicesSkipped: string[];
+  crmWithoutInvoice: number;
 };
 
 export type ImportState = { error?: string; summary?: ImportSummary };
@@ -127,24 +132,31 @@ export async function importSalesRegister(
   const rangeStart = new Date(Date.UTC(minDate.getUTCFullYear(), minDate.getUTCMonth(), 1));
   const rangeEnd = new Date(Date.UTC(maxDate.getUTCFullYear(), maxDate.getUTCMonth() + 1, 1));
 
-  // Months with Won deals entered directly in the CRM (e.g. once the team
-  // stopped relying on the register) would be counted twice if the file's
-  // invoices for those months were imported on top - refuse and say which.
-  if (replace) {
-    const crmWon = await prisma.deal.findMany({
-      where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: rangeStart, lt: rangeEnd } },
-      select: { closedAt: true },
-    });
-    const clashMonths = Array.from(
-      new Set(crmWon.map((d) => monthLabel(new Date(Date.UTC(d.closedAt!.getUTCFullYear(), d.closedAt!.getUTCMonth(), 1))))),
+  // Invoices already entered in the CRM as won sales would be counted twice
+  // if imported on top: those documents are left out of this upload (and
+  // listed), the rest are imported. Matched on the invoice no. (the file's
+  // Txn No) and the billing company when both are known - Sakuragi and
+  // Somotex number their invoices separately.
+  const crmWon = await prisma.deal.findMany({
+    where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: rangeStart, lt: rangeEnd } },
+    select: { invoiceNo: true, billingCompany: true, title: true },
+  });
+  const crmWithoutInvoice = crmWon.filter((d) => !d.invoiceNo?.trim()).length;
+  const skippedDocKeys = new Set<string>();
+  const crmInvoicesSkipped: string[] = [];
+  for (const d of result.deals) {
+    const company = billingCompanyOf(d.entity);
+    const hit = crmWon.find(
+      (c) => c.invoiceNo?.trim().toLowerCase() === String(d.txnNo) && (!c.billingCompany || !company || c.billingCompany === company),
     );
-    if (clashMonths.length > 0) {
-      return {
-        error: `This file covers ${monthLabel(rangeStart)} – ${monthLabel(maxDate)}, but ${clashMonths.join(", ")} already ${
-          clashMonths.length === 1 ? "has" : "have"
-        } Won deals entered in the CRM. Remove those months' rows from the file and upload again, so those sales aren't counted twice.`,
-      };
+    if (hit) {
+      skippedDocKeys.add(d.docKey);
+      crmInvoicesSkipped.push(`${d.txnNo}${company ? ` (${company})` : ""} - ${hit.title}`);
     }
+  }
+  if (skippedDocKeys.size) {
+    result.deals = result.deals.filter((d) => !skippedDocKeys.has(d.docKey));
+    result.lineItems = result.lineItems.filter((li) => !skippedDocKeys.has(li.docKey));
   }
 
   // Retire the placeholder demo accounts if they don't own anything yet.
@@ -572,6 +584,8 @@ export async function importSalesRegister(
       skippedFileRows,
       upToLabel,
       rowsAfterUpTo,
+      crmInvoicesSkipped,
+      crmWithoutInvoice,
     },
   };
 }
