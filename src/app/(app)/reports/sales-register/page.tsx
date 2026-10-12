@@ -40,7 +40,7 @@ export default async function SalesRegisterPage({
   const user = await requireUser();
   const all = isBackOffice(user);
   const params = await searchParams;
-  const description = all ? "Every invoice line - filter by period, sales person, product type and company" : "Your invoice lines - filter by period and product type";
+  const description = all ? "Every invoice line - filter by period, sales person, product type and company" : "Your invoice lines - filter by period, product type and company";
 
   // Default period: last month.
   const now = new Date();
