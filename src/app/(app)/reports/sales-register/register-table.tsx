@@ -19,6 +19,8 @@ export type RegisterRow = {
   amount: number;
   invoiceNo: string;
   invoiceDate: string; // YYYY-MM-DD
+  // Billing company: "Sakuragi" / "Somotex", or "Not recorded".
+  company: string;
   dealId: string | null;
 };
 
@@ -33,6 +35,7 @@ const COLUMNS: { key: Key; label: string; numeric?: boolean; width?: string }[] 
   { key: "qty", label: "Qty", numeric: true },
   { key: "rate", label: "Rate ex-VAT", numeric: true },
   { key: "amount", label: "Amount", numeric: true },
+  { key: "company", label: "Company" },
   { key: "invoiceNo", label: "Invoice no." },
   { key: "invoiceDate", label: "Invoice date" },
 ];
@@ -101,7 +104,7 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
       </button>
     </div>
     {showCharts && (
-      <RegisterCharts rows={visible} showSalesPerson={showSalesPerson} onPickCategory={pick("category")} onPickSalesPerson={pick("salesPerson")} />
+      <RegisterCharts rows={visible} showSalesPerson={showSalesPerson} onPickCategory={pick("category")} onPickSalesPerson={pick("salesPerson")} onPickCompany={pick("company")} />
     )}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">

@@ -17,15 +17,18 @@ export function RegisterCharts({
   showSalesPerson,
   onPickCategory,
   onPickSalesPerson,
+  onPickCompany,
 }: {
   rows: RegisterRow[];
   showSalesPerson: boolean;
   onPickCategory: (category: string) => void;
   onPickSalesPerson: (name: string) => void;
+  onPickCompany: (company: string) => void;
 }) {
   const data = useMemo(() => {
     const byCat = new Map<string, { value: number; qty: number; lines: number }>();
     const byPerson = new Map<string, number>();
+    const byCompany = new Map<string, { value: number; lines: number }>();
     const periods = new Set<string>();
     for (const r of rows) {
       const c = byCat.get(r.category) ?? { value: 0, qty: 0, lines: 0 };
@@ -34,6 +37,10 @@ export function RegisterCharts({
       c.lines += 1;
       byCat.set(r.category, c);
       byPerson.set(r.salesPerson, (byPerson.get(r.salesPerson) ?? 0) + r.amount);
+      const co = byCompany.get(r.company) ?? { value: 0, lines: 0 };
+      co.value += r.amount;
+      co.lines += 1;
+      byCompany.set(r.company, co);
       periods.add(r.invoiceDate.slice(0, 7));
     }
     const categories = [...byCat.entries()].map(([category, v]) => ({ category, ...v })).sort((a, b) => b.value - a.value);
@@ -78,7 +85,10 @@ export function RegisterCharts({
     });
     const colors: Record<string, string> = { [OTHER_CATEGORY_LABEL]: CATEGORY_OTHER_COLOR };
     for (const [c, col] of colorMap) colors[c] = col;
-    return { categories, total, people, trend, trendCats, colors, byYear };
+    // Sakuragi, Somotex, then lines with no company recorded.
+    const companyOrder = (c: string) => (c === "Sakuragi" ? 0 : c === "Somotex" ? 1 : 2);
+    const companies = [...byCompany.entries()].map(([company, v]) => ({ company, ...v })).sort((a, b) => companyOrder(a.company) - companyOrder(b.company));
+    return { categories, total, people, trend, trendCats, colors, byYear, companies };
   }, [rows]);
 
   if (rows.length === 0) return null;
@@ -134,6 +144,43 @@ export function RegisterCharts({
             </tfoot>
           </table>
         </div>
+      </div>
+      <div className={card}>
+        <h2 className="text-sm font-semibold text-slate-900">Sales by company</h2>
+        <p className="text-xs text-slate-400 mb-2">Which company billed the lines shown below. Click one to filter the table.</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+              <th className="py-2 pr-2 font-medium">Company</th>
+              <th className="py-2 px-2 font-medium text-right">Lines</th>
+              <th className="py-2 px-2 font-medium text-right">Sales value (excl. VAT)</th>
+              <th className="py-2 pl-2 font-medium text-right">Share</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.companies.map((c) => (
+              <tr key={c.company} className="hover:bg-slate-50">
+                <td className="py-1.5 pr-2">
+                  <button
+                    type="button"
+                    onClick={() => onPickCompany(c.company)}
+                    className={`text-left font-medium hover:text-indigo-600 ${c.company === "Not recorded" ? "text-slate-500" : "text-slate-800"}`}
+                  >
+                    {c.company}
+                  </button>
+                </td>
+                <td className="py-1.5 px-2 text-right tabular-nums text-slate-600">{c.lines.toLocaleString()}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums text-slate-700">{formatCurrency(c.value)}</td>
+                <td className="py-1.5 pl-2 text-right tabular-nums text-slate-600">{data.total ? `${((c.value / data.total) * 100).toFixed(1)}%` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {data.companies.some((c) => c.company === "Not recorded") && (
+          <p className="mt-2 text-[11px] text-slate-400">
+            Not recorded: older deals, service billings, and register uploads without a Company column.
+          </p>
+        )}
       </div>
       <div className={card}>
         <h2 className="text-sm font-semibold text-slate-900">Product-type mix by {data.byYear ? "year" : "month"}</h2>

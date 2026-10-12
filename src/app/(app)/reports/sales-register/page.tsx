@@ -35,12 +35,12 @@ function invoiceFromKey(sourceKey: string, itemCode: string): string | null {
 export default async function SalesRegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; rep?: string; category?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; rep?: string; category?: string; company?: string }>;
 }) {
   const user = await requireUser();
   const all = isBackOffice(user);
   const params = await searchParams;
-  const description = all ? "Every invoice line - filter by period, sales person and product type" : "Your invoice lines - filter by period and product type";
+  const description = all ? "Every invoice line - filter by period, sales person, product type and company" : "Your invoice lines - filter by period and product type";
 
   // Default period: last month.
   const now = new Date();
@@ -60,12 +60,17 @@ export default async function SalesRegisterPage({
   const repId = all ? (people.some((p) => p.id === params.rep) ? params.rep! : null) : user.id;
   const ownerWhere = repId ? { ownerId: repId } : {};
   const category = params.category || null;
+  // Billing company: Sakuragi / Somotex, or "none" for lines without one.
+  const company = params.company === "Sakuragi" || params.company === "Somotex" || params.company === "none" ? params.company : null;
+  const lineCompanyWhere =
+    company === "none" ? { OR: [{ dealId: null }, { deal: { billingCompany: null } }] } : company ? { deal: { billingCompany: company } } : {};
+  const dealCompanyWhere = company === "none" ? { billingCompany: null } : company ? { billingCompany: company } : {};
 
   const [lines, billings, categories] = await Promise.all([
     category === "Project & Service" || category === "No products listed"
       ? Promise.resolve([])
       : prisma.saleLineItem.findMany({
-          where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...(category ? { product: { category } } : {}) },
+          where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...lineCompanyWhere, ...(category ? { product: { category } } : {}) },
           orderBy: [{ docDate: "desc" }],
           take: MAX_ROWS,
           select: {
@@ -76,10 +81,11 @@ export default async function SalesRegisterPage({
             sourceKey: true,
             owner: { select: { name: true } },
             product: { select: { code: true, model: true, category: true } },
-            deal: { select: { id: true, sourceTxnNo: true, invoiceNo: true, title: true, account: { select: { name: true, code: true } } } },
+            deal: { select: { id: true, sourceTxnNo: true, invoiceNo: true, title: true, billingCompany: true, account: { select: { name: true, code: true } } } },
           },
         }),
-    category && category !== "Project & Service"
+    // Service billings carry no company.
+    (category && category !== "Project & Service") || (company && company !== "none")
       ? Promise.resolve([])
       : prisma.projectBilling.findMany({
           where: { docDate: { gte: from, lt: end }, ...ownerWhere },
@@ -96,9 +102,9 @@ export default async function SalesRegisterPage({
     category && category !== "No products listed"
       ? []
       : await prisma.deal.findMany({
-          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere },
+          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
           take: MAX_ROWS,
-          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, owner: { select: { name: true } }, account: { select: { name: true, code: true } } },
+          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true } }, account: { select: { name: true, code: true } } },
         });
 
   // Account codes for project billing lines (they carry the customer name only).
@@ -123,6 +129,7 @@ export default async function SalesRegisterPage({
       invoiceNo:
         l.deal?.sourceTxnNo != null ? String(l.deal.sourceTxnNo) : (l.deal?.invoiceNo ?? invoiceFromKey(l.sourceKey, l.product.code) ?? ""),
       invoiceDate: iso(l.docDate),
+      company: l.deal?.billingCompany ?? "Not recorded",
       dealId: l.deal?.id ?? null,
     })),
     ...bareDeals.map((d) => ({
@@ -138,6 +145,7 @@ export default async function SalesRegisterPage({
       amount: d.value,
       invoiceNo: d.invoiceNo ?? "",
       invoiceDate: iso(d.closedAt!),
+      company: d.billingCompany ?? "Not recorded",
       dealId: d.id,
     })),
     ...billings.map((b) => ({
@@ -153,6 +161,7 @@ export default async function SalesRegisterPage({
       amount: b.value,
       invoiceNo: b.txnNo ? String(b.txnNo) : b.docKey,
       invoiceDate: iso(b.docDate),
+      company: "Not recorded",
       dealId: null,
     })),
   ];
@@ -196,6 +205,15 @@ export default async function SalesRegisterPage({
                   {c}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
+            <select name="company" defaultValue={company ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="">Both companies</option>
+              <option value="Sakuragi">Sakuragi</option>
+              <option value="Somotex">Somotex</option>
+              <option value="none">Not recorded</option>
             </select>
           </div>
           <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
