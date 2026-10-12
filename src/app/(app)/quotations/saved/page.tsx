@@ -3,14 +3,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
-import { visibleQuotationsWhere } from "@/lib/saved-quotes";
+import { visibleQuotationsWhere, quoteSalesPeople } from "@/lib/saved-quotes";
 import { SavedQuotesTable, savedQuoteSelect } from "../saved-quotes-table";
 import { QuotationTabs } from "../quotation-tabs";
 
 // Every quotation downloaded from the builder, newest first.
-export default async function SavedQuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string; rep?: string }> }) {
+export default async function SavedQuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string; rep?: string; unlinked?: string }> }) {
   const user = await requireUser();
-  const { q = "", rep = "" } = await searchParams;
+  const { q = "", rep = "", unlinked = "" } = await searchParams;
   const backOffice = isBackOffice(user);
   const term = q.trim();
   const where: Prisma.QuotationWhereInput = {
@@ -25,13 +25,14 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
             ],
           }
         : {},
-      backOffice && rep ? { createdById: rep } : {},
+      backOffice && rep ? { ownerId: rep } : {},
+      unlinked === "1" ? { dealId: null } : {},
     ],
   };
   const [quotes, total, reps] = await Promise.all([
     prisma.quotation.findMany({ where, orderBy: { createdAt: "desc" }, take: 300, select: savedQuoteSelect }),
     prisma.quotation.count({ where }),
-    backOffice ? prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    backOffice ? quoteSalesPeople() : Promise.resolve([]),
   ]);
   const field = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
 
@@ -51,10 +52,14 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
               ))}
             </select>
           )}
+          <label className="flex items-center gap-2 py-2 text-sm text-slate-600">
+            <input type="checkbox" name="unlinked" value="1" defaultChecked={unlinked === "1"} className="rounded border-slate-300" />
+            Not linked to a deal
+          </label>
           <button type="submit" className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-3.5 py-2">
             Search
           </button>
-          {(term || rep) && (
+          {(term || rep || unlinked) && (
             <Link href="/quotations/saved" className="text-sm text-slate-500 hover:text-slate-800 py-2">
               Clear
             </Link>

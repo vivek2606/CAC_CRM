@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { getCompanySettings, defaultTermsLines } from "@/lib/company-profile";
 import { PAYMENT_TERMS_LABELS } from "@/lib/constants";
@@ -11,7 +11,7 @@ import {
   getQuotableProducts,
 } from "@/lib/pricing";
 import { documentInputSchema } from "@/lib/sales-document";
-import { canSeeQuotation } from "@/lib/saved-quotes";
+import { canSeeQuotation, quoteSalesPeople } from "@/lib/saved-quotes";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
 
@@ -99,6 +99,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       if (deal.paymentTerms) terms[0] = `Payment Terms: ${PAYMENT_TERMS_LABELS[deal.paymentTerms]}`;
       fromDeal = {
         dealId: deal.id,
+        ownerId: deal.ownerId,
         to: to.join("\n"),
         attention: acc ? (deal.customerName ?? contactName) : contactName,
         title: deal.title,
@@ -122,12 +123,25 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     if (q && data?.success) {
       const isRevision = revise === "1";
       fromQuote = {
+        ownerId: q.ownerId,
         dealId: q.deal?.id ?? null,
         dealTitle: q.deal?.title ?? null,
         ref: isRevision ? "" : q.ref,
         revisionOf: isRevision ? q.ref : null,
         data: data.data,
       };
+    }
+  }
+
+  // Head / Coordinator pick the sales person; the deal's or saved quote's
+  // own sales person is always in the list.
+  let salesPeople: { id: string; name: string }[] | null = null;
+  if (isBackOffice(user)) {
+    salesPeople = await quoteSalesPeople();
+    const current = fromQuote?.ownerId ?? fromDeal?.ownerId;
+    if (current && !salesPeople.some((p) => p.id === current)) {
+      const u = await prisma.user.findUnique({ where: { id: current }, select: { id: true, name: true } });
+      if (u) salesPeople = [...salesPeople, u].sort((a, b) => a.name.localeCompare(b.name));
     }
   }
 
@@ -166,6 +180,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           signatory={{ name: me?.name ?? user.name ?? "", designation: me?.title ?? "", phone: me?.phone ?? "" }}
           fromDeal={fromQuote ? null : fromDeal}
           fromQuote={fromQuote}
+          salesPeople={salesPeople}
           isHead={user.role === "HEAD"}
         />
       </div>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
-import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef } from "@/lib/document-format";
+import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
 import { reserveQuoteRef } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
@@ -30,6 +30,7 @@ export type CompanyOption = {
 };
 export type DealPrefill = {
   dealId: string;
+  ownerId: string;
   to: string;
   attention: string;
   title: string;
@@ -40,6 +41,7 @@ export type DealPrefill = {
 // A saved quotation reopened in the builder: as it was (same reference -
 // downloading again updates it), or as a revision (a new reference).
 export type QuotePrefill = {
+  ownerId: string;
   dealId: string | null;
   dealTitle: string | null;
   ref: string;
@@ -53,6 +55,8 @@ type Row =
 
 type Draft = {
   type: DocumentType;
+  // The sales person the quote is for - picked by the Head / Coordinator.
+  ownerId?: string;
   companyKey: string;
   ref: string;
   date: string;
@@ -120,6 +124,7 @@ export function QuotationBuilder({
   signatory,
   fromDeal,
   fromQuote,
+  salesPeople,
   isHead,
 }: {
   options: ModelOption[];
@@ -131,6 +136,8 @@ export function QuotationBuilder({
   signatory: { name: string; designation: string; phone: string };
   fromDeal: DealPrefill | null;
   fromQuote: QuotePrefill | null;
+  // Head / Coordinator only: who they can prepare a quote for.
+  salesPeople: { id: string; name: string }[] | null;
   isHead: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
@@ -145,6 +152,7 @@ export function QuotationBuilder({
     const byModel = new Map(options.map((o) => [o.model.trim().toLowerCase(), o.id]));
     return {
       type: x.type,
+      ownerId: q.ownerId,
       companyKey: companyFor(x.companyKey).key,
       ref: q.ref,
       date: q.revisionOf ? todayIso() : x.date,
@@ -187,6 +195,7 @@ export function QuotationBuilder({
     const date = todayIso();
     return {
       type: "quote",
+      ownerId: fromDeal?.ownerId ?? "",
       companyKey: co.key,
       // A unique reference is issued on the first download (see download()).
       ref: "",
@@ -232,6 +241,13 @@ export function QuotationBuilder({
     setD((cur) => {
       return { ...cur, ...patch };
     });
+  };
+  // A reference already issued with another person's initials is replaced
+  // (on the next download) when the sales person changes.
+  const changeOwner = (ownerId: string) => {
+    const name = salesPeople?.find((p) => p.id === ownerId)?.name;
+    const initials = isIssuedQuoteRef(d.ref) ? d.ref.split("/")[3] : null;
+    update({ ownerId, ...(initials && name && nameInitials(name) !== initials ? { ref: "" } : {}) });
   };
   const setRow = (id: string, patch: Partial<Row>) => update({ rows: d.rows.map((r) => (r.uid === id ? ({ ...r, ...patch } as Row) : r)) });
   const move = (i: number, by: number) => {
@@ -313,16 +329,23 @@ export function QuotationBuilder({
   const download = async (format: "pdf" | "xlsx") => {
     setError(null);
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
+    if (salesPeople && !d.ownerId) return setError("Pick the sales person this quotation is for.");
     setBusy(format);
     try {
       // The first download issues this quote's unique reference; later
       // downloads of the same quote keep it.
       let ref = d.ref;
       if (!isIssuedQuoteRef(ref)) {
-        ref = await reserveQuoteRef();
+        const issued = await reserveQuoteRef(d.ownerId || null);
+        if ("error" in issued) throw new Error(issued.error);
+        ref = issued.ref;
         update({ ref });
       }
-      const res = await fetch(`/quotations/${format}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload(ref), dealId: linkedDealId }) });
+      const res = await fetch(`/quotations/${format}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload(ref), dealId: linkedDealId, ownerId: d.ownerId || null }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Couldn't create the file.");
@@ -393,6 +416,22 @@ export function QuotationBuilder({
             Start over
           </button>
         </div>
+        {salesPeople && (
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-full sm:w-72">
+              <label className={label}>Sales person</label>
+              <select value={d.ownerId ?? ""} onChange={(e) => changeOwner(e.target.value)} className={input}>
+                <option value="">Pick the sales person…</option>
+                {salesPeople.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="pb-2 text-xs text-slate-500">The quotation is saved under this sales person, with their initials in the ref no.</p>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className={label}>Issued by</label>

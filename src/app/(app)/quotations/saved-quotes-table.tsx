@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileDown, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { LinkDealButton } from "./link-deal-button";
 
 export type SavedQuoteRow = {
   id: string;
@@ -10,6 +11,7 @@ export type SavedQuoteRow = {
   total: number;
   createdAt: Date;
   updatedAt: Date;
+  owner: { name: string };
   createdBy: { name: string };
   deal: { id: string; title: string } | null;
 };
@@ -30,7 +32,7 @@ export function SavedQuotesTable({ quotes, showDeal = true }: { quotes: SavedQuo
             <th className="font-medium">Type</th>
             <th className="font-medium">Customer</th>
             {showDeal && <th className="font-medium">Deal</th>}
-            <th className="font-medium">Made by</th>
+            <th className="font-medium">Sales person</th>
             <th className="font-medium text-right">Amount</th>
             <th className="font-medium text-right">Actions</th>
           </tr>
@@ -55,11 +57,16 @@ export function SavedQuotesTable({ quotes, showDeal = true }: { quotes: SavedQuo
                       {q.deal.title}
                     </Link>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <LinkDealButton quoteId={q.id} quoteRef={q.ref} ownerName={q.owner.name} />
                   )}
                 </td>
               )}
-              <td className="max-w-[130px] truncate text-slate-600" title={q.createdBy.name}>{q.createdBy.name}</td>
+              <td
+                className="max-w-[130px] truncate text-slate-600"
+                title={q.createdBy.name !== q.owner.name ? `${q.owner.name} - prepared by ${q.createdBy.name}` : q.owner.name}
+              >
+                {q.owner.name}
+              </td>
               <td className="whitespace-nowrap text-right text-slate-800">{formatCurrency(q.total)}</td>
               <td className="whitespace-nowrap text-right">
                 <span className="inline-flex items-center gap-2.5">
@@ -92,6 +99,7 @@ export const savedQuoteSelect = {
   total: true,
   createdAt: true,
   updatedAt: true,
+  owner: { select: { name: true } },
   createdBy: { select: { name: true } },
   deal: { select: { id: true, title: true } },
 } as const;

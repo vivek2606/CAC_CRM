@@ -166,6 +166,7 @@ model User {
   inTransitOrders InTransitOrder[] @relation("InTransitCreator")
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
   quotations    Quotation[] @relation("QuotationCreator")
+  ownedQuotations Quotation[] @relation("QuotationOwner")
 }
 
 model Target {
@@ -694,7 +695,8 @@ model ProjectBilling {
 // A quotation / proforma invoice / bill of quantity as downloaded from the
 // Quotations builder. The builder's input is kept (not the PDF), so the
 // same document can be downloaded again or revised. One row per reference
-// number; downloading the same quote again updates it.
+// number; downloading the same quote again updates it. A quote made
+// without a deal can be linked to one later.
 model Quotation {
   id           String   @id @default(cuid())
   ref          String   @unique
@@ -708,10 +710,16 @@ model Quotation {
   dealId       String?
   deal         Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
+  // The sales person the quote is for (picked by the Head / Coordinator
+  // when they prepare it); createdBy is whoever prepared it.
+  ownerId      String
+  owner        User     @relation("QuotationOwner", fields: [ownerId], references: [id])
+
   createdById  String
   createdBy    User     @relation("QuotationCreator", fields: [createdById], references: [id])
 
   @@index([dealId])
+  @@index([ownerId])
   @@index([createdById])
   @@index([createdAt])
 }
