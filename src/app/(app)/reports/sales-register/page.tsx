@@ -45,10 +45,10 @@ export default async function SalesRegisterPage({
   const params = await searchParams;
   const description = all ? "Every invoice line - filter by period, sales person, product type and company" : "Your invoice lines - filter by period, product type and company";
 
-  // Default period: last month.
+  // Default period: the current month.
   const now = new Date();
-  const defFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  const defTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+  const defFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const defTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
   const from = parseDate(params.from) ?? defFrom;
   const to = parseDate(params.to) ?? defTo;
   const end = new Date(to.getTime() + 86400000);
