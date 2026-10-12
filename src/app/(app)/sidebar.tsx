@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import {
+  PanelLeftClose,
+  PanelLeftOpen,
   LayoutDashboard,
   Target,
   KanbanSquare,
@@ -122,6 +125,39 @@ export function sectionFor(pathname: string, role: SessionUser["role"]): { href:
   );
 }
 
+// Collapsed (icons only) on computer screens - remembered in this browser.
+const COLLAPSE_KEY = "sidebar-collapsed";
+const COLLAPSE_EVENT = "sidebar-collapse";
+function useCollapsed(): [boolean, () => void] {
+  const collapsed = useSyncExternalStore(
+    (cb) => {
+      window.addEventListener(COLLAPSE_EVENT, cb);
+      window.addEventListener("storage", cb);
+      return () => {
+        window.removeEventListener(COLLAPSE_EVENT, cb);
+        window.removeEventListener("storage", cb);
+      };
+    },
+    () => {
+      try {
+        return localStorage.getItem(COLLAPSE_KEY) === "1";
+      } catch {
+        return false;
+      }
+    },
+    () => false,
+  );
+  const toggle = () => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? "0" : "1");
+    } catch {
+      // storage blocked - stays as it is
+    }
+    window.dispatchEvent(new Event(COLLAPSE_EVENT));
+  };
+  return [collapsed, toggle];
+}
+
 export function Sidebar({
   user,
   open,
@@ -138,6 +174,9 @@ export function Sidebar({
   onOpenSection: (href: string, label: string) => void;
 }) {
   const pathname = usePathname();
+  const [collapsed, toggleCollapsed] = useCollapsed();
+  // Hidden on computer screens while collapsed (the phone drawer always shows labels).
+  const label = collapsed ? "lg:hidden" : "";
   const activeHref = sectionFor(currentPath, user.role)?.href ?? null;
   // A plain click opens the section in its own tab; Ctrl / Cmd / Shift /
   // middle click keep the browser's usual behaviour.
@@ -149,14 +188,23 @@ export function Sidebar({
 
   return (
     <aside
-      className={`app-chrome w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col h-screen
+      className={`app-chrome w-64 ${collapsed ? "lg:w-16" : ""} shrink-0 border-r border-slate-200 bg-white flex flex-col h-screen
         fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out
         lg:sticky lg:top-0 lg:translate-x-0
         ${open ? "translate-x-0" : "-translate-x-full"}`}
     >
-      <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/70 via-white to-white">
-        <SakuragiMark className="h-8 w-8 shrink-0" />
-        <span className="font-semibold text-slate-900 tracking-tight">SAKURAGI CRM Pro</span>
+      <div className={`h-16 flex items-center gap-2 px-5 ${collapsed ? "lg:px-0 lg:justify-center" : ""} border-b border-slate-200 bg-gradient-to-r from-indigo-50/70 via-white to-white`}>
+        <SakuragiMark className={`h-8 w-8 shrink-0 ${collapsed ? "lg:hidden" : ""}`} />
+        <span className={`font-semibold text-slate-900 tracking-tight ${label}`}>SAKURAGI CRM Pro</span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className={`hidden lg:inline-flex ${collapsed ? "" : "ml-auto"} rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700`}
+          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+          title={collapsed ? "Expand menu" : "Collapse menu"}
+        >
+          {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+        </button>
         <button
           onClick={onClose}
           className="ml-auto lg:hidden text-slate-400 hover:text-slate-700 p-1"
@@ -166,7 +214,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+      <nav className={`flex-1 overflow-y-auto py-4 px-3 ${collapsed ? "lg:px-2" : ""} space-y-1`}>
         {NAV_ITEMS.map((item) => {
           const active = item.href === activeHref;
           const Icon = item.icon;
@@ -176,24 +224,24 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               onClick={openInTab(item.href, item.label)}
-              className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              title={item.label}
+              className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm font-medium transition-colors ${
                 active
                   ? "bg-slate-100 text-slate-900"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {active && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full ${colors.bar}`} aria-hidden />}
-              <Icon className={`h-4 w-4 ${colors.text}`} />
-              {item.label}
+              <Icon className={`h-4 w-4 shrink-0 ${colors.text}`} />
+              <span className={label}>{item.label}</span>
             </Link>
           );
         })}
 
         {(user.role === "HEAD" || user.role === "COORDINATOR") && (
           <>
-            <div className="pt-4 pb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Management
-            </div>
+            <div className={`pt-4 pb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 ${label}`}>Management</div>
+            {collapsed && <div className="hidden lg:block my-3 border-t border-slate-200" />}
             {MANAGEMENT_NAV_ITEMS.filter((item) => !item.headOnly || user.role === "HEAD").map((item) => {
               const active = item.href === activeHref;
               const Icon = item.icon;
@@ -203,13 +251,14 @@ export function Sidebar({
                   key={item.href}
                   href={item.href}
                   onClick={openInTab(item.href, item.label)}
-                  className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  title={item.label}
+                  className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm font-medium transition-colors ${
                     active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   {active && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full ${colors.bar}`} aria-hidden />}
-                  <Icon className={`h-4 w-4 ${colors.text}`} />
-                  {item.label}
+                  <Icon className={`h-4 w-4 shrink-0 ${colors.text}`} />
+                  <span className={label}>{item.label}</span>
                 </Link>
               );
             })}
@@ -217,15 +266,15 @@ export function Sidebar({
         )}
       </nav>
 
-      <div className="border-t border-slate-200 p-3">
-        <div className="flex items-center gap-3 px-2 py-2">
+      <div className={`border-t border-slate-200 p-3 ${collapsed ? "lg:p-2" : ""}`}>
+        <div className={`flex items-center gap-3 px-2 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""}`} title={collapsed ? user.name ?? undefined : undefined}>
           <div
             className="h-9 w-9 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
             style={{ backgroundColor: user.avatarColor }}
           >
             {initials(user.name ?? "?")}
           </div>
-          <div className="min-w-0">
+          <div className={`min-w-0 ${label}`}>
             <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
             <p className="text-xs text-slate-500 truncate">
               {roleLabel(user.role)}
@@ -235,16 +284,17 @@ export function Sidebar({
         <Link
           href="/account"
           onClick={onClose}
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+          title="Change password"
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm transition-colors ${
             pathname.startsWith("/account")
               ? "bg-indigo-50 text-indigo-700"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
-          <KeyRound className="h-4 w-4" />
-          Change password
+          <KeyRound className="h-4 w-4 shrink-0" />
+          <span className={label}>Change password</span>
         </Link>
-        <SignOutButton />
+        <SignOutButton compact={collapsed} />
       </div>
     </aside>
   );

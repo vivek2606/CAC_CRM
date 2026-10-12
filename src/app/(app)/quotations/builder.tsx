@@ -393,7 +393,99 @@ export function QuotationBuilder({
             </label>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {/* Phones: one card per line, with big quantity / rate boxes. */}
+        <div className="md:hidden divide-y divide-slate-100 border-t border-slate-100">
+          {d.rows.length === 0 && <p className="px-4 py-8 text-center text-sm text-slate-500">Add products, custom items or a section heading below.</p>}
+          {d.rows.map((r, i) => {
+            const tools = (
+              <div className="flex items-center gap-1">
+                <button type="button" aria-label="Move up" onClick={() => move(i, -1)} className="rounded-md p-2 text-slate-400 active:bg-slate-100">
+                  <ArrowUp className="h-5 w-5" />
+                </button>
+                <button type="button" aria-label="Move down" onClick={() => move(i, 1)} className="rounded-md p-2 text-slate-400 active:bg-slate-100">
+                  <ArrowDown className="h-5 w-5" />
+                </button>
+                <button type="button" aria-label="Remove" onClick={() => update({ rows: d.rows.filter((x) => x.uid !== r.uid) })} className="rounded-md p-2 text-slate-400 active:bg-rose-50 active:text-rose-600">
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              </div>
+            );
+            if (r.kind === "section") {
+              return (
+                <div key={r.uid} className="bg-slate-50/60 px-4 py-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500">Section {sns[i]}</span>
+                    {tools}
+                  </div>
+                  <input value={r.label} onChange={(e) => setRow(r.uid, { label: e.target.value })} placeholder="Section heading, e.g. VRF Outdoor Unit" className={`${input} text-base font-semibold`} />
+                </div>
+              );
+            }
+            const opt = r.productId ? optionById.get(r.productId) : undefined;
+            const amount = num(r.qty) * num(r.unitPrice);
+            const big = "w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500";
+            return (
+              <div key={r.uid} className="space-y-2 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500">
+                    Item {sns[i]}
+                    {r.custom && " · custom"}
+                  </span>
+                  {tools}
+                </div>
+                {!r.custom && (
+                  <SearchableSelect
+                    options={productOptions}
+                    value={r.productId ?? ""}
+                    placeholder="Search model or code…"
+                    onSelect={(o) => {
+                      const m = o ? optionById.get(o.id) : undefined;
+                      setRow(r.uid, m ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(suggested(m.rate)) : r.unitPrice } : { productId: null });
+                    }}
+                  />
+                )}
+                <textarea
+                  rows={2}
+                  value={r.description}
+                  onChange={(e) => setRow(r.uid, { description: e.target.value })}
+                  placeholder={r.custom ? "e.g. Installation, piping and commissioning" : "Description printed on the document"}
+                  className={`${input} text-base`}
+                />
+                <input
+                  value={r.detail}
+                  onChange={(e) => setRow(r.uid, { detail: e.target.value })}
+                  placeholder={r.custom ? "Note (optional)" : "Availability / note"}
+                  className={`${input} text-base ${!showAvailability && isAvailabilityNote(r.detail) ? "line-through text-slate-400" : ""}`}
+                />
+                {opt && (
+                  <p className="text-xs text-slate-500">
+                    In stock {opt.stock}
+                    {opt.inTransit > 0 && ` · ${opt.inTransit} in transit`}
+                    {opt.rate != null ? ` · Suggested ${naira(suggested(opt.rate))}` : " · No dealer price on file"}
+                  </p>
+                )}
+                <div className="grid grid-cols-[1fr_1fr_1.6fr] gap-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Unit</span>
+                    <input list="quote-units" value={r.unit} onChange={(e) => setRow(r.uid, { unit: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Qty</span>
+                    <input inputMode="decimal" enterKeyHint="next" value={r.qty} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { qty: e.target.value })} className={big} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
+                    <input inputMode="decimal" enterKeyHint="done" value={r.unitPrice} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={big} />
+                  </label>
+                </div>
+                <p className="text-right text-sm text-slate-600">
+                  Amount <span className="font-semibold text-slate-900 tabular-nums">{naira(amount)}</span>
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
