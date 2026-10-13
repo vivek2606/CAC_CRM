@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { setDealInvoice } from "./actions";
-import { BILLING_COMPANIES } from "@/lib/billing-company";
+import { BILLING_COMPANIES, DEFAULT_BILLING_COMPANY } from "@/lib/billing-company";
 
 // Inline "add the invoice" form for a deal won in the CRM without one: the
 // invoice no., its date and the company that raised it.
@@ -18,7 +18,7 @@ export function InvoiceEntry({
   billingCompany?: string | null;
 }) {
   const [no, setNo] = useState("");
-  const [company, setCompany] = useState(billingCompany ?? "");
+  const [company, setCompany] = useState(billingCompany ?? DEFAULT_BILLING_COMPANY);
   const [date, setDate] = useState(closedAt);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -26,12 +26,9 @@ export function InvoiceEntry({
   const save = () =>
     start(async () => {
       setError(null);
-      try {
-        await setDealInvoice(dealId, no, date, company);
-        setSaved(true);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't save.");
-      }
+      const res = await setDealInvoice(dealId, no, date, company);
+      if (res.error) setError(res.error);
+      else setSaved(true);
     });
   if (saved) return <span className="text-xs font-medium text-emerald-700">Saved</span>;
   const box = `rounded-lg border border-slate-300 bg-white px-2.5 ${compact ? "py-1 text-xs" : "py-1.5 text-sm"} focus:outline-none focus:ring-2 focus:ring-indigo-500`;

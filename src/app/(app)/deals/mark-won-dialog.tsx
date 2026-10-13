@@ -5,7 +5,7 @@ import { Plus, Trash2, Upload, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { parseWonItemsSheet } from "./actions";
 import { groupSheetInvoices } from "@/lib/sheet-invoices";
-import { BILLING_COMPANIES } from "@/lib/billing-company";
+import { BILLING_COMPANIES, DEFAULT_BILLING_COMPANY } from "@/lib/billing-company";
 import { invoiceKey, invoiceTypeOf } from "@/lib/invoice-key";
 
 export type WonProductOption = { id: string; label: string; defaultPrice: number | null };
@@ -38,6 +38,8 @@ export function MarkWonDialog({
   billingCompany,
   initialInvoices,
   initialError,
+  submitError,
+  submitting = false,
 }: {
   existingItems: WonExistingItem[];
   quotedValue: number;
@@ -52,6 +54,9 @@ export function MarkWonDialog({
   // Invoices saved from a products sheet that couldn't be applied yet, and why.
   initialInvoices?: WonInvoiceInput[];
   initialError?: string | null;
+  // The server's answer when confirming failed (the dialog stays open).
+  submitError?: string | null;
+  submitting?: boolean;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const priceById = new Map(products.map((p) => [p.id, p.defaultPrice]));
@@ -61,7 +66,7 @@ export function MarkWonDialog({
           key: newKey(),
           invoiceNo: inv.invoiceNo,
           closedAt: inv.closedAt || today,
-          company: inv.billingCompany || billingCompany || "",
+          company: inv.billingCompany || billingCompany || DEFAULT_BILLING_COMPANY,
           rows: inv.items.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) })),
         }))
       : [
@@ -69,7 +74,7 @@ export function MarkWonDialog({
       key: newKey(),
       invoiceNo: wonInvoice?.invoiceNo ?? "",
       closedAt: wonInvoice?.closedAt || today,
-      company: billingCompany ?? "",
+      company: billingCompany ?? DEFAULT_BILLING_COMPANY,
       rows: existingItems.length
         ? existingItems.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) }))
         : [blankRow()],
@@ -103,7 +108,7 @@ export function MarkWonDialog({
           key: newKey(),
           invoiceNo: inv.invoiceNo,
           closedAt: inv.closedAt || today,
-          company: inv.company || billingCompany || "",
+          company: inv.company || billingCompany || DEFAULT_BILLING_COMPANY,
           rows: inv.rows.map((x) => ({ key: newKey(), productId: x.productId, qty: String(x.qty), rate: String(x.unitPrice) })),
         }));
         setBlocks(blocksFromSheet);
@@ -274,7 +279,7 @@ export function MarkWonDialog({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setBlocks((bs) => [...bs, { key: newKey(), invoiceNo: "", closedAt: bs[bs.length - 1]?.closedAt ?? today, company: bs[bs.length - 1]?.company ?? "", rows: [blankRow()] }])}
+            onClick={() => setBlocks((bs) => [...bs, { key: newKey(), invoiceNo: "", closedAt: bs[bs.length - 1]?.closedAt ?? today, company: bs[bs.length - 1]?.company || DEFAULT_BILLING_COMPANY, rows: [blankRow()] }])}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Plus className="h-4 w-4" />
@@ -287,13 +292,19 @@ export function MarkWonDialog({
         </div>
 
         {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+        {!error && submitError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{submitError}</p>}
 
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-3.5 py-2">
             Cancel
           </button>
-          <button type="button" onClick={confirm} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-3.5 py-2">
-            {wonInvoice
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={submitting}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-medium px-3.5 py-2"
+          >
+            {submitting ? "Saving…" : wonInvoice
               ? blocks.length > 1
                 ? `Save ${blocks.length} invoices`
                 : "Save"

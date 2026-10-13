@@ -54,6 +54,7 @@ export function StageActions({
   const [showWonDialog, setShowWonDialog] = useState(openWon && !blockWonReason && !needsAccount);
   const [showLinkDialog, setShowLinkDialog] = useState(openWon && needsAccount);
   const [error, setError] = useState<string | null>(null);
+  const [wonError, setWonError] = useState<string | null>(null);
   const router = useRouter();
 
   if (stage === "WON" && wonInvoice) {
@@ -77,6 +78,8 @@ export function StageActions({
             initialInvoices={pendingInvoices}
             initialError={pendingError}
             onConfirm={markWon}
+            submitError={wonError}
+            submitting={isPending}
             onCancel={() => setShowWonDialog(false)}
           />
         )}
@@ -86,16 +89,15 @@ export function StageActions({
   }
   if (stage === "WON" || stage === "LOST") return null;
 
+  // The dialog stays open until the server accepts - on a problem it shows
+  // why, with everything entered still there.
   function markWon(invoices: WonInvoiceInput[]) {
-    setShowWonDialog(false);
-    setError(null);
+    setWonError(null);
     startTransition(async () => {
-      try {
-        await markDealWon(dealId, invoices);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not mark this deal Won.");
-      }
+      const res = await markDealWon(dealId, invoices);
+      if (res.error) return setWonError(res.error);
+      setShowWonDialog(false);
+      router.refresh();
     });
   }
 
@@ -103,12 +105,9 @@ export function StageActions({
     setShowLostDialog(false);
     setError(null);
     startTransition(async () => {
-      try {
-        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not mark this deal Lost.");
-      }
+      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
+      if (res.error) return setError(res.error);
+      router.refresh();
     });
   }
 
@@ -142,6 +141,8 @@ export function StageActions({
             initialInvoices={pendingInvoices}
             initialError={pendingError}
             onConfirm={markWon}
+            submitError={wonError}
+            submitting={isPending}
             onCancel={() => setShowWonDialog(false)}
           />
         )}

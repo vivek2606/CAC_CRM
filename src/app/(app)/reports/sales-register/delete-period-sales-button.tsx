@@ -35,6 +35,7 @@ export function DeletePeriodSalesButton({
         start(async () => {
           try {
             const res = await deleteCrmSalesInPeriod(ownerId, from, to);
+            if (res.error) return alert(res.error);
             alert(`Deleted ${res.deleted} sale${res.deleted === 1 ? "" : "s"}.`);
             router.refresh();
           } catch (e) {

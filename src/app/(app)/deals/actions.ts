@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
@@ -10,7 +10,7 @@ import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
-import { billingCompanyOf } from "@/lib/billing-company";
+import { billingCompanyOf, DEFAULT_BILLING_COMPANY } from "@/lib/billing-company";
 import { invoiceKey, invoiceTypeOf, type InvoiceType } from "@/lib/invoice-key";
 import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
 import { binDeal } from "@/lib/recycle-bin";
@@ -26,6 +26,21 @@ async function logDealChange(dealId: string, authorId: string, text: string) {
   }
 }
 const naira = (n: number) => `₦${n.toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
+
+// Actions called from the browser return their problem instead of throwing
+// it: in production a thrown message is hidden ("Minified React error
+// #441"), so the person would never see why something was refused.
+export type ActionResult = { error?: string };
+async function attempt(run: () => Promise<unknown>): Promise<ActionResult> {
+  try {
+    await run();
+    return {};
+  } catch (e) {
+    unstable_rethrow(e);
+    console.error(e);
+    return { error: e instanceof Error ? e.message : "Something went wrong - try again." };
+  }
+}
 import type { DealStage, LostReason, EquipmentType, EndUseSegment, PaymentTerms, ContactRole } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
@@ -218,7 +233,7 @@ async function applySheetInvoices(dealId: string, formData: FormData): Promise<s
   if (invoices === null) return "The invoices in the sheet couldn't be read - check each has an invoice no., a date and a company, then use Mark Won.";
   if (invoices.length === 0) return null;
   try {
-    await markDealWon(dealId, invoices);
+    await markDealWonImpl(dealId, invoices);
     return null;
   } catch (e) {
     const error = e instanceof Error ? e.message : "Couldn't mark the deal Won.";
@@ -409,7 +424,11 @@ export async function deleteDeal(dealId: string) {
 // pipeline (Negotiation) - e.g. marked Won or Lost by mistake. Its invoice,
 // lost reason and Sales Register lines are cleared; its products stay.
 // Deals imported from the Sales Register can be deleted instead.
-export async function reopenDeal(dealId: string) {
+export async function reopenDeal(dealId: string): Promise<ActionResult> {
+  return attempt(() => reopenDealImpl(dealId));
+}
+
+async function reopenDealImpl(dealId: string) {
   const user = await requireUser();
   if (!isBackOffice(user)) throw new Error("Only the Head of Sales or the Sales Coordinator can reopen a deal.");
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { stage: true, sourceTxnNo: true } });
@@ -450,8 +469,8 @@ export async function updateDealStage(
   invoiceNo?: string,
   // Marking Lost: the brand the customer bought instead.
   lostToBrand?: string,
-) {
-  await setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true, lostToBrand);
+): Promise<ActionResult> {
+  return attempt(() => setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true, lostToBrand));
 }
 
 // updateDealStage, minus the discount check when markDealWon has already
@@ -665,7 +684,11 @@ export async function setDealConsiderForReorder(dealId: string, considerForReord
 // Add (or correct) the invoice on a deal already won in the CRM - for deals
 // marked Won before the invoice was asked for. The invoice date becomes the
 // date the sale counts (closedAt), so its line items move with it.
-export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string, company?: string) {
+export async function setDealInvoice(dealId: string, invoiceNo: string, invoiceDate: string, company?: string): Promise<ActionResult> {
+  return attempt(() => setDealInvoiceImpl(dealId, invoiceNo, invoiceDate, company));
+}
+
+async function setDealInvoiceImpl(dealId: string, invoiceNo: string, invoiceDate: string, company?: string) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, stage: true, sourceTxnNo: true, value: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
@@ -740,7 +763,11 @@ export type WonInvoice = {
 // other invoice becomes its own Won deal - same account, contact, customer,
 // owner and details - with its products, value, invoice no. and date.
 // Everything is checked before anything is saved.
-export async function markDealWon(dealId: string, invoices: WonInvoice[]) {
+export async function markDealWon(dealId: string, invoices: WonInvoice[]): Promise<ActionResult> {
+  return attempt(() => markDealWonImpl(dealId, invoices));
+}
+
+async function markDealWonImpl(dealId: string, invoices: WonInvoice[]) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
@@ -970,8 +997,9 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
     const rawDate = get(iDate);
     let invoiceDate = toDate(rawDate) ?? "";
     if (rawDate != null && String(rawDate).trim() && !invoiceDate) problems.push(`Row ${n}: couldn't read the date "${String(rawDate)}" - use dd/mm/yyyy`);
+    // Company: Sakuragi unless the sheet says otherwise.
     const rawCompany = String(get(iCompany) ?? "").trim();
-    const company = billingCompanyOf(rawCompany) ?? "";
+    const company = rawCompany ? (billingCompanyOf(rawCompany) ?? "") : DEFAULT_BILLING_COMPANY;
     if (rawCompany && !company) problems.push(`Row ${n}: company "${rawCompany}" - use Sakuragi or Somotex`);
     if (invoiceNo) {
       // One date per invoice - an invoice being its company + type (sale /
@@ -1094,7 +1122,15 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
 // deals, not ones imported from the Sales Register) with an invoice date in
 // [from, to] - to clear a muddled month and enter it again. Each goes the
 // way deleteDeal does: its Sales Register lines too, and its lead reopened.
-export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: string): Promise<{ deleted: number }> {
+export async function deleteCrmSalesInPeriod(ownerId: string, from: string, to: string): Promise<{ deleted: number; error?: string }> {
+  let deleted = 0;
+  const res = await attempt(async () => {
+    deleted = (await deleteCrmSalesInPeriodImpl(ownerId, from, to)).deleted;
+  });
+  return { deleted, ...res };
+}
+
+async function deleteCrmSalesInPeriodImpl(ownerId: string, from: string, to: string): Promise<{ deleted: number }> {
   const head = await requireHead();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Pick the period.");
   const start = new Date(`${from}T00:00:00Z`);
@@ -1127,7 +1163,15 @@ export async function clearOrphanCrmLines(): Promise<void> {
 // Head only: deletes Sales Register lines with no deal behind them (e.g. an
 // imported invoice whose deal was deleted) for the period, optionally for
 // one sales person.
-export async function deleteOrphanLinesInPeriod(ownerId: string | null, from: string, to: string): Promise<{ deleted: number }> {
+export async function deleteOrphanLinesInPeriod(ownerId: string | null, from: string, to: string): Promise<{ deleted: number; error?: string }> {
+  let deleted = 0;
+  const res = await attempt(async () => {
+    deleted = (await deleteOrphanLinesInPeriodImpl(ownerId, from, to)).deleted;
+  });
+  return { deleted, ...res };
+}
+
+async function deleteOrphanLinesInPeriodImpl(ownerId: string | null, from: string, to: string): Promise<{ deleted: number }> {
   await requireHead();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error("Pick the period.");
   const start = new Date(`${from}T00:00:00Z`);

@@ -563,8 +563,8 @@ export function DealForm({
               {dealId && initialItems.length ? "Download current list (.xlsx)" : "Download template"}
             </a>
             <p className="mt-1 text-xs text-slate-400">
-              Sheet columns: Date, Invoice No, Company (Sakuragi / Somotex), Item Code, Item Name, Quantity, Rate (excl. VAT). Leave Date, Invoice No and
-              Company blank if it isn&apos;t billed yet.
+              Sheet columns: Date, Invoice No, Company (Sakuragi / Somotex - Sakuragi if left blank), Item Code, Item Name, Quantity, Rate (excl. VAT).
+              Leave Date and Invoice No blank if it isn&apos;t billed yet.
               Uploading replaces the list above.
             </p>
             {uploadNote && <p className="mt-1 text-xs text-slate-600">{uploadNote}</p>}

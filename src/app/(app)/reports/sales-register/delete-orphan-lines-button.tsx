@@ -19,6 +19,7 @@ export function DeleteOrphanLinesButton({ ownerId, from, to, count, total }: { o
         start(async () => {
           try {
             const res = await deleteOrphanLinesInPeriod(ownerId, from, to);
+            if (res.error) return alert(res.error);
             alert(`Deleted ${res.deleted} line${res.deleted === 1 ? "" : "s"}.`);
             router.refresh();
           } catch (e) {

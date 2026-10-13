@@ -64,11 +64,10 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
 
     setItems((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
     startTransition(async () => {
-      try {
-        await updateDealStage(dealId, stage);
-      } catch (e) {
+      const res = await updateDealStage(dealId, stage);
+      if (res.error) {
         setItems((prev) => prev.map((d) => (d.id === dealId ? deal : d)));
-        alert(e instanceof Error ? e.message : "Could not update this deal.");
+        alert(res.error);
       }
     });
   }
@@ -81,11 +80,10 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     const deal = items.find((d) => d.id === dealId);
     setItems((prev) => prev.filter((d) => d.id !== dealId));
     startTransition(async () => {
-      try {
-        await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
-      } catch (e) {
+      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
+      if (res.error) {
         if (deal) setItems((prev) => [...prev, deal]);
-        alert(e instanceof Error ? e.message : "Could not update this deal.");
+        alert(res.error);
       }
     });
   }

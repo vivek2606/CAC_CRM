@@ -17,12 +17,9 @@ export function ReopenDealButton({ dealId, stage }: { dealId: string; stage: "WO
         const what = stage === "WON" ? "its invoice no., date and Sales Register lines are cleared" : "its lost reason is cleared";
         if (!window.confirm(`Reopen this deal? It goes back to Negotiation and ${what}. Its products stay.`)) return;
         start(async () => {
-          try {
-            await reopenDeal(dealId);
-            router.refresh();
-          } catch (e) {
-            alert(e instanceof Error ? e.message : "Couldn't reopen the deal.");
-          }
+          const res = await reopenDeal(dealId);
+          if (res.error) alert(res.error);
+          else router.refresh();
         });
       }}
       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 disabled:opacity-60 text-slate-700 text-sm font-medium px-3.5 py-2 transition-colors"

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
   const ws = wb.addWorksheet("Products billed");
   // Date and Invoice No: blank for products not billed yet. Lines with the
   // same invoice no. are one invoice; each invoice is recorded on its date.
+  // Company: Sakuragi when left blank.
   ws.addRow(["Date", "Invoice No", "Company", "Item Code", "Item Name", "Quantity", "Rate"]);
   ws.getRow(1).font = { bold: true };
   if (own && own.items.length) {
