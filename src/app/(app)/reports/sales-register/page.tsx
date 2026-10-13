@@ -136,6 +136,7 @@ export default async function SalesRegisterPage({
       invoiceDate: iso(l.docDate),
       company: l.deal?.billingCompany ?? "Not recorded",
       dealId: l.deal?.id ?? null,
+      accountLinked: !l.deal || !!l.deal.account,
     })),
     ...bareDeals.map((d) => ({
       id: d.id,
@@ -152,6 +153,7 @@ export default async function SalesRegisterPage({
       invoiceDate: iso(d.closedAt!),
       company: d.billingCompany ?? "Not recorded",
       dealId: d.id,
+      accountLinked: !!d.account,
     })),
     ...billings.map((b) => ({
       id: b.id,
@@ -169,8 +171,17 @@ export default async function SalesRegisterPage({
       company: b.billingCompany ?? "Not recorded",
       dealId: null,
       billingId: b.id,
+      accountLinked: codeByName.has(b.custName),
     })),
   ];
+  // Accounts to link unlinked lines to (Head / Coordinator only).
+  const linkAccounts =
+    all && rows.some((r) => r.accountLinked === false)
+      ? (await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } })).map((a) => ({
+          id: a.id,
+          label: a.code ? `${a.name} (${a.code})` : a.name,
+        }))
+      : [];
   // Deals won in the CRM before the invoice was asked for.
   const missingInvoice = await prisma.deal.findMany({
     // Won in the CRM with the invoice no. or the products billed missing.
@@ -345,7 +356,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} accounts={linkAccounts} />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
 import { z } from "zod";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -1037,43 +1038,21 @@ export async function parseWonItemsSheet(formData: FormData): Promise<{ rows: Wo
 // account - an existing one, or one created here from a name and customer
 // code. Used from the deal page when it has to have an account, e.g. to be
 // marked Won.
-export async function linkDealAccount(
-  dealId: string,
-  input: { accountId: string } | { name: string; code: string; city?: string },
-): Promise<{ error?: string; accountId?: string }> {
+export async function linkDealAccount(dealId: string, input: AccountInput): Promise<{ error?: string; accountId?: string }> {
   const user = await requireUser();
   const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { ownerId: true } });
   if (!deal || !canAccessOwner(user, deal.ownerId)) return { error: "You do not have access to this deal." };
 
-  let accountId: string;
-  if ("accountId" in input) {
-    const acc = await prisma.account.findUnique({ where: { id: input.accountId }, select: { id: true } });
-    if (!acc) return { error: "Pick an account from the list." };
-    accountId = acc.id;
-  } else {
-    const name = input.name.trim().replace(/\s+/g, " ");
-    const code = input.code.trim();
-    if (!name) return { error: "Enter the account name." };
-    if (!code) return { error: "Enter the customer code (the account code in the ERP)." };
-    const clash = await prisma.account.findFirst({
-      where: { code: { equals: code, mode: "insensitive" } },
-      select: { name: true },
-    });
-    if (clash) return { error: `Customer code ${code} is already used by "${clash.name}" - pick that account from the list instead.` };
-    const sameName = await prisma.account.findFirst({ where: { name: { equals: name, mode: "insensitive" } }, select: { name: true } });
-    if (sameName) return { error: `An account named "${sameName.name}" already exists - pick it from the list instead.` };
-    const created = await prisma.account.create({
-      data: { name, code, city: input.city?.trim() || null, ownerId: deal.ownerId },
-      select: { id: true },
-    });
-    accountId = created.id;
-  }
+  const acc = await resolveAccountInput(input, deal.ownerId);
+  if ("error" in acc) return { error: acc.error };
+  const accountId = acc.id;
 
   await prisma.deal.update({ where: { id: dealId }, data: { accountId } });
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, accountId: null }, data: { accountId } });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/deals");
   revalidatePath("/accounts");
+  revalidatePath("/reports/sales-register");
   return { accountId };
 }
 

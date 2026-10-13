@@ -8,6 +8,7 @@ import { requireBackOffice } from "@/lib/rbac";
 import { parseProjectBillingBuffer, type ProjectBillingRowProblem } from "@/lib/import/parse-project-billing";
 import { parseReceiptDate } from "@/lib/import/parse-stock-receipts";
 import { binProjectBilling } from "@/lib/recycle-bin";
+import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
 import { BILLING_COMPANIES, DEFAULT_BILLING_COMPANY, billingCompanyOf } from "@/lib/billing-company";
 import { MANUAL_PREFIX, UPLOAD_PREFIX, isCrmEntered } from "@/lib/project-billing";
 
@@ -120,6 +121,22 @@ export async function setProjectBillingCompany(id: string, company: string): Pro
   revalidatePath("/project-billing");
   revalidatePath("/service-billings");
   revalidatePath("/reports/sales-register");
+  return {};
+}
+
+// Links a billing line to an account (picked, or created here): the line
+// carries the account's name, which is how it finds the account code.
+export async function linkProjectBillingAccount(id: string, input: AccountInput): Promise<{ error?: string }> {
+  await requireBackOffice();
+  const row = await prisma.projectBilling.findUnique({ where: { id }, select: { ownerId: true } });
+  if (!row) return { error: "This billing line no longer exists." };
+  const acc = await resolveAccountInput(input, row.ownerId);
+  if ("error" in acc) return { error: acc.error };
+  await prisma.projectBilling.update({ where: { id }, data: { custName: acc.name } });
+  revalidatePath("/project-billing");
+  revalidatePath("/service-billings");
+  revalidatePath("/reports/sales-register");
+  revalidatePath("/accounts");
   return {};
 }
 

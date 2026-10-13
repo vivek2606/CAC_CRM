@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { linkDealAccount } from "./actions";
+import type { AccountInput } from "@/lib/account-link";
 
 type Option = { id: string; label: string };
 
@@ -13,15 +14,26 @@ export function LinkAccountDialog({
   accounts,
   onLinked,
   onCancel,
+  save: saveInput,
+  initialMode = "pick",
+  initialName = "",
+  title = "Link an account to this deal",
+  hint = "A deal needs the customer's account before it can be marked Won. Pick it from all accounts, or create it if it isn't there.",
 }: {
-  dealId: string;
+  dealId?: string;
   accounts: Option[];
   onLinked: () => void;
   onCancel: () => void;
+  // Instead of linking a deal (e.g. a project billing line).
+  save?: (input: AccountInput) => Promise<{ error?: string }>;
+  initialMode?: "pick" | "new";
+  initialName?: string;
+  title?: string;
+  hint?: string;
 }) {
-  const [mode, setMode] = useState<"pick" | "new">("pick");
+  const [mode, setMode] = useState<"pick" | "new">(initialMode);
   const [accountId, setAccountId] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [code, setCode] = useState("");
   const [city, setCity] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +44,8 @@ export function LinkAccountDialog({
     setError(null);
     if (mode === "pick" && !accountId) return setError("Pick an account from the list, or create a new one.");
     start(async () => {
-      const res = await linkDealAccount(dealId, mode === "pick" ? { accountId } : { name, code, city });
+      const input: AccountInput = mode === "pick" ? { accountId } : { name, code, city };
+      const res = saveInput ? await saveInput(input) : await linkDealAccount(dealId!, input);
       if (res.error) setError(res.error);
       else onLinked();
     });
@@ -41,8 +54,8 @@ export function LinkAccountDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-sm font-semibold text-slate-900">Link an account to this deal</h2>
-        <p className="mt-1 mb-4 text-xs text-slate-500">A deal needs the customer&apos;s account before it can be marked Won. Pick it from all accounts, or create it if it isn&apos;t there.</p>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <p className="mt-1 mb-4 text-xs text-slate-500">{hint}</p>
 
         <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1">
           {(

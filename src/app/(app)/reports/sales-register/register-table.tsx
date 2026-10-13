@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { RegisterCharts } from "./register-charts";
 import { BillingCompanyCell } from "../../project-billing/forms";
+import { AccountCell } from "./account-cell";
 
 export type RegisterRow = {
   id: string;
@@ -25,9 +26,12 @@ export type RegisterRow = {
   dealId: string | null;
   // Project & Service lines: the billing line, so its company can be set here.
   billingId?: string;
+  // False when the line isn't linked to an account (the name is the deal
+  // title / the billing's customer text).
+  accountLinked?: boolean;
 };
 
-type Key = Exclude<keyof RegisterRow, "id" | "dealId" | "billingId">;
+type Key = Exclude<keyof RegisterRow, "id" | "dealId" | "billingId" | "accountLinked">;
 const COLUMNS: { key: Key; label: string; numeric?: boolean; width?: string }[] = [
   { key: "accountName", label: "Account name", width: "max-w-[140px]" },
   { key: "accountCode", label: "Account code" },
@@ -54,11 +58,14 @@ export function SalesRegisterTable({
   filename,
   showSalesPerson,
   canEditCompany = false,
+  accounts = [],
 }: {
   rows: RegisterRow[];
   filename: string;
   showSalesPerson: boolean;
   canEditCompany?: boolean;
+  // For linking lines without an account (Head / Coordinator).
+  accounts?: { id: string; label: string }[];
 }) {
   const columns = showSalesPerson ? COLUMNS : COLUMNS.filter((c) => c.key !== "salesPerson");
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
@@ -186,7 +193,15 @@ export function SalesRegisterTable({
                   <td key={c.key} className={`px-1.5 py-1 whitespace-nowrap ${c.width ?? ""} ${c.numeric ? "text-right tabular-nums" : ""}`}>
                     {/* Long text stays on one line; the full text shows on hover. */}
                     <div className={c.width ? "truncate" : ""} title={c.width ? display(r, c.key) : undefined}>
-                      {c.key === "accountName" && r.dealId ? (
+                      {c.key === "accountName" && r.accountLinked === false && canEditCompany && (r.dealId || r.billingId) ? (
+                        <AccountCell
+                          key={`${r.billingId ?? r.dealId}:${r.accountName}`}
+                          name={r.accountName}
+                          dealId={r.billingId ? undefined : (r.dealId ?? undefined)}
+                          billingId={r.billingId}
+                          accounts={accounts}
+                        />
+                      ) : c.key === "accountName" && r.dealId ? (
                         <Link
                           // A won deal with no products opens straight on its invoices & products.
                           href={r.category === "No products listed" ? `/deals/${r.dealId}?markWon=1` : `/deals/${r.dealId}`}
