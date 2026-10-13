@@ -1189,3 +1189,27 @@ async function deleteOrphanLinesInPeriodImpl(ownerId: string | null, from: strin
   revalidatePath("/");
   return { deleted: res.count };
 }
+
+// Head / Coordinator: sets a won deal's billing company (e.g. from Data
+// health), checked against invoices already recorded and noted in its
+// change log.
+export async function setDealCompany(dealId: string, company: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const user = await requireUser();
+    if (!isBackOffice(user)) throw new Error("Only the Head of Sales or the Sales Coordinator can change the billing company.");
+    const billingCompany = billingCompanyOf(company);
+    if (!billingCompany) throw new Error("Pick Sakuragi or Somotex.");
+    const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, select: { stage: true, invoiceNo: true, value: true, billingCompany: true } });
+    if (deal.stage !== "WON") throw new Error("Only a won deal has a billing company.");
+    if (deal.billingCompany === billingCompany) return;
+    if (deal.invoiceNo) {
+      const clash = await invoiceClash([{ invoiceNo: deal.invoiceNo, company: billingCompany, type: invoiceTypeOf(deal.value) }], [dealId]);
+      if (clash) throw new Error(clash);
+    }
+    await prisma.deal.update({ where: { id: dealId }, data: { billingCompany } });
+    await logDealChange(dealId, user.id, `Billing company: ${deal.billingCompany ?? "not recorded"} → ${billingCompany}.`);
+    revalidatePath("/admin/data-health");
+    revalidatePath(`/deals/${dealId}`);
+    revalidatePath("/reports/sales-register");
+  });
+}

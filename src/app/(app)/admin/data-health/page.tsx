@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { CompanyFix } from "./company-fix";
 
 // Everything that needs fixing in one place, for the Head and the Sales
 // Coordinator: won sales with details missing, the same invoice recorded
@@ -178,8 +179,8 @@ export default async function DataHealthPage() {
         <Card className="p-5">
           <h2 id="won" className="text-sm font-semibold text-slate-900 scroll-mt-24">Won sales with details missing</h2>
           <p className="mb-3 text-xs text-slate-500">
-            Entered in the CRM without the account, company, invoice no. or products. Open the deal: Edit for the account and company, Invoices &amp;
-            products for the invoice and products (by hand or the Excel template).
+            Entered in the CRM without the account, company, invoice no. or products. Set the company right here; Link account opens Edit Deal;
+            Invoices &amp; products for the invoice and products (by hand or the Excel template).
           </p>
           {incompleteWon.length === 0 ? (
             <p className="text-sm text-emerald-700">None.</p>
@@ -208,13 +209,14 @@ export default async function DataHealthPage() {
                     <td className="py-1.5 pr-3 text-amber-800">{missing(d)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-slate-700">{formatCurrency(d.value)}</td>
                     <td className="py-1.5 whitespace-nowrap">
-                      {(!d.accountId || !d.billingCompany) && (
-                        <Link href={`/deals/${d.id}/edit`} className={`${link} mr-3`}>
-                          Edit
+                      {!d.billingCompany && <CompanyFix dealId={d.id} />}
+                      {!d.accountId && (
+                        <Link href={`/deals/${d.id}/edit`} className={`${link} ml-3`} title="Pick the account in Edit Deal">
+                          Link account
                         </Link>
                       )}
                       {(!d.invoiceNo || d._count.items === 0) && (
-                        <Link href={`/deals/${d.id}?markWon=1&returnTo=/admin/data-health`} className={link}>
+                        <Link href={`/deals/${d.id}?markWon=1&returnTo=/admin/data-health`} className={`${link} ml-3`}>
                           Invoices &amp; products
                         </Link>
                       )}

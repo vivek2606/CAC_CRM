@@ -272,6 +272,21 @@ export function DealForm({
           />
         </div>
 
+        {defaultValues?.stage === "WON" && canEditCompany && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Billed by</label>
+            <select
+              name="billingCompany"
+              defaultValue={defaultValues?.billingCompany ?? ""}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Not recorded</option>
+              <option value="Sakuragi">Sakuragi</option>
+              <option value="Somotex">Somotex</option>
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
           <input
@@ -363,21 +378,6 @@ export function DealForm({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-
-        {defaultValues?.stage === "WON" && canEditCompany && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Billed by</label>
-            <select
-              name="billingCompany"
-              defaultValue={defaultValues?.billingCompany ?? ""}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">Not recorded</option>
-              <option value="Sakuragi">Sakuragi</option>
-              <option value="Somotex">Somotex</option>
-            </select>
-          </div>
-        )}
 
         {defaultValues?.stage === "WON" && (
           <div>
