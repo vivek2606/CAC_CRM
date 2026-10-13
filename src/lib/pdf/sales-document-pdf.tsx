@@ -121,13 +121,53 @@ function RateCells({ inst }: { inst: boolean }) {
   );
 }
 
-export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
+// fill: stretch the item table down to the totals with empty ruled rows -
+// only for a one-page document; a longer one gets no blank table on its
+// later pages (see renderSalesDocumentPdf).
+export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fill?: boolean }) {
   const c = doc.company;
   const contact = [c.phone, c.email, c.website].filter(Boolean).join("  |  ");
   const reg = [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`]
     .filter(Boolean)
     .join("  |  ");
   const hasBank = Boolean(doc.bank.bankName || doc.bank.accountName || doc.bank.accountNumber);
+  // One table row (a section heading or an item).
+  const renderRow = (r: SalesDocument["rows"][number], i: number) =>
+            r.kind === "section" ? (
+              <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
+                <Text style={[...col.no, s.sectionText]}>{r.sn}</Text>
+                <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
+                <View style={col.unit} />
+                <View style={col.qty} />
+                <RateCells inst={doc.withInstallation} />
+                <View style={col.amt} />
+              </View>
+            ) : (
+              <View key={i} style={s.row} wrap={false}>
+                <Text style={[...col.no, { color: muted }]}>{r.sn}</Text>
+                <View style={col.desc}>
+                  <Text>{r.description}</Text>
+                  {r.detail ? <Text style={{ fontSize: 7.5, color: muted, marginTop: 1 }}>{r.detail}</Text> : null}
+                </View>
+                <Text style={col.unit}>{r.unit}</Text>
+                <Text style={col.qty}>{qtyFmt(r.qty)}</Text>
+                {doc.withInstallation ? (
+                  <>
+                    <Text style={col.srate}>{money(r.unitPrice)}</Text>
+                    <Text style={col.inst}>{r.installRate ? money(r.installRate) : "-"}</Text>
+                  </>
+                ) : (
+                  <Text style={col.rate}>{money(r.unitPrice)}</Text>
+                )}
+                <Text style={col.amt}>{money(r.amount)}</Text>
+              </View>
+            );
+  // Multi-page (no filler): the last row goes in the totals block, which
+  // never splits - so the totals never sit alone under the column headings
+  // on a page of their own.
+  const bodyRows = fill ? doc.rows : doc.rows.slice(0, -1);
+  const lastRow = fill ? null : doc.rows[doc.rows.length - 1];
+
   return (
     <Document title={`${doc.heading} ${doc.ref}`} author={c.name} subject={doc.title || doc.heading}>
       <Page size="A4" style={s.page}>
@@ -212,43 +252,14 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
 
         <View style={s.body}>
           <TableHeader vatInclusive={doc.vatInclusive} inst={doc.withInstallation} />
-          {doc.rows.map((r, i) =>
-            r.kind === "section" ? (
-              <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
-                <Text style={[...col.no, s.sectionText]}>{r.sn}</Text>
-                <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
-                <View style={col.unit} />
-                <View style={col.qty} />
-                <RateCells inst={doc.withInstallation} />
-                <View style={col.amt} />
-              </View>
-            ) : (
-              <View key={i} style={s.row} wrap={false}>
-                <Text style={[...col.no, { color: muted }]}>{r.sn}</Text>
-                <View style={col.desc}>
-                  <Text>{r.description}</Text>
-                  {r.detail ? <Text style={{ fontSize: 7.5, color: muted, marginTop: 1 }}>{r.detail}</Text> : null}
-                </View>
-                <Text style={col.unit}>{r.unit}</Text>
-                <Text style={col.qty}>{qtyFmt(r.qty)}</Text>
-                {doc.withInstallation ? (
-                  <>
-                    <Text style={col.srate}>{money(r.unitPrice)}</Text>
-                    <Text style={col.inst}>{r.installRate ? money(r.installRate) : "-"}</Text>
-                  </>
-                ) : (
-                  <Text style={col.rate}>{money(r.unitPrice)}</Text>
-                )}
-                <Text style={col.amt}>{money(r.amount)}</Text>
-              </View>
-            ),
-          )}
+          {bodyRows.map((r, i) => renderRow(r, i))}
 
-          {/* Empty table down to the bottom block (and above it on a page of its own). */}
-          <EmptyRows inst={doc.withInstallation} />
+          {/* Empty table down to the bottom block (one-page documents only). */}
+          {fill && <EmptyRows inst={doc.withInstallation} />}
 
-          <View style={s.bottom} wrap={false}>
-            <EmptyRows inst={doc.withInstallation} />
+          <View style={fill ? s.bottom : { flexDirection: "column" }} wrap={false}>
+            {fill && <EmptyRows inst={doc.withInstallation} />}
+            {lastRow && renderRow(lastRow, doc.rows.length - 1)}
             {doc.withInstallation && (
               <>
                 <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
@@ -356,6 +367,13 @@ export function SalesDocumentPdf({ doc }: { doc: SalesDocument }) {
   );
 }
 
+// One page: the table is stretched to the totals. More than one: rendered
+// again without the empty rows, so no blank table runs onto later pages.
 export async function renderSalesDocumentPdf(doc: SalesDocument): Promise<Buffer> {
-  return renderToBuffer(<SalesDocumentPdf doc={doc} />);
+  const filled = await renderToBuffer(<SalesDocumentPdf doc={doc} />);
+  return pageCount(filled) > 1 ? renderToBuffer(<SalesDocumentPdf doc={doc} fill={false} />) : filled;
+}
+
+function pageCount(pdf: Buffer): number {
+  return (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
 }
