@@ -158,7 +158,7 @@ export default async function DataHealthPage() {
                     <tr key={d.id} className={i === 0 && gi > 0 ? "border-t-2 border-slate-200" : "border-t border-slate-100"}>
                       <td className="py-1.5 pr-3 font-medium text-slate-800">{i === 0 ? (d.invoiceNo ?? d.sourceTxnNo) : ""}</td>
                       <td className="py-1.5 pr-3">
-                        <Link href={`/deals/${d.id}`} className={link}>
+                        <Link href={`/deals/${d.id}?returnTo=/admin/data-health`} className={link}>
                           {d.title}
                         </Link>
                         {d.sourceTxnNo != null && <span className="ml-1 text-xs text-slate-400">(ERP upload)</span>}
@@ -199,7 +199,7 @@ export default async function DataHealthPage() {
                 {incompleteWon.map((d) => (
                   <tr key={d.id} className="border-t border-slate-100">
                     <td className="py-1.5 pr-3">
-                      <Link href={`/deals/${d.id}`} className={link}>
+                      <Link href={`/deals/${d.id}?returnTo=/admin/data-health`} className={link}>
                         {d.title}
                       </Link>
                     </td>
@@ -214,7 +214,7 @@ export default async function DataHealthPage() {
                         </Link>
                       )}
                       {(!d.invoiceNo || d._count.items === 0) && (
-                        <Link href={`/deals/${d.id}?markWon=1`} className={link}>
+                        <Link href={`/deals/${d.id}?markWon=1&returnTo=/admin/data-health`} className={link}>
                           Invoices &amp; products
                         </Link>
                       )}
@@ -306,7 +306,7 @@ export default async function DataHealthPage() {
               <ul className="divide-y divide-slate-100 text-sm">
                 {pastClose.slice(0, SHOW).map((d) => (
                   <li key={d.id} className="flex justify-between gap-3 py-1.5">
-                    <Link href={`/deals/${d.id}`} className={`${link} truncate`}>
+                    <Link href={`/deals/${d.id}?returnTo=/admin/data-health`} className={`${link} truncate`}>
                       {d.title}
                     </Link>
                     <span className="whitespace-nowrap text-slate-500">

@@ -34,7 +34,9 @@ export default async function DealDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ markWon?: string; wonError?: string }>;
+  // returnTo: the page the deal was opened from (e.g. Data health) - a
+  // delete goes back there.
+  searchParams: Promise<{ markWon?: string; wonError?: string; returnTo?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -165,6 +167,7 @@ export default async function DealDetailPage({
             )}
             <ConfirmDeleteButton
               action={deleteAction}
+              returnTo={sp.returnTo?.startsWith("/") && !sp.returnTo.startsWith("//") ? sp.returnTo : undefined}
               label="Delete deal"
               message={
                 deal.stage === "WON"

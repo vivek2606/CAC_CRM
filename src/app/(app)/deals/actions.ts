@@ -401,7 +401,14 @@ export async function updateDeal(dealId: string, formData: FormData) {
   redirect(wonError ? `/deals/${dealId}?wonError=${encodeURIComponent(wonError)}` : `/deals/${dealId}`);
 }
 
-export async function deleteDeal(dealId: string) {
+// Where to go after a delete: back to the page the deal was opened from
+// (e.g. Data health) when it says so, else the pipeline.
+function safeReturnTo(formData?: FormData): string | null {
+  const v = formData?.get("returnTo");
+  return typeof v === "string" && v.startsWith("/") && !v.startsWith("//") ? v : null;
+}
+
+export async function deleteDeal(dealId: string, formData?: FormData) {
   const user = await requireUser();
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
@@ -417,7 +424,8 @@ export async function deleteDeal(dealId: string) {
   revalidatePath("/deals");
   revalidatePath("/reports/sales-register");
   revalidatePath("/leads");
-  redirect("/deals");
+  revalidatePath("/admin/data-health");
+  redirect(safeReturnTo(formData) ?? "/deals");
 }
 
 // Head / Coordinator: puts a Won or Lost deal entered in the CRM back in the

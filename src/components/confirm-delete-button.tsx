@@ -3,7 +3,18 @@
 import { Trash2 } from "lucide-react";
 
 // A delete button that asks first - for a bound server action.
-export function ConfirmDeleteButton({ action, message, label }: { action: () => Promise<void>; message: string; label: string }) {
+// returnTo: sent with the form - where the action goes afterwards.
+export function ConfirmDeleteButton({
+  action,
+  message,
+  label,
+  returnTo,
+}: {
+  action: (formData: FormData) => Promise<void>;
+  message: string;
+  label: string;
+  returnTo?: string;
+}) {
   return (
     <form
       action={action}
@@ -11,6 +22,7 @@ export function ConfirmDeleteButton({ action, message, label }: { action: () => 
         if (!window.confirm(message)) e.preventDefault();
       }}
     >
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <button
         type="submit"
         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-500 text-sm font-medium px-3 py-2 transition-colors"
