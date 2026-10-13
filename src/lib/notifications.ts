@@ -156,6 +156,52 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     }
   }
 
+  // Data health (Head / Coordinator): won sales with details missing, the
+  // same invoice recorded twice, register lines with no deal - the clean-up
+  // jobs on the Data health page.
+  if (team) {
+    const [incomplete, orphans, crmInvoices] = await Promise.all([
+      prisma.deal.count({
+        where: { stage: "WON", sourceTxnNo: null, OR: [{ accountId: null }, { billingCompany: null }, { invoiceNo: null }, { items: { none: {} } }] },
+      }),
+      prisma.saleLineItem.count({ where: { dealId: null } }),
+      prisma.deal.findMany({
+        where: { stage: "WON", sourceTxnNo: null, invoiceNo: { not: null } },
+        select: { id: true, invoiceNo: true, billingCompany: true, value: true },
+      }),
+    ]);
+    // A CRM invoice also on another won sale (same number, type and company - or company not recorded).
+    const nos = [...new Set(crmInvoices.map((d) => d.invoiceNo!.trim()))];
+    const others = nos.length
+      ? await prisma.deal.findMany({
+          where: {
+            stage: "WON",
+            OR: [{ invoiceNo: { in: nos, mode: "insensitive" } }, { sourceTxnNo: { in: nos.filter((n) => /^\d+$/.test(n)).map(Number) } }],
+          },
+          select: { id: true, invoiceNo: true, sourceTxnNo: true, billingCompany: true, value: true },
+        })
+      : [];
+    const duplicates = crmInvoices.filter((d) =>
+      others.some(
+        (o) =>
+          o.id !== d.id &&
+          ((o.invoiceNo ?? "").trim().toLowerCase() === d.invoiceNo!.trim().toLowerCase() || String(o.sourceTxnNo ?? "") === d.invoiceNo!.trim()) &&
+          o.value < 0 === d.value < 0 &&
+          (!o.billingCompany || !d.billingCompany || o.billingCompany === d.billingCompany),
+      ),
+    ).length;
+    const items: NotificationItem[] = [];
+    if (duplicates) items.push({ label: `${duplicates} sale${duplicates === 1 ? "" : "s"} with an invoice recorded twice`, sub: "Counted twice - fix first", href: "/admin/data-health#dup" });
+    if (incomplete) items.push({ label: `${incomplete} won sale${incomplete === 1 ? "" : "s"} with details missing`, sub: "Account, company, invoice no. or products", href: "/admin/data-health#won" });
+    if (orphans) items.push({ label: `${orphans} Sales Register line${orphans === 1 ? "" : "s"} with no deal`, href: "/admin/data-health#orphan" });
+    if (items.length) {
+      const group = { key: "dataHealth", label: "Data health - to fix", count: duplicates + incomplete + orphans, href: "/admin/data-health", items };
+      // The Coordinator's main job list: first in her bell and morning push.
+      if (user.role === "COORDINATOR") groups.unshift(group);
+      else groups.push(group);
+    }
+  }
+
   // Incentives: the last three months.
   if (team) {
     const months = [1, 2, 3].map((i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)));
