@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Menu, RefreshCw, X } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { Sidebar, sectionFor } from "./sidebar";
 import { SearchBox } from "./search-box";
@@ -33,6 +33,25 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   const [active, setActive] = useState<string>("main");
   const pathname = usePathname();
   const embedded = useEmbedded();
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+  const [tabReloading, setTabReloading] = useState(false);
+  const lastRefresh = useRef(0);
+
+  // Coming back to the app after a minute or more away: fetch the page's
+  // data again, so the figures are current without pressing Refresh.
+  // (Not inside an in-app tab - the open tab is refreshed with the button.)
+  useEffect(() => {
+    if (embedded) return;
+    lastRefresh.current = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh.current < 60_000) return;
+      lastRefresh.current = Date.now();
+      router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [router, embedded]);
 
   // Inside a tab: just the page.
   if (embedded) return <main className="flex-1 min-w-0">{children}</main>;
@@ -54,6 +73,23 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
     });
     setActive(tab.id);
   };
+  // Refresh: the data on the page you're looking at - the main page, or the
+  // open in-app tab.
+  const refresh = () => {
+    lastRefresh.current = Date.now();
+    if (active !== "main") {
+      const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-tab="${active}"]`);
+      if (frame?.contentWindow) {
+        setTabReloading(true);
+        frame.addEventListener("load", () => setTabReloading(false), { once: true });
+        frame.contentWindow.location.reload();
+        return;
+      }
+    }
+    startRefresh(() => router.refresh());
+  };
+  const busy = refreshing || tabReloading;
+
   const closeTab = (id: string) => {
     const i = tabs.findIndex((t) => t.id === id);
     setTabs((ts) => ts.filter((t) => t.id !== id));
@@ -91,6 +127,17 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
             <span className="lg:hidden font-semibold text-slate-900 text-sm shrink-0">SAKURAGI</span>
             <SearchBox />
             <div className="ml-auto shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={busy}
+                title="Refresh - load the latest data on this page"
+                aria-label="Refresh data"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-70"
+              >
+                <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">{busy ? "Refreshing…" : "Refresh"}</span>
+              </button>
               <NotificationBell onNavigate={() => setActive("main")} />
               <CalculatorButton />
             </div>
@@ -120,6 +167,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         {tabs.map((t) => (
           <iframe
             key={t.id}
+            data-tab={t.id}
             src={t.href}
             title={t.label}
             hidden={active !== t.id}
