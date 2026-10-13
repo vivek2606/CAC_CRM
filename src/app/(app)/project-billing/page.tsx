@@ -4,7 +4,7 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { MANUAL_PREFIX, UPLOAD_PREFIX } from "@/lib/project-billing";
-import { AddBillingForm, UploadBillingForm, DeleteBillingButton } from "./forms";
+import { AddBillingForm, UploadBillingForm, DeleteBillingButton, BillingCompanyCell } from "./forms";
 
 // Project & Service billing: what the Sales Register brought in, plus what
 // is entered here (by hand or from a sheet) - e.g. from September 2026,
@@ -78,7 +78,8 @@ export default async function ProjectBillingPage({
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Upload from Excel</h2>
           <p className="text-xs text-slate-500 mt-1 mb-3">
-            Columns: Date, Invoice No, Customer, Sales Person, Description, Value (excl. VAT) - Invoice No is required. Customer is matched to
+            Columns: Date, Invoice No, Customer, Sales Person, Description, Value (excl. VAT), Company - Invoice No is required; Company
+            (Sakuragi or Somotex) is Sakuragi when left blank. Customer is matched to
             the account by name or code. Sales Person is matched to the login by name - lines under the Service Manager are service billing, everyone else&apos;s project billing. Uploading the
             same sheet again doesn&apos;t double it.
           </p>
@@ -145,7 +146,7 @@ export default async function ProjectBillingPage({
             </h2>
             <ExportCsvButton
               filename={`project-service-billing-${monthValue(month)}.csv`}
-              headers={["Date", "Invoice No", "Customer", "Sales Person", "Billing", "Description", "Value (excl. VAT)", "Source"]}
+              headers={["Date", "Invoice No", "Customer", "Sales Person", "Billing", "Description", "Value (excl. VAT)", "Company", "Source"]}
               rows={lines.map((l) => [
                 l.docDate.toISOString().slice(0, 10),
                 l.docKey.includes("/") ? String(l.txnNo) : l.docKey,
@@ -154,6 +155,7 @@ export default async function ProjectBillingPage({
                 isService(l) ? "Service" : "Project",
                 l.itemName,
                 l.value,
+                l.billingCompany ?? "",
                 sourceOf(l.sourceKey),
               ])}
             />
@@ -172,6 +174,7 @@ export default async function ProjectBillingPage({
                     <th className="px-3 py-3 font-medium">Customer / detail</th>
                     <th className="px-3 py-3 font-medium">Sales person</th>
                     <th className="px-3 py-3 font-medium text-right">Value (excl. VAT)</th>
+                    <th className="px-3 py-3 font-medium">Company</th>
                     <th className="px-4 py-3 font-medium">Source</th>
                   </tr>
                 </thead>
@@ -193,6 +196,9 @@ export default async function ProjectBillingPage({
                         </td>
                         <td className="px-3 py-2.5 text-slate-600">{l.owner.name}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCurrency(l.value)}</td>
+                        <td className="px-3 py-2.5">
+                          <BillingCompanyCell key={`${l.id}:${l.billingCompany ?? ""}`} id={l.id} company={l.billingCompany} />
+                        </td>
                         <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                           <span className="text-slate-500">{source}</span>
                           {source !== "Sales Register" && (

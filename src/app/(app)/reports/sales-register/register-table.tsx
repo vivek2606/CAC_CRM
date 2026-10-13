@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { RegisterCharts } from "./register-charts";
+import { BillingCompanyCell } from "../../project-billing/forms";
 
 export type RegisterRow = {
   id: string;
@@ -22,9 +23,11 @@ export type RegisterRow = {
   // Billing company: "Sakuragi" / "Somotex", or "Not recorded".
   company: string;
   dealId: string | null;
+  // Project & Service lines: the billing line, so its company can be set here.
+  billingId?: string;
 };
 
-type Key = Exclude<keyof RegisterRow, "id" | "dealId">;
+type Key = Exclude<keyof RegisterRow, "id" | "dealId" | "billingId">;
 const COLUMNS: { key: Key; label: string; numeric?: boolean; width?: string }[] = [
   { key: "accountName", label: "Account name", width: "max-w-[140px]" },
   { key: "accountCode", label: "Account code" },
@@ -46,7 +49,17 @@ const display = (r: RegisterRow, k: Key) =>
   k === "rate" || k === "amount" ? money(r[k]) : k === "qty" ? String(r.qty) : k === "invoiceDate" ? fmtDate(r.invoiceDate) : String(r[k] ?? "");
 const PAGE = 500;
 
-export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: RegisterRow[]; filename: string; showSalesPerson: boolean }) {
+export function SalesRegisterTable({
+  rows,
+  filename,
+  showSalesPerson,
+  canEditCompany = false,
+}: {
+  rows: RegisterRow[];
+  filename: string;
+  showSalesPerson: boolean;
+  canEditCompany?: boolean;
+}) {
   const columns = showSalesPerson ? COLUMNS : COLUMNS.filter((c) => c.key !== "salesPerson");
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
   const [sortKey, setSortKey] = useState<Key>("invoiceDate");
@@ -181,6 +194,12 @@ export function SalesRegisterTable({ rows, filename, showSalesPerson }: { rows: 
                         >
                           {r.accountName}
                         </Link>
+                      ) : c.key === "company" && r.billingId && canEditCompany ? (
+                        <BillingCompanyCell
+                          key={`${r.billingId}:${r.company}`}
+                          id={r.billingId}
+                          company={r.company === "Not recorded" ? null : r.company}
+                        />
                       ) : (
                         display(r, c.key)
                       )}

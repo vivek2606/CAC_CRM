@@ -11,6 +11,7 @@ export type RawProjectBillingRow = {
   salesPerson: string;
   description: string | null;
   value: number; // net, negative for a credit note
+  company: string | null; // as written; Sakuragi when blank
 };
 
 export type ProjectBillingRowProblem = { rowNumber: number; problem: string };
@@ -21,10 +22,11 @@ const COLUMNS = {
   customer: ["customer", "customer name", "cust name"],
   salesPerson: ["sales person", "salesperson", "salesmen", "salesman"],
   description: ["description", "item name", "details", "item"],
+  company: ["company", "company name", "billing company", "billingentity", "billing entity", "entity"],
   value: ["value", "value (excl. vat)", "value excl. vat", "amount", "amount (excl. vat)", "net amt", "net amount"],
 };
 
-export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Description", "Value (excl. VAT)"];
+export const PROJECT_BILLING_TEMPLATE_HEADERS = ["Date", "Invoice No", "Customer", "Sales Person", "Description", "Value (excl. VAT)", "Company"];
 
 export async function parseProjectBillingBuffer(
   buffer: ArrayBuffer,
@@ -81,6 +83,7 @@ export async function parseProjectBillingBuffer(
       salesPerson,
       description: str(idx.description),
       value,
+      company: str(idx.company),
     });
   });
   return { rows, problems };

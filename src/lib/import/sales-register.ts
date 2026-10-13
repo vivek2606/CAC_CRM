@@ -79,6 +79,7 @@ export type TransformedProjectBilling = {
   itemName: string;
   value: number;
   ownerKey: string;
+  entity?: string;
 };
 
 export type TransformResult = {
@@ -405,6 +406,7 @@ export function transformSalesRegister(inputRows: RawSalesRow[], knownAccounts: 
       itemName: row.itemName,
       value: row.netAmt,
       ownerKey: normalizeSalesmanName(row.salesman),
+      entity: row.entity?.trim() || undefined,
     };
   });
 

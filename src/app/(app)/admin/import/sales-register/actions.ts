@@ -545,6 +545,7 @@ export async function importSalesRegister(
       itemCode: pb.itemCode,
       itemName: pb.itemName,
       value: pb.value,
+      billingCompany: billingCompanyOf(pb.entity),
       ownerId: userIdByKey.get(pb.ownerKey) ?? head.id,
     })),
     skipDuplicates: true,

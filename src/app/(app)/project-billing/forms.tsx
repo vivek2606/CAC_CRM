@@ -1,12 +1,15 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { BILLING_COMPANIES, DEFAULT_BILLING_COMPANY } from "@/lib/billing-company";
 import { formatCurrency } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import {
   addProjectBilling,
   deleteProjectBilling,
   importProjectBilling,
+  setProjectBillingCompany,
   type BulkProjectBillingState,
   type FormState,
 } from "./actions";
@@ -61,6 +64,16 @@ export function AddBillingForm({
         <div>
           <label className={labelClass}>Amount excl. VAT, ₦ (negative for a credit note)</label>
           <input name="value" inputMode="decimal" required className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Company</label>
+          <select name="company" defaultValue={DEFAULT_BILLING_COMPANY} required className={inputClass}>
+            {BILLING_COMPANIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -133,6 +146,47 @@ export function UploadBillingForm() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// A line's billing company, changed in place - saves on pick.
+export function BillingCompanyCell({ id, company }: { id: string; company: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(company ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div>
+      <select
+        value={value}
+        disabled={pending}
+        aria-label="Billing company"
+        onChange={(e) => {
+          const next = e.target.value;
+          if (!next) return;
+          const prev = value;
+          setValue(next);
+          start(async () => {
+            setError(null);
+            const res = await setProjectBillingCompany(id, next);
+            if (res.error) {
+              setValue(prev);
+              setError(res.error);
+            } else router.refresh();
+          });
+        }}
+        className={`rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${value ? "border-slate-200 bg-white text-slate-700" : "border-amber-300 bg-amber-50 text-amber-800"}`}
+      >
+        {!value && <option value="">Not recorded - pick</option>}
+        {BILLING_COMPANIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+      {pending && <span className="ml-1 text-xs text-slate-400">Saving…</span>}
+      {error && <div className="text-xs text-red-600">{error}</div>}
     </div>
   );
 }

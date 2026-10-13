@@ -90,14 +90,13 @@ export default async function SalesRegisterPage({
             deal: { select: { id: true, sourceTxnNo: true, invoiceNo: true, title: true, billingCompany: true, account: { select: { name: true, code: true } } } },
           },
         }),
-    // Service billings carry no company.
-    (category && category !== "Project & Service") || (company && company !== "none")
+    category && category !== "Project & Service"
       ? Promise.resolve([])
       : prisma.projectBilling.findMany({
-          where: { docDate: { gte: from, lt: end }, ...ownerWhere },
+          where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...dealCompanyWhere },
           orderBy: [{ docDate: "desc" }],
           take: MAX_ROWS,
-          select: { id: true, docDate: true, value: true, txnNo: true, docKey: true, sourceKey: true, custName: true, itemCode: true, itemName: true, owner: { select: { name: true } } },
+          select: { id: true, docDate: true, value: true, txnNo: true, docKey: true, sourceKey: true, custName: true, itemCode: true, itemName: true, billingCompany: true, owner: { select: { name: true } } },
         }),
     prisma.product.findMany({ distinct: ["category"], select: { category: true }, orderBy: { category: "asc" } }),
   ]);
@@ -167,8 +166,9 @@ export default async function SalesRegisterPage({
       amount: b.value,
       invoiceNo: b.txnNo ? String(b.txnNo) : b.docKey,
       invoiceDate: iso(b.docDate),
-      company: "Not recorded",
+      company: b.billingCompany ?? "Not recorded",
       dealId: null,
+      billingId: b.id,
     })),
   ];
   // Deals won in the CRM before the invoice was asked for.
@@ -345,7 +345,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} />
       </div>
     </div>
   );

@@ -700,6 +700,9 @@ model ProjectBilling {
   itemCode  String
   itemName  String
   value     Float    // net, so returns come off
+  // Sakuragi / Somotex - from the register's billing entity, or set in the
+  // CRM; null = not recorded.
+  billingCompany String?
 
   ownerId   String
   owner     User     @relation("ProjectBillingOwner", fields: [ownerId], references: [id])

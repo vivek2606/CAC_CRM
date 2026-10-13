@@ -8,6 +8,7 @@ import { requireBackOffice } from "@/lib/rbac";
 import { parseProjectBillingBuffer, type ProjectBillingRowProblem } from "@/lib/import/parse-project-billing";
 import { parseReceiptDate } from "@/lib/import/parse-stock-receipts";
 import { binProjectBilling } from "@/lib/recycle-bin";
+import { BILLING_COMPANIES, DEFAULT_BILLING_COMPANY, billingCompanyOf } from "@/lib/billing-company";
 import { MANUAL_PREFIX, UPLOAD_PREFIX, isCrmEntered } from "@/lib/project-billing";
 
 // Project & Service billing entered in the CRM - by hand or from a sheet -
@@ -54,6 +55,7 @@ const manualSchema = z.object({
   description: z.string().trim().max(200),
   invoiceNo: z.string().trim().min(1, "Enter the invoice no.").max(60),
   value: z.coerce.number().refine((v) => Number.isFinite(v) && v !== 0, "Enter the amount (negative for a credit note)."),
+  company: z.enum(BILLING_COMPANIES, { message: "Pick the company (Sakuragi or Somotex)." }),
 });
 
 export async function addProjectBilling(_prev: FormState | undefined, formData: FormData): Promise<FormState> {
@@ -65,6 +67,7 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
     description: formData.get("description") ?? "",
     invoiceNo: formData.get("invoiceNo") ?? "",
     value: String(formData.get("value") ?? "").replace(/[₦,\s]/g, ""),
+    company: formData.get("company") ?? DEFAULT_BILLING_COMPANY,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
   const d = parsed.data;
@@ -87,6 +90,7 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
       itemCode: type.toUpperCase(),
       itemName: d.description || type,
       value: d.value,
+      billingCompany: d.company,
       ownerId: d.ownerId,
     },
   });
@@ -105,6 +109,18 @@ export async function deleteProjectBilling(id: string) {
   await binProjectBilling(id, user.id);
   await prisma.projectBilling.delete({ where: { id } });
   revalidate();
+}
+
+// Set or change a line's billing company (any line - register ones too).
+export async function setProjectBillingCompany(id: string, company: string): Promise<{ error?: string }> {
+  await requireBackOffice();
+  if (!(BILLING_COMPANIES as readonly string[]).includes(company)) return { error: "Pick Sakuragi or Somotex." };
+  const { count } = await prisma.projectBilling.updateMany({ where: { id }, data: { billingCompany: company } });
+  if (!count) return { error: "This billing line no longer exists." };
+  revalidatePath("/project-billing");
+  revalidatePath("/service-billings");
+  revalidatePath("/reports/sales-register");
+  return {};
 }
 
 export type BulkProjectBillingState = {
@@ -167,6 +183,12 @@ export async function importProjectBilling(
       problems.push({ rowNumber: r.rowNumber, problem: `No sales person login matches "${r.salesPerson}"` });
       continue;
     }
+    // Company column: Sakuragi when blank; anything else unrecognised is a problem.
+    const company = r.company ? billingCompanyOf(r.company) : DEFAULT_BILLING_COMPANY;
+    if (!company) {
+      problems.push({ rowNumber: r.rowNumber, problem: `Company "${r.company}" isn't Sakuragi or Somotex` });
+      continue;
+    }
     const type = typeFor(owner);
     // Same row uploaded again = same key, so a re-upload doesn't double it.
     const base = [r.date.toISOString().slice(0, 10), r.invoiceNo, norm(accountName), owner.id, type, r.value].join("|");
@@ -182,6 +204,7 @@ export async function importProjectBilling(
       itemCode: type.toUpperCase(),
       itemName: r.description ?? type,
       value: r.value,
+      billingCompany: company,
       ownerId: owner.id,
     });
   }
