@@ -11,6 +11,8 @@ export type NotificationGroup = { key: string; label: string; count: number; hre
 export type Notifications = { total: number; groups: NotificationGroup[]; pushKey?: string | null };
 
 const STALE_DAYS = 14;
+// An open deal in the same stage this long: move it on, or close it.
+const STUCK_DAYS = 30;
 // A quotation on an open deal with no activity since: follow it up.
 const QUOTE_FOLLOW_UP_DAYS = 7;
 const SHOW = 5;
@@ -32,7 +34,8 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   const who = (name: string) => (team ? ` · ${name}` : "");
 
   const quoteBefore = new Date(now.getTime() - QUOTE_FOLLOW_UP_DAYS * day);
-  const [tasks, pastClose, quiet, noInvoice, quotes] = await Promise.all([
+  const stuckBefore = new Date(now.getTime() - STUCK_DAYS * day);
+  const [tasks, pastClose, quiet, noInvoice, quotes, stuck] = await Promise.all([
     prisma.activity.findMany({
       where: { ownerId: user.id, status: "PENDING", dueAt: { lt: endOfToday } },
       orderBy: { dueAt: "asc" },
@@ -72,6 +75,18 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       orderBy: { updatedAt: "desc" },
       select: { ref: true, updatedAt: true, dealId: true, deal: { select: { title: true } }, owner: { select: { name: true } } },
       take: 300,
+    }),
+    // Same stage for 30+ days (deals from before the stage date was kept:
+    // since they were created).
+    prisma.deal.findMany({
+      where: {
+        ...own,
+        stage: { notIn: ["WON", "LOST"] },
+        OR: [{ stageChangedAt: { lt: stuckBefore } }, { stageChangedAt: null, createdAt: { lt: stuckBefore } }],
+      },
+      orderBy: [{ stageChangedAt: "asc" }, { createdAt: "asc" }],
+      select: { id: true, title: true, stage: true, stageChangedAt: true, createdAt: true, owner: { select: { name: true } } },
+      take: 200,
     }),
   ]);
 
@@ -120,6 +135,20 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
         label: q.deal?.title ?? q.ref,
         sub: `${q.ref} sent ${fmt(q.updatedAt)}${who(q.owner.name)}`,
         href: `/deals/${q.dealId}`,
+      })),
+    });
+  }
+  if (stuck.length) {
+    const stageLabel: Record<string, string> = { QUALIFICATION: "Qualification", NEEDS_ANALYSIS: "Needs Analysis", PROPOSAL: "Quotation", NEGOTIATION: "Negotiation" };
+    groups.push({
+      key: "stuck",
+      label: `Deals in the same stage for ${STUCK_DAYS}+ days`,
+      count: stuck.length,
+      href: "/deals",
+      items: stuck.slice(0, SHOW).map((d) => ({
+        label: d.title,
+        sub: `${stageLabel[d.stage] ?? d.stage} since ${fmt(d.stageChangedAt ?? d.createdAt)}${who(d.owner.name)}`,
+        href: `/deals/${d.id}`,
       })),
     });
   }

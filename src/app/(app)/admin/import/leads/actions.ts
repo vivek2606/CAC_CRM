@@ -5,7 +5,8 @@ import { requireBackOffice } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { parseLeadsRegisterBuffer } from "@/lib/import/parse-leads-register";
 import { transformLeadsRegister } from "@/lib/import/leads-register";
-import type { LeadStatus } from "@prisma/client";
+import type { LeadStatus, Prisma } from "@prisma/client";
+import { binLeadBatch } from "@/lib/recycle-bin";
 
 // Shared by a fresh import (replacing its own previous run) and by
 // clearLeadsWithoutNewFile (removing a previous run's data with no fresh
@@ -14,13 +15,11 @@ import type { LeadStatus } from "@prisma/client";
 // is only removed if it was never actually linked to a Deal (Deal.contactId
 // is ON DELETE SET NULL, so a contact still on a Deal only got there via a
 // real conversion, not just the import).
+const PREVIOUS_LEADS = { importKey: { startsWith: "leadsheet:" }, status: { not: "CONVERTED" } } satisfies Prisma.LeadWhereInput;
+const PREVIOUS_CONTACTS = { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } } satisfies Prisma.ContactWhereInput;
 async function clearPreviousLeadsImport(): Promise<{ leadsRemoved: number; contactsRemoved: number }> {
-  const { count: leadsRemoved } = await prisma.lead.deleteMany({
-    where: { importKey: { startsWith: "leadsheet:" }, status: { not: "CONVERTED" } },
-  });
-  const { count: contactsRemoved } = await prisma.contact.deleteMany({
-    where: { importKey: { startsWith: "leadsheet:contact:" }, deals: { none: {} } },
-  });
+  const { count: leadsRemoved } = await prisma.lead.deleteMany({ where: PREVIOUS_LEADS });
+  const { count: contactsRemoved } = await prisma.contact.deleteMany({ where: PREVIOUS_CONTACTS });
   return { leadsRemoved, contactsRemoved };
 }
 
@@ -197,7 +196,9 @@ export type ClearLeadsState = { error?: string; summary?: { leadsRemoved: number
 // one has replaced it yet - runs the same cleanup a fresh import's own
 // "replace my previous run" step would do, without waiting for a new file.
 export async function clearLeadsWithoutNewFile(): Promise<ClearLeadsState> {
-  await requireBackOffice();
+  const user = await requireBackOffice();
+  // Clearing with no new file to replace them: keep them restorable.
+  await binLeadBatch(PREVIOUS_LEADS, PREVIOUS_CONTACTS, user.id);
   const summary = await clearPreviousLeadsImport();
   revalidatePath("/leads");
   revalidatePath("/accounts");

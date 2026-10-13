@@ -322,6 +322,9 @@ model Deal {
   id            String      @id @default(cuid())
   title         String
   stage         DealStage   @default(QUALIFICATION)
+  // When the deal last moved stage (for "same stage for 30+ days"); null on
+  // deals from before this was recorded - their created date stands in.
+  stageChangedAt DateTime?
   value         Float       @default(0)
   probability   Int         @default(20)
   expectedCloseDate DateTime?
@@ -743,7 +746,7 @@ model Quotation {
 // lines, contact roles; activities, notes and quotations are re-linked).
 model DeletedRecord {
   id          String   @id @default(cuid())
-  kind        String   // "deal" | "lead"
+  kind        String   // "deal" | "lead" | "leadBatch" | "billing"
   recordId    String
   label       String
   ownerName   String?

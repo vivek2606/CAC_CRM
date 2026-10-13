@@ -179,6 +179,7 @@ async function createDealFromLead(lead: Lead, stage: DealStage, probability: num
     data: {
       title: lead.title,
       stage,
+      stageChangedAt: new Date(),
       value: lead.value ?? 0,
       probability,
       ownerId: lead.ownerId,

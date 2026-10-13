@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
-// Recycle bin: before a deal or lead is deleted, a snapshot of it - and of
+// Recycle bin: before a deal or lead is deleted (or the imported leads are
+// cleared in one go, or a Project & Service Billing line is deleted), a snapshot of it - and of
 // what is deleted with it (a deal's products, Sales Register lines and
 // contact roles) - is kept for 30 days, so it can be restored. Activities,
 // notes and quotations aren't deleted with the record (they're only
@@ -21,6 +22,8 @@ type DealSnapshot = {
   leadId: string | null;
 };
 type LeadSnapshot = { lead: Row; activityIds: string[]; noteIds: string[] };
+type LeadBatchSnapshot = { leads: Row[]; contacts: Row[]; activities: { id: string; leadId: string }[]; notes: { id: string; leadId: string }[] };
+type BillingSnapshot = { billing: Row };
 
 // JSON turns dates into strings - turn the date fields back into dates.
 const DATE_KEYS = /(At|Date|docDate|month)$/;
@@ -90,6 +93,56 @@ export async function binLead(leadId: string, deletedById: string): Promise<void
   });
 }
 
+// The imported leads (and their contacts) about to be cleared together -
+// kept as one entry, restored together.
+export async function binLeadBatch(
+  leadWhere: Prisma.LeadWhereInput,
+  contactWhere: Prisma.ContactWhereInput,
+  deletedById: string,
+): Promise<void> {
+  const [leads, contacts] = await Promise.all([prisma.lead.findMany({ where: leadWhere }), prisma.contact.findMany({ where: contactWhere })]);
+  if (!leads.length && !contacts.length) return;
+  const ids = leads.map((l) => l.id);
+  const [activities, notes] = await Promise.all([
+    prisma.activity.findMany({ where: { leadId: { in: ids } }, select: { id: true, leadId: true } }),
+    prisma.note.findMany({ where: { leadId: { in: ids } }, select: { id: true, leadId: true } }),
+  ]);
+  const data: LeadBatchSnapshot = {
+    leads,
+    contacts,
+    activities: activities.map((a) => ({ id: a.id, leadId: a.leadId! })),
+    notes: notes.map((n) => ({ id: n.id, leadId: n.leadId! })),
+  };
+  await prisma.deletedRecord.create({
+    data: {
+      kind: "leadBatch",
+      recordId: `leadBatch:${Date.now()}`,
+      label: `Imported leads cleared - ${leads.length} lead${leads.length === 1 ? "" : "s"}, ${contacts.length} contact${contacts.length === 1 ? "" : "s"}`,
+      value: leads.reduce((t, l) => t + (l.value ?? 0), 0),
+      data: JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue,
+      deletedById,
+    },
+  });
+}
+
+export async function binProjectBilling(id: string, deletedById: string): Promise<void> {
+  const row = await prisma.projectBilling.findUnique({ where: { id }, include: { owner: { select: { name: true } } } });
+  if (!row) return;
+  const { owner, ...billing } = row;
+  const data: BillingSnapshot = { billing };
+  await prisma.deletedRecord.create({
+    data: {
+      kind: "billing",
+      recordId: row.id,
+      label: `${row.custName} - ${row.itemName} (no. ${row.txnNo})`,
+      ownerName: owner.name,
+      value: row.value,
+      data: JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue,
+      deletedById,
+    },
+  });
+}
+
 // Puts a deleted deal or lead back. Returns where to find it, or an error
 // (e.g. its sales person or account was deleted since).
 export async function restoreRecord(id: string, restoredById: string): Promise<{ href?: string; error?: string }> {
@@ -112,6 +165,26 @@ export async function restoreRecord(id: string, restoredById: string): Promise<{
         await tx.deletedRecord.delete({ where: { id: rec.id } });
       });
       return { href: `/deals/${rec.recordId}` };
+    }
+    if (rec.kind === "leadBatch") {
+      const s = rec.data as unknown as LeadBatchSnapshot;
+      // Anything already back (e.g. a fresh import brought the same rows in
+      // again) is skipped rather than duplicated.
+      await prisma.$transaction(async (tx) => {
+        if (s.contacts.length) await tx.contact.createMany({ data: s.contacts.map((r) => revive(r) as Prisma.ContactCreateManyInput), skipDuplicates: true });
+        if (s.leads.length) await tx.lead.createMany({ data: s.leads.map((r) => revive(r) as Prisma.LeadCreateManyInput), skipDuplicates: true });
+        for (const a of s.activities) await tx.activity.updateMany({ where: { id: a.id, leadId: null }, data: { leadId: a.leadId } });
+        for (const n of s.notes) await tx.note.updateMany({ where: { id: n.id, leadId: null }, data: { leadId: n.leadId } });
+        await tx.deletedRecord.delete({ where: { id: rec.id } });
+      }, { timeout: 60000 });
+      return { href: "/leads" };
+    }
+    if (rec.kind === "billing") {
+      const s = rec.data as unknown as BillingSnapshot;
+      const row = revive(s.billing) as Prisma.ProjectBillingUncheckedCreateInput;
+      if (await prisma.projectBilling.findUnique({ where: { sourceKey: row.sourceKey }, select: { id: true } })) return { error: "This billing line already exists." };
+      await prisma.$transaction([prisma.projectBilling.create({ data: row }), prisma.deletedRecord.delete({ where: { id: rec.id } })]);
+      return { href: "/project-billing" };
     }
     const s = rec.data as unknown as LeadSnapshot;
     if (await prisma.lead.findUnique({ where: { id: rec.recordId }, select: { id: true } })) return { error: "This lead already exists." };

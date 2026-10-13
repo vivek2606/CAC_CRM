@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { parseProjectBillingBuffer, type ProjectBillingRowProblem } from "@/lib/import/parse-project-billing";
 import { parseReceiptDate } from "@/lib/import/parse-stock-receipts";
+import { binProjectBilling } from "@/lib/recycle-bin";
 import { MANUAL_PREFIX, UPLOAD_PREFIX, isCrmEntered } from "@/lib/project-billing";
 
 // Project & Service billing entered in the CRM - by hand or from a sheet -
@@ -96,11 +97,12 @@ export async function addProjectBilling(_prev: FormState | undefined, formData: 
 // Only entries made in the CRM can be deleted here - register lines are
 // corrected by re-uploading the register.
 export async function deleteProjectBilling(id: string) {
-  await requireBackOffice();
+  const user = await requireBackOffice();
   const row = await prisma.projectBilling.findUnique({ where: { id }, select: { sourceKey: true } });
   if (!row || !isCrmEntered(row.sourceKey)) {
     throw new Error("Only billing entered in the CRM can be deleted here.");
   }
+  await binProjectBilling(id, user.id);
   await prisma.projectBilling.delete({ where: { id } });
   revalidate();
 }

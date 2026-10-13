@@ -5,6 +5,8 @@ import { formatCurrency, formatDateTime } from "@/lib/format";
 import { purgeRecycleBin, KEEP_DAYS } from "@/lib/recycle-bin";
 import { BinRowActions } from "./bin-row-actions";
 
+const KIND_LABEL: Record<string, string> = { deal: "Deal", lead: "Lead", leadBatch: "Leads (bulk clear)", billing: "Project billing" };
+
 // Deleted deals and leads, kept for KEEP_DAYS days - restore one with its
 // products, Sales Register lines, activities, notes and quotations.
 export default async function RecycleBinPage() {
@@ -18,7 +20,7 @@ export default async function RecycleBinPage() {
   const th = "py-2 pr-3 font-medium";
   return (
     <div>
-      <PageHeader title="Recycle bin" description={`Deleted deals and leads, kept for ${KEEP_DAYS} days - restore one with everything that went with it`} />
+      <PageHeader title="Recycle bin" description={`Deleted deals, leads and project billing, kept for ${KEEP_DAYS} days - restore one with everything that went with it`} />
       <div className="p-6">
         <Card className="p-5">
           {rows.length === 0 ? (
@@ -40,7 +42,7 @@ export default async function RecycleBinPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
                     <td className="py-1.5 pr-3 whitespace-nowrap text-slate-600">{formatDateTime(r.deletedAt)}</td>
-                    <td className="py-1.5 pr-3 text-slate-600">{r.kind === "deal" ? "Deal" : "Lead"}</td>
+                    <td className="py-1.5 pr-3 text-slate-600">{KIND_LABEL[r.kind] ?? r.kind}</td>
                     <td className="py-1.5 pr-3 font-medium text-slate-800">{r.label}</td>
                     <td className="py-1.5 pr-3 text-slate-600">{r.ownerName ?? "—"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-slate-700">{formatCurrency(r.value)}</td>
