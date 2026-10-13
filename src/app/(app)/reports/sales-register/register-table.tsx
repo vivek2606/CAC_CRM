@@ -194,10 +194,11 @@ export function SalesRegisterTable({
                         >
                           {r.accountName}
                         </Link>
-                      ) : c.key === "company" && r.billingId && canEditCompany ? (
+                      ) : c.key === "company" && (r.billingId || r.dealId) && canEditCompany ? (
                         <BillingCompanyCell
-                          key={`${r.billingId}:${r.company}`}
+                          key={`${r.billingId ?? r.dealId}:${r.company}`}
                           id={r.billingId}
+                          dealId={r.billingId ? undefined : (r.dealId ?? undefined)}
                           company={r.company === "Not recorded" ? null : r.company}
                         />
                       ) : (

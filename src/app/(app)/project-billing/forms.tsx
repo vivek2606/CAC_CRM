@@ -13,6 +13,7 @@ import {
   type BulkProjectBillingState,
   type FormState,
 } from "./actions";
+import { setDealCompany } from "../deals/actions";
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -150,8 +151,9 @@ export function UploadBillingForm() {
   );
 }
 
-// A line's billing company, changed in place - saves on pick.
-export function BillingCompanyCell({ id, company }: { id: string; company: string | null }) {
+// A line's billing company, changed in place - saves on pick. For a sales
+// line (dealId) it is the deal's company, so all that invoice's lines change.
+export function BillingCompanyCell({ id, dealId, company }: { id?: string; dealId?: string; company: string | null }) {
   const router = useRouter();
   const [value, setValue] = useState(company ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +171,7 @@ export function BillingCompanyCell({ id, company }: { id: string; company: strin
           setValue(next);
           start(async () => {
             setError(null);
-            const res = await setProjectBillingCompany(id, next);
+            const res = dealId ? await setDealCompany(dealId, next) : await setProjectBillingCompany(id!, next);
             if (res.error) {
               setValue(prev);
               setError(res.error);
