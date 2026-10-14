@@ -532,6 +532,10 @@ model Product {
   subCategory   String
   model         String
   capacityKw    Float?
+  // Most a quotation may discount this item off its dealer's price, in %,
+  // from the Stock & Price List upload; more needs the Head's approval.
+  // Null = no limit recorded.
+  maxDiscountPct Float?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -737,6 +741,17 @@ model Quotation {
 
   createdById  String
   createdBy    User     @relation("QuotationCreator", fields: [createdById], references: [id])
+
+  // Discounts over an item's permissible maximum: "pending" (download held
+  // until the Head decides), "approved" or "rejected". discountRequest is
+  // the lines asked for, discountApproved the lines approved (a download
+  // goes ahead while every line is within its approval).
+  discountStatus      String?
+  discountRequest     Json?
+  discountApproved    Json?
+  discountRequestedAt DateTime?
+  discountDecidedAt   DateTime?
+  discountDecidedById String?
 
   @@index([dealId])
   @@index([ownerId])

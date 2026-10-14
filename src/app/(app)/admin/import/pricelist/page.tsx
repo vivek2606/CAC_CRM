@@ -25,13 +25,18 @@ export default async function ImportPricelistPage() {
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
               Columns required: <strong>PRODUCT CODE</strong>, <strong>MODEL</strong>, <strong>CATEGORY</strong> and{" "}
-              <strong>Quantity</strong>. Optional: <strong>Dealer&apos;s Price</strong>, <strong>Landed Cost</strong> and{" "}
-              <strong>MONTH</strong> - leave them out for a quantities-only opening stock.
+              <strong>Quantity</strong>. Optional: <strong>Dealer&apos;s Price</strong>, <strong>Landed Cost</strong>, <strong>MONTH</strong> and{" "}
+              <strong>Max Discount %</strong> - leave them out for a quantities-only opening stock.
             </li>
             <li>
               Landed Cost and Dealer&apos;s Price are both taken as-is in Naira, excluding VAT @ 7.5%. A row without a
               Dealer&apos;s Price keeps the item&apos;s current price; a priced row with no MONTH is filed under the opening
               stock date&apos;s month.
+            </li>
+            <li>
+              Max Discount % is the most a quotation, proforma or BOQ may discount the item off its Dealer&apos;s Price (10 or 10%
+              both mean 10%). A bigger discount is held for the Head&apos;s approval before it can be downloaded. A blank cell keeps
+              the item&apos;s current limit.
             </li>
             <li>Products are matched by Product Code — a known code updates that product; a new one is created.</li>
             <li>

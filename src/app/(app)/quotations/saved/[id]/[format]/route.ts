@@ -4,6 +4,7 @@ import { buildDocument, documentFilename, documentInputSchema } from "@/lib/sale
 import { renderSalesDocumentPdf } from "@/lib/pdf/sales-document-pdf";
 import { buildSalesDocumentXlsx } from "@/lib/sales-document-xlsx";
 import { canSeeQuotation } from "@/lib/saved-quotes";
+import { coveredByApproval, excessDiscounts } from "@/lib/quote-discount";
 
 // Download a saved quotation again, rebuilt from what was saved.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; format: string }> }) {
@@ -15,6 +16,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const parsed = documentInputSchema.safeParse(q.data);
   if (!parsed.success) return new Response("This saved quotation can't be read.", { status: 500 });
   const doc = await buildDocument(parsed.data);
+  // A discount over an item's maximum downloads only once the Head approved it.
+  if (user.role !== "HEAD") {
+    const excess = await excessDiscounts(doc);
+    if (excess.length && !(q.discountStatus === "approved" && coveredByApproval(excess, q.discountApproved))) {
+      const why = q.discountStatus === "rejected" ? "was declined by the Head of Sales - revise it with the discount within the limit" : "is below the permissible discount - only the Head of Sales can prepare it (it has been sent to them)";
+      return new Response(`Quotation ${q.ref}: the discount (${excess.map((l) => `${l.description} ${l.discountPct}%, max ${l.maxPct}%`).join("; ")}) ${why}.`, {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+  }
   if (format === "pdf") {
     const pdf = await renderSalesDocumentPdf(doc);
     return new Response(new Uint8Array(pdf), {

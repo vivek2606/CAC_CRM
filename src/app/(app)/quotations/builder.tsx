@@ -18,6 +18,8 @@ export type ModelOption = {
   inTransit: number;
   availability: string;
   tentative: boolean;
+  // Most it may be discounted off the dealer rate, in % (null = no limit).
+  maxDiscountPct: number | null;
 };
 export type CompanyOption = {
   key: string;
@@ -63,6 +65,8 @@ type Row =
       unitPrice: string;
       // Supply & installation quotes only. Optional: older drafts lack it.
       installRate?: string;
+      // Discount off the (supply) rate, in %. Optional: older drafts lack it.
+      discountPct?: string;
     };
 
 type Draft = {
@@ -152,6 +156,7 @@ export function QuotationBuilder({
   fromQuote: QuotePrefill | null;
   // Head / Coordinator only: who they can prepare a quote for.
   salesPeople: { id: string; name: string }[] | null;
+  // The Head may also quote below an item's permissible discount.
   isHead: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
@@ -188,6 +193,7 @@ export function QuotationBuilder({
           qty: String(r.qty),
           unitPrice: String(r.unitPrice),
           installRate: r.installRate ? String(r.installRate) : "",
+          discountPct: r.discountPct ? String(r.discountPct) : "",
         };
       }),
       terms: [...x.terms],
@@ -240,6 +246,8 @@ export function QuotationBuilder({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<"pdf" | "xlsx" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The download was held: a discount is over the limit and went to the Head.
+  const [held, setHeld] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState<{ summary: string; details: string[] } | null>(null);
   const hasSavedDraft = useHasSavedDraft();
@@ -364,8 +372,20 @@ export function QuotationBuilder({
   // The suggested dealer rate is ex-VAT; in inclusive mode it's shown with VAT.
   const suggested = (rate: number) => (inclusive ? round2(rate * vatFactor) : rate);
   const withInstallation = d.withInstallation === true;
-  // Line amount: qty x rate, plus installation on supply & installation quotes.
-  const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (num(r.unitPrice) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
+  // Discount %, kept to 0-100; the net rate is the rate less it.
+  const discOf = (r: Extract<Row, { kind: "item" }>) => Math.min(100, Math.max(0, num(r.discountPct ?? "")));
+  const netRate = (r: Extract<Row, { kind: "item" }>) => round2(num(r.unitPrice) * (1 - discOf(r) / 100));
+  // How far below the dealer rate the net rate is, and whether that's over
+  // the item's permissible maximum (then the Head has to approve it).
+  const overMax = (r: Extract<Row, { kind: "item" }>, opt: ModelOption | undefined) => {
+    // (A tentative price isn't a dealer's price - no limit applies to it.)
+    if (isHead || !opt || opt.tentative || opt.rate == null || opt.maxDiscountPct == null || !suggested(opt.rate)) return null;
+    const off = round2(Math.max(0, (1 - netRate(r) / suggested(opt.rate)) * 100));
+    return off > opt.maxDiscountPct + 0.005 ? { off, max: opt.maxDiscountPct } : null;
+  };
+  // Line amount: qty x net rate, plus installation on supply & installation quotes.
+  const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
+  const overLines = d.rows.filter((r) => r.kind === "item" && overMax(r, r.productId ? optionById.get(r.productId) : undefined)).length;
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
   const installTotal = withInstallation ? d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.installRate ?? "") * 100) / 100 : 0), 0) : 0;
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
@@ -386,7 +406,8 @@ export function QuotationBuilder({
             kind: "item",
             productId: !r.custom && r.productId && !r.productId.startsWith("tentative:") ? r.productId : undefined,
             description: r.description,
-            detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0 },
+            detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0,
+            discountPct: discOf(r) },
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
@@ -404,6 +425,7 @@ export function QuotationBuilder({
 
   const download = async (format: "pdf" | "xlsx") => {
     setError(null);
+    setHeld(null);
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
     if (salesPeople && !d.ownerId) return setError("Pick the sales person this quotation is for.");
     setBusy(format);
@@ -424,6 +446,7 @@ export function QuotationBuilder({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.approval === "pending") return setHeld(body.error);
         throw new Error(body.error ?? "Couldn't create the file.");
       }
       const blob = await res.blob();
@@ -691,6 +714,17 @@ export function QuotationBuilder({
                     <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={big} />
                   </label>
                 </div>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">
+                    Discount %{opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
+                  </span>
+                  <input inputMode="decimal" value={r.discountPct ?? ""} placeholder="0" onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { discountPct: e.target.value })} className={big} />
+                  {discOf(r) > 0 && <span className="mt-1 block text-xs text-slate-500">Net rate {naira(netRate(r))}</span>}
+                  {(() => {
+                    const o = overMax(r, opt);
+                    return o ? <span className="mt-1 block text-xs font-medium text-rose-700">{o.off}% off the dealer rate - over the {o.max}% maximum; only the Head of Sales can quote this</span> : null;
+                  })()}
+                </label>
                 {withInstallation && (
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Installation rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
@@ -715,6 +749,7 @@ export function QuotationBuilder({
                 <th className="px-3 py-2 w-40 text-right">
                   {withInstallation ? "Supply rate" : "Rate"} {inclusive ? "incl." : "excl."} VAT (₦)
                 </th>
+                <th className="px-3 py-2 w-28 text-right">Disc. %</th>
                 {withInstallation && <th className="px-3 py-2 w-36 text-right">Installation rate (₦)</th>}
                 <th className="px-3 py-2 w-36 text-right">Amount (₦)</th>
                 <th className="px-2 py-2 w-24" />
@@ -723,7 +758,7 @@ export function QuotationBuilder({
             <tbody className="divide-y divide-slate-100">
               {d.rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={withInstallation ? 9 : 8} className="px-3 py-8 text-center text-sm text-slate-500">
                     Add products from the list, custom items (installation, piping…) or a section heading - or import a quotation made in Excel.
                   </td>
                 </tr>
@@ -746,7 +781,7 @@ export function QuotationBuilder({
                   return (
                     <tr key={r.uid} className="bg-slate-50/60">
                       <td className="px-3 py-2 font-semibold text-slate-700">{sns[i]}</td>
-                      <td colSpan={5} className="px-3 py-2">
+                      <td colSpan={withInstallation ? 7 : 6} className="px-3 py-2">
                         <input
                           value={r.label}
                           onChange={(e) => setRow(r.uid, { label: e.target.value })}
@@ -816,6 +851,25 @@ export function QuotationBuilder({
                           {Math.abs(((num(r.unitPrice) - suggested(opt.rate)) / suggested(opt.rate)) * 100).toFixed(1)}%
                         </p>
                       )}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <input
+                        inputMode="decimal"
+                        value={r.discountPct ?? ""}
+                        placeholder="0"
+                        onChange={(e) => setRow(r.uid, { discountPct: e.target.value })}
+                        className={`${input} text-right ${overMax(r, opt) ? "border-rose-400 bg-rose-50" : ""}`}
+                      />
+                      {discOf(r) > 0 && <p className="mt-1 text-right text-[11px] text-slate-500">Net {naira(netRate(r))}</p>}
+                      {opt?.maxDiscountPct != null && <p className="mt-0.5 text-right text-[11px] text-slate-400">Max {opt.maxDiscountPct}%</p>}
+                      {(() => {
+                        const o = overMax(r, opt);
+                        return o ? (
+                          <p className="mt-0.5 text-right text-[11px] font-medium text-rose-700" title="Over the permissible discount - only the Head of Sales can prepare this quote">
+                            {o.off}% off - over max
+                          </p>
+                        ) : null;
+                      })()}
                     </td>
                     {withInstallation && (
                       <td className="px-3 py-2 align-top">
@@ -1027,6 +1081,13 @@ export function QuotationBuilder({
           <span className="font-bold text-slate-900 tabular-nums">{naira(total)}</span>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {held && <p className="basis-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 order-last">{held}</p>}
+        {!held && overLines > 0 && (
+          <p className="text-sm text-rose-700">
+            Can&apos;t be generated: {overLines} line{overLines === 1 ? " is" : "s are"} below the permissible discount - only the Head of Sales can prepare
+            such a quote. Download sends it to the Head of Sales instead; or bring the discount within the limit.
+          </p>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           {linkedDealId && (
             <Link href={`/deals/${linkedDealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">

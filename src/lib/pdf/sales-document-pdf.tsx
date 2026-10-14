@@ -22,7 +22,8 @@ const accent = "#1e4f9c"; // Sakuragi logo blue
 
 // Column widths (#, Unit, Qty, Rate, Amount fixed; Description flexes).
 // Supply & installation quotes add an Installation rate column.
-const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72 };
+// A discount adds Disc. % and Net rate columns (rates narrow to fit).
+const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72, drate: 62, disc: 34 };
 
 const s = StyleSheet.create({
   // paddingTop leaves room for the continuation header on pages 2+.
@@ -70,54 +71,71 @@ const col = {
   desc: [s.cell, { flex: 1 }],
   unit: [s.cell, { width: W.unit, textAlign: "center" as const }],
   qty: [s.cell, { width: W.qty, textAlign: "right" as const }],
-  rate: [s.cell, { width: W.rate, textAlign: "right" as const }],
-  srate: [s.cell, { width: W.inst, textAlign: "right" as const }],
-  inst: [s.cell, { width: W.inst, textAlign: "right" as const }],
   amt: [s.cell, s.last, { width: W.amt, textAlign: "right" as const }],
 };
 
-function TableHeader({ vatInclusive, inst }: { vatInclusive: boolean; inst: boolean }) {
+type ItemRow = Extract<SalesDocument["rows"][number], { kind: "item" }>;
+type RateCol = { header: string; width: number; value: (r: ItemRow) => string };
+
+// The rate columns between Qty and Amount: the rate (supply rate with
+// installation), then Disc. % and Net rate when a line is discounted, then
+// the installation rate.
+function rateCols(doc: SalesDocument): RateCol[] {
+  const vi = doc.vatInclusive;
+  const inst = doc.withInstallation;
+  const disc = doc.withDiscount;
+  const w = disc ? W.drate : inst ? W.inst : W.rate;
+  const cols: RateCol[] = [
+    { header: inst ? (vi ? "Supply rate incl. VAT" : "Supply rate (NGN)") : vi ? "Rate incl. VAT (NGN)" : "Rate (NGN)", width: w, value: (r) => money(r.unitPrice) },
+  ];
+  if (disc) {
+    cols.push({ header: "Disc. %", width: W.disc, value: (r) => (r.discountPct ? `${pct(r.discountPct)}%` : "-") });
+    cols.push({ header: vi ? "Net rate incl. VAT" : "Net rate (NGN)", width: w, value: (r) => money(r.netRate) });
+  }
+  if (inst) cols.push({ header: vi ? "Installation incl. VAT" : "Installation rate (NGN)", width: w, value: (r) => (r.installRate ? money(r.installRate) : "-") });
+  return cols;
+}
+const pct = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+const rateStyle = (c: RateCol) => [s.cell, { width: c.width, textAlign: "right" as const }];
+
+function TableHeader({ doc }: { doc: SalesDocument }) {
   return (
     <View style={[s.row, s.th]}>
       <Text style={[...col.no, s.thText]}>#</Text>
       <Text style={[...col.desc, s.thText]}>Description</Text>
       <Text style={[...col.unit, s.thText]}>Unit</Text>
       <Text style={[...col.qty, s.thText]}>Qty</Text>
-      {inst ? (
-        <>
-          <Text style={[...col.srate, s.thText]}>{vatInclusive ? "Supply rate incl. VAT" : "Supply rate (NGN)"}</Text>
-          <Text style={[...col.inst, s.thText]}>{vatInclusive ? "Installation incl. VAT" : "Installation rate (NGN)"}</Text>
-        </>
-      ) : (
-        <Text style={[...col.rate, s.thText]}>{vatInclusive ? "Rate incl. VAT (NGN)" : "Rate (NGN)"}</Text>
-      )}
-      <Text style={[...col.amt, s.thText]}>{vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
+      {rateCols(doc).map((c) => (
+        <Text key={c.header} style={[...rateStyle(c), s.thText]}>
+          {c.header}
+        </Text>
+      ))}
+      <Text style={[...col.amt, s.thText]}>{doc.vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
     </View>
   );
 }
 
 // Empty ruled columns - stretches to fill whatever height is left.
-function EmptyRows({ grow = true, inst }: { grow?: boolean; inst: boolean }) {
+function EmptyRows({ grow = true, doc }: { grow?: boolean; doc: SalesDocument }) {
   return (
     <View style={[s.row, grow ? s.filler : { height: 0 }]}>
       <View style={col.no} />
       <View style={col.desc} />
       <View style={col.unit} />
       <View style={col.qty} />
-      <RateCells inst={inst} />
+      <RateCells doc={doc} />
       <View style={col.amt} />
     </View>
   );
 }
 
-function RateCells({ inst }: { inst: boolean }) {
-  return inst ? (
+function RateCells({ doc }: { doc: SalesDocument }) {
+  return (
     <>
-      <View style={col.srate} />
-      <View style={col.inst} />
+      {rateCols(doc).map((c) => (
+        <View key={c.header} style={rateStyle(c)} />
+      ))}
     </>
-  ) : (
-    <View style={col.rate} />
   );
 }
 
@@ -139,7 +157,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
                 <View style={col.unit} />
                 <View style={col.qty} />
-                <RateCells inst={doc.withInstallation} />
+                <RateCells doc={doc} />
                 <View style={col.amt} />
               </View>
             ) : (
@@ -151,14 +169,11 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 </View>
                 <Text style={col.unit}>{r.unit}</Text>
                 <Text style={col.qty}>{qtyFmt(r.qty)}</Text>
-                {doc.withInstallation ? (
-                  <>
-                    <Text style={col.srate}>{money(r.unitPrice)}</Text>
-                    <Text style={col.inst}>{r.installRate ? money(r.installRate) : "-"}</Text>
-                  </>
-                ) : (
-                  <Text style={col.rate}>{money(r.unitPrice)}</Text>
-                )}
+                {rateCols(doc).map((c) => (
+                  <Text key={c.header} style={rateStyle(c)}>
+                    {c.value(r)}
+                  </Text>
+                ))}
                 <Text style={col.amt}>{money(r.amount)}</Text>
               </View>
             );
@@ -185,7 +200,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                     {doc.ref ? ` ${doc.ref}` : ""} (continued)
                   </Text>
                 </View>
-                <TableHeader vatInclusive={doc.vatInclusive} inst={doc.withInstallation} />
+                <TableHeader doc={doc} />
               </View>
             ) : null
           }
@@ -251,14 +266,14 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
         ) : null}
 
         <View style={s.body}>
-          <TableHeader vatInclusive={doc.vatInclusive} inst={doc.withInstallation} />
+          <TableHeader doc={doc} />
           {bodyRows.map((r, i) => renderRow(r, i))}
 
           {/* Empty table down to the bottom block (one-page documents only). */}
-          {fill && <EmptyRows inst={doc.withInstallation} />}
+          {fill && <EmptyRows doc={doc} />}
 
           <View style={fill ? s.bottom : { flexDirection: "column" }} wrap={false}>
-            {fill && <EmptyRows inst={doc.withInstallation} />}
+            {fill && <EmptyRows doc={doc} />}
             {lastRow && renderRow(lastRow, doc.rows.length - 1)}
             {doc.withInstallation && (
               <>

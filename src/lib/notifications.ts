@@ -185,6 +185,45 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     }
   }
 
+  // Quotation discounts over an item's maximum: the Head approves them;
+  // whoever the quote is for / made it hears back for a week.
+  if (user.role === "HEAD") {
+    const held = await prisma.quotation.findMany({
+      where: { discountStatus: "pending" },
+      orderBy: { discountRequestedAt: "asc" },
+      select: { id: true, ref: true, customerName: true, owner: { select: { name: true } } },
+    });
+    if (held.length) {
+      groups.unshift({
+        key: "quoteDiscount",
+        label: "Quotes below permissible discount, sent to you",
+        count: held.length,
+        href: "/quotations/approvals",
+        items: held.slice(0, SHOW).map((q) => ({ label: `${q.ref} - ${q.customerName}`, sub: q.owner.name, href: "/quotations/approvals" })),
+      });
+    }
+  } else {
+    const decidedQuotes = await prisma.quotation.findMany({
+      where: { OR: [{ ownerId: user.id }, { createdById: user.id }], discountStatus: { in: ["approved", "rejected", "pending"] } },
+      select: { id: true, ref: true, customerName: true, discountStatus: true, discountDecidedAt: true },
+      take: 50,
+    });
+    const recent = decidedQuotes.filter((q) => q.discountStatus === "pending" || (q.discountDecidedAt && now.getTime() - q.discountDecidedAt.getTime() < 7 * day));
+    if (recent.length) {
+      groups.push({
+        key: "quoteDiscount",
+        label: "Quotation discounts",
+        count: recent.length,
+        href: "/quotations/saved",
+        items: recent.slice(0, SHOW).map((q) => ({
+          label: `${q.ref} - ${q.customerName}`,
+          sub: q.discountStatus === "approved" ? "Approved by the Head - download it from Saved quotations" : q.discountStatus === "rejected" ? "Declined - bring the discount within the limit" : "Sent to the Head of Sales",
+          href: q.discountStatus === "approved" ? "/quotations/saved" : `/quotations?quote=${q.id}`,
+        })),
+      });
+    }
+  }
+
   // Data health (Head / Coordinator): won sales with details missing, the
   // same invoice recorded twice, register lines with no deal - the clean-up
   // jobs on the Data health page.

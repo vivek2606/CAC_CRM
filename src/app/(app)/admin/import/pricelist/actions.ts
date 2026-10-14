@@ -12,6 +12,7 @@ export type ImportSummary = {
   productsUpserted: number;
   priceEntriesSet: number;
   stockEntriesSet: number;
+  maxDiscountsSet: number;
   stockAsOfDate: string;
   skippedFileRows: number;
 };
@@ -71,8 +72,10 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
         subCategory: "Uncategorized",
         model: p.model,
         capacityKw: p.capacityKw,
+        maxDiscountPct: p.maxDiscountPct,
       },
-      update: { category: p.category, model: p.model, capacityKw: p.capacityKw },
+      // A blank Max Discount % keeps the item's current one.
+      update: { category: p.category, model: p.model, capacityKw: p.capacityKw, ...(p.maxDiscountPct != null ? { maxDiscountPct: p.maxDiscountPct } : {}) },
     });
   }
 
@@ -131,6 +134,7 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
       productsUpserted: result.products.length,
       priceEntriesSet,
       stockEntriesSet,
+      maxDiscountsSet: result.products.filter((p) => p.maxDiscountPct != null).length,
       stockAsOfDate: stockDateRaw.data,
       skippedFileRows,
     },

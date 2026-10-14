@@ -53,3 +53,35 @@ export async function notifyIncentives(kind: "submitted" | "approved" | "returne
     else await pushToRole("COORDINATOR", payload);
   }
 }
+
+// A quotation's discount went over an item's maximum: the Head decides.
+export async function notifyQuoteDiscountRequested(quoteId: string) {
+  try {
+    const q = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { ref: true, customerName: true, owner: { select: { name: true } } } });
+    if (!q) return;
+    await pushToRole("HEAD", {
+      title: "Quote below permissible discount",
+      body: `${q.ref} - ${q.customerName} (${q.owner.name})`,
+      url: "/quotations/approvals",
+      tag: `quote-discount-${quoteId}`,
+    });
+  } catch (e) {
+    console.error("notifyQuoteDiscountRequested", e);
+  }
+}
+
+// The Head approved / rejected it: tell the sales person and whoever made it.
+export async function notifyQuoteDiscountDecided(quoteId: string, approved: boolean) {
+  try {
+    const q = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { ref: true, customerName: true, ownerId: true, createdById: true } });
+    if (!q) return;
+    await sendPush([...new Set([q.ownerId, q.createdById])], {
+      title: approved ? "Quotation approved by the Head" : "Quotation declined by the Head",
+      body: approved ? `${q.ref} - ${q.customerName}: download it from Saved quotations.` : `${q.ref} - ${q.customerName}: bring the discount within the limit.`,
+      url: approved ? "/quotations/saved" : `/quotations?quote=${quoteId}`,
+      tag: `quote-discount-${quoteId}`,
+    });
+  } catch (e) {
+    console.error("notifyQuoteDiscountDecided", e);
+  }
+}

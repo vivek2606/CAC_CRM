@@ -6,6 +6,7 @@ export type TransformedProduct = {
   category: string;
   model: string;
   capacityKw: number | null;
+  maxDiscountPct: number | null;
 };
 export type TransformedPriceEntry = {
   productCode: string;
@@ -38,6 +39,7 @@ export function transformPricelistStock(rows: RawPricelistRow[], defaultMonth: D
       category: row.category,
       model: row.model,
       capacityKw: computeCapacityKw(row.category, row.model),
+      maxDiscountPct: row.maxDiscountPct,
     });
     if (row.dealerPrice != null) {
       priceMap.set(row.productCode, {

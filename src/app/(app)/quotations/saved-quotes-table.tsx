@@ -12,6 +12,7 @@ export type SavedQuoteRow = {
   total: number;
   createdAt: Date;
   updatedAt: Date;
+  discountStatus?: string | null;
   owner: { name: string };
   createdBy: { name: string };
   deal: { id: string; title: string } | null;
@@ -78,7 +79,17 @@ export function SavedQuotesTable({
               >
                 {q.owner.name}
               </td>
-              <td className="whitespace-nowrap text-right text-slate-800">{formatCurrency(q.total)}</td>
+              <td className="whitespace-nowrap text-right text-slate-800">
+                {formatCurrency(q.total)}
+                {q.discountStatus && (
+                  <div
+                    className={`text-xs font-medium ${q.discountStatus === "approved" ? "text-emerald-700" : q.discountStatus === "rejected" ? "text-rose-700" : "text-amber-700"}`}
+                    title="Discount over the permissible maximum"
+                  >
+                    {q.discountStatus === "approved" ? "Discount approved" : q.discountStatus === "rejected" ? "Discount rejected" : "Discount awaiting approval"}
+                  </div>
+                )}
+              </td>
               <td className="whitespace-nowrap text-right">
                 <span className="inline-flex items-center gap-2.5">
                   <a href={`/quotations/saved/${q.id}/pdf`} className={`${link} inline-flex items-center gap-1`} title="Download PDF">
@@ -111,6 +122,7 @@ export const savedQuoteSelect = {
   total: true,
   createdAt: true,
   updatedAt: true,
+  discountStatus: true,
   owner: { select: { name: true } },
   createdBy: { select: { name: true } },
   deal: { select: { id: true, title: true } },

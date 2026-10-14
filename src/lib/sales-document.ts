@@ -27,6 +27,9 @@ const rowSchema = z.discriminatedUnion("kind", [
     // Supply & installation quotes: installation per unit, on top of the
     // supply rate (unitPrice).
     installRate: z.number().finite().min(0).default(0),
+    // Discount off the (supply) rate, in %; the document shows the net rate.
+    // Over the item's permissible maximum it needs the Head's approval.
+    discountPct: z.number().finite().min(0).max(100).default(0),
   }),
 ]);
 
@@ -64,7 +67,20 @@ export type DocumentInput = z.infer<typeof documentInputSchema>;
 
 export type DocRow =
   | { kind: "section"; label: string; sn: string }
-  | { kind: "item"; sn: string; description: string; detail: string; unit: string; qty: number; unitPrice: number; installRate: number; amount: number };
+  | {
+      kind: "item";
+      sn: string;
+      productId?: string;
+      description: string;
+      detail: string;
+      unit: string;
+      qty: number;
+      unitPrice: number; // before discount
+      discountPct: number;
+      netRate: number; // unitPrice less the discount
+      installRate: number;
+      amount: number;
+    };
 
 export type SalesDocument = {
   type: DocumentType;
@@ -82,6 +98,8 @@ export type SalesDocument = {
   rows: DocRow[];
   vatInclusive: boolean;
   withInstallation: boolean;
+  // Some line has a discount: Disc. % and Net rate columns are shown.
+  withDiscount: boolean;
   supplyTotal: number;
   installTotal: number;
   subtotal: number;
@@ -101,7 +119,9 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
       if (!r.description && r.qty === 0) return null;
       const detail = !input.showAvailability && isAvailabilityNote(r.detail) ? "" : r.detail;
       const installRate = input.withInstallation ? r.installRate : 0;
-      return { ...r, detail, installRate, sn: sns[i], amount: round2(r.qty * (r.unitPrice + installRate)) };
+      const discountPct = round2(r.discountPct);
+      const netRate = netOf(r.unitPrice, discountPct);
+      return { ...r, detail, installRate, discountPct, netRate, sn: sns[i], amount: round2(r.qty * (netRate + installRate)) };
     })
     .filter((r): r is DocRow => r != null);
   const vatInclusive = input.vatMode === "inclusive";
@@ -125,6 +145,7 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     rows,
     vatInclusive,
     withInstallation: input.withInstallation,
+    withDiscount: rows.some((r) => r.kind === "item" && r.discountPct > 0),
     supplyTotal: round2(subtotal - installTotal),
     installTotal,
     subtotal,
@@ -147,6 +168,11 @@ function addDays(d: Date, n: number) {
   const x = new Date(d);
   x.setUTCDate(x.getUTCDate() + n);
   return x;
+}
+
+// A rate less a discount %, to the kobo.
+export function netOf(rate: number, discountPct: number): number {
+  return round2(rate * (1 - discountPct / 100));
 }
 
 function round2(n: number) {

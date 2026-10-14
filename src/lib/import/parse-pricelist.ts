@@ -11,7 +11,11 @@ export type RawPricelistRow = {
   quantity: number;
   landedCost: number | null;
   dealerPrice: number | null;
+  // Most a quotation may discount it, in % (blank keeps the item's current one).
+  maxDiscountPct: number | null;
 };
+
+const MAX_DISCOUNT_HEADERS = ["max discount %", "max discount", "maximum discount %", "maximum discount", "max disc %", "max disc", "permissible discount %", "permissible discount", "max. discount %"];
 
 const REQUIRED_COLUMNS = ["PRODUCT CODE", "MODEL", "CATEGORY", "Quantity"];
 
@@ -86,13 +90,26 @@ export async function parsePricelistBuffer(
     const quantity = getNum("Quantity") ?? 0;
     const landedCost = getNum("Landed Cost");
     const dealerPrice = getNum("Dealer's Price");
+    // "10" or "10%" = 10%; a cell formatted as a percentage holds 0.1.
+    const discCol = headers.findIndex((h) => h != null && MAX_DISCOUNT_HEADERS.includes(h.trim().toLowerCase().replace(/\s+/g, " ")));
+    let maxDiscountPct: number | null = null;
+    if (discCol !== -1) {
+      const cell = row.getCell(discCol);
+      const raw = typeof cell.value === "object" && cell.value && "result" in cell.value ? (cell.value as { result: unknown }).result : cell.value;
+      const text = String(raw ?? "").replace(/[%\s]/g, "");
+      const n = typeof raw === "number" ? raw : text === "" ? NaN : Number(text);
+      if (Number.isFinite(n)) {
+        const v = typeof raw === "number" && String(cell.numFmt ?? "").includes("%") ? n * 100 : n;
+        if (v >= 0 && v <= 100) maxDiscountPct = Math.round(v * 100) / 100;
+      }
+    }
 
     if (!productCode || !model || !category) {
       skippedRows++;
       return;
     }
 
-    rows.push({ productCode, model, category, month, quantity, landedCost, dealerPrice });
+    rows.push({ productCode, model, category, month, quantity, landedCost, dealerPrice, maxDiscountPct });
   });
 
   return { rows, skippedRows };

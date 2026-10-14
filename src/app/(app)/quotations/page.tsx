@@ -58,6 +58,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       stock: stock.get(p.id) ?? 0,
       inTransit: inTransit.get(p.id)?.qty ?? 0,
       availability: availability(p.id),
+      maxDiscountPct: p.maxDiscountPct,
     })),
     // Models only on the tentative price list (not stocked).
     ...tentative
@@ -72,6 +73,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         inTransit: 0,
         availability: "Not Available",
         tentative: true,
+        maxDiscountPct: null,
       })),
   ];
 

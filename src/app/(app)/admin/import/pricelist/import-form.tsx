@@ -46,7 +46,7 @@ export function ImportForm() {
       {state.summary && (
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Import complete</h2>
-          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-sm">
             <div>
               <dt className="text-slate-500">Rows read</dt>
               <dd className="text-lg font-semibold text-slate-800">{state.summary.totalRowsIn}</dd>
@@ -62,6 +62,10 @@ export function ImportForm() {
             <div>
               <dt className="text-slate-500">Stock entries set</dt>
               <dd className="text-lg font-semibold text-slate-800">{state.summary.stockEntriesSet}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Max discounts set</dt>
+              <dd className="text-lg font-semibold text-slate-800">{state.summary.maxDiscountsSet}</dd>
             </div>
           </dl>
           <p className="text-xs text-slate-400 mt-4">

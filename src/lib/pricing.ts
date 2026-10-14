@@ -123,10 +123,10 @@ export function inTransitLabel(t: { qty: number; eta: Date | null } | undefined)
 // Every product in the catalog - pickable on deals and quotes whether or
 // not it has a dealer price yet (the rate is then typed in, or comes from
 // the tentative price list on a quote).
-export async function getQuotableProducts(): Promise<{ id: string; code: string; model: string }[]> {
+export async function getQuotableProducts(): Promise<{ id: string; code: string; model: string; maxDiscountPct: number | null }[]> {
   return prisma.product.findMany({
     orderBy: { model: "asc" },
-    select: { id: true, code: true, model: true },
+    select: { id: true, code: true, model: true, maxDiscountPct: true },
   });
 }
 
