@@ -87,6 +87,8 @@ type Draft = {
   showAvailability?: boolean;
   // Supply & installation: adds an Installation rate column.
   withInstallation?: boolean;
+  // Sales commission %: product rates are the price-list rate / (1 - it).
+  commissionPct?: string;
   tin: string;
   bankName: string;
   accountName: string;
@@ -201,6 +203,7 @@ export function QuotationBuilder({
       vatMode: x.vatMode,
       showAvailability: x.showAvailability,
       withInstallation: x.withInstallation,
+      commissionPct: x.commissionPct ? String(x.commissionPct) : "",
       tin: x.tin,
       bankName: x.bankName,
       accountName: x.accountName,
@@ -371,6 +374,9 @@ export function QuotationBuilder({
   const round2 = (n: number) => Math.round(n * 100) / 100;
   // The suggested dealer rate is ex-VAT; in inclusive mode it's shown with VAT.
   const suggested = (rate: number) => (inclusive ? round2(rate * vatFactor) : rate);
+  // Sales commission built into the rate: price-list rate (excl. VAT) / (1 - commission).
+  const commission = Math.min(50, Math.max(0, num(d.commissionPct ?? "")));
+  const quoteRate = (rate: number) => round2((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
   const withInstallation = d.withInstallation === true;
   // Discount %, kept to 0-100; the net rate is the rate less it.
   const discOf = (r: Extract<Row, { kind: "item" }>) => Math.min(100, Math.max(0, num(r.discountPct ?? "")));
@@ -414,6 +420,7 @@ export function QuotationBuilder({
     vatMode: d.vatMode,
     showAvailability: showAvailability,
     withInstallation,
+    commissionPct: commission,
     tin: d.tin,
     bankName: d.bankName,
     accountName: d.accountName,
@@ -609,6 +616,27 @@ export function QuotationBuilder({
                 </button>
               ))}
             </div>
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600" title="Product rates become the price-list rate (excl. VAT) / (1 - commission). Not printed on the document.">
+              Sales commission %
+              <input
+                inputMode="decimal"
+                value={d.commissionPct ?? ""}
+                placeholder="0"
+                onChange={(e) => {
+                  // Re-price the product lines: rate x (1 - old) / (1 - new), so
+                  // a rate already changed by hand keeps its change.
+                  const next = Math.min(50, Math.max(0, num(e.target.value)));
+                  const f = (1 - commission / 100) / (1 - next / 100);
+                  update({
+                    commissionPct: e.target.value,
+                    rows: d.rows.map((r) =>
+                      r.kind === "item" && !r.custom && r.unitPrice.trim() !== "" && f !== 1 ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r,
+                    ),
+                  });
+                }}
+                className="w-16 rounded-md border border-slate-200 bg-white px-2 py-1 text-right text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
             <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600">
               <input
                 type="checkbox"
@@ -676,7 +704,7 @@ export function QuotationBuilder({
                     placeholder="Search model or code…"
                     onSelect={(o) => {
                       const m = o ? optionById.get(o.id) : undefined;
-                      setRow(r.uid, m ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(suggested(m.rate)) : r.unitPrice } : { productId: null });
+                      setRow(r.uid, m ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice } : { productId: null });
                     }}
                   />
                 )}
@@ -697,7 +725,7 @@ export function QuotationBuilder({
                   <p className="text-xs text-slate-500">
                     In stock {opt.stock}
                     {opt.inTransit > 0 && ` · ${opt.inTransit} in transit`}
-                    {opt.rate != null ? ` · Suggested ${naira(suggested(opt.rate))}` : " · No dealer price on file"}
+                    {opt.rate != null ? ` · Suggested ${naira(quoteRate(opt.rate))}${commission ? ` (price list ${naira(suggested(opt.rate))} + ${commission}% commission)` : ""}` : " · No dealer price on file"}
                   </p>
                 )}
                 <div className="grid grid-cols-[1fr_1fr_1.6fr] gap-2">
@@ -807,7 +835,7 @@ export function QuotationBuilder({
                           onSelect={(o) => {
                             const m = o ? optionById.get(o.id) : undefined;
                             setRow(r.uid, m
-                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(suggested(m.rate)) : r.unitPrice }
+                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice }
                               : { productId: null });
                           }}
                         />
@@ -831,7 +859,7 @@ export function QuotationBuilder({
                           {opt.code && `${opt.code} · `}In stock {opt.stock}
                           {opt.inTransit > 0 && ` · ${opt.inTransit} in transit`}
                           {opt.rate != null
-                            ? ` · Suggested ${naira(suggested(opt.rate))} ${inclusive ? "incl." : "excl."} VAT${opt.tentative ? " (tentative)" : ""}`
+                            ? ` · Suggested ${naira(quoteRate(opt.rate))} ${inclusive ? "incl." : "excl."} VAT${opt.tentative ? " (tentative)" : ""}${commission ? ` - price list ${naira(suggested(opt.rate))} + ${commission}% commission` : ""}`
                             : " · No dealer price on file"}
                         </p>
                       )}
@@ -845,10 +873,10 @@ export function QuotationBuilder({
                     </td>
                     <td className="px-3 py-2 align-top">
                       <input inputMode="decimal" value={r.unitPrice} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${input} text-right`} />
-                      {opt?.rate != null && Math.abs(num(r.unitPrice) - suggested(opt.rate)) >= 0.01 && (
+                      {opt?.rate != null && Math.abs(num(r.unitPrice) - quoteRate(opt.rate)) >= 0.01 && (
                         <p className="mt-1 text-right text-[11px] text-amber-700">
-                          {num(r.unitPrice) < suggested(opt.rate) ? "Below" : "Above"} suggested by{" "}
-                          {Math.abs(((num(r.unitPrice) - suggested(opt.rate)) / suggested(opt.rate)) * 100).toFixed(1)}%
+                          {num(r.unitPrice) < quoteRate(opt.rate) ? "Below" : "Above"} suggested by{" "}
+                          {Math.abs(((num(r.unitPrice) - quoteRate(opt.rate)) / quoteRate(opt.rate)) * 100).toFixed(1)}%
                         </p>
                       )}
                     </td>

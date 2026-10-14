@@ -53,6 +53,9 @@ export const documentInputSchema = z.object({
   // Supply & installation: an Installation rate column next to the supply
   // rate; each line's amount is qty x (supply + installation).
   withInstallation: z.boolean().default(false),
+  // Sales commission %, built into the product rates (price-list rate excl.
+  // VAT / (1 - commission)). Kept so the quote reopens with it; not printed.
+  commissionPct: z.number().finite().min(0).max(50).default(0),
   // Pre-filled from Company Details, editable per document.
   tin: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(120).default(""),
