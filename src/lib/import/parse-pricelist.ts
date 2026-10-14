@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { normalizeCategory } from "./category";
+import { cellValue } from "./parse-stock-receipts";
 
 export type RawPricelistRow = {
   productCode: string;
@@ -15,7 +16,6 @@ export type RawPricelistRow = {
   maxDiscountPct: number | null;
 };
 
-const MAX_DISCOUNT_HEADERS = ["max discount %", "max discount", "maximum discount %", "maximum discount", "max disc %", "max disc", "permissible discount %", "permissible discount", "max. discount %"];
 
 // The product's code: "PRODUCT CODE" or "ITEM CODE" (as in the Sales
 // Register) - with both, a row's Product Code, else its Item Code.
@@ -36,7 +36,7 @@ function parseMonthCell(value: unknown): Date | null {
 
 export async function parsePricelistBuffer(
   buffer: ArrayBuffer
-): Promise<{ rows: RawPricelistRow[]; skippedRows: number }> {
+): Promise<{ rows: RawPricelistRow[]; skippedRows: number; discountColumn: string | null; headers: string[] }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const ws = wb.worksheets[0];
@@ -45,8 +45,12 @@ export async function parsePricelistBuffer(
   const headerRow = ws.getRow(1);
   const headers: string[] = [];
   headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-    headers[colNumber] = String(cell.value ?? "").trim();
+    // Rich-text / formula headings read as their text.
+    headers[colNumber] = String(cellValue(cell.value) ?? "").replace(/\s+/g, " ").trim();
   });
+  // Max discount: any heading with "disc" in it ("Max Discount %",
+  // "Maximum Permissible Discount", "Max. Disc %", "Discount %"...).
+  const discCol = headers.findIndex((h) => h != null && /disc/i.test(h));
 
   const idx = (name: string) => headers.findIndex((h) => h?.trim().toLowerCase() === name.toLowerCase());
   const missing = [...(CODE_COLUMNS.every((c) => idx(c) === -1) ? ["PRODUCT CODE (or ITEM CODE)"] : []), ...REQUIRED_COLUMNS.filter((c) => idx(c) === -1)];
@@ -94,11 +98,10 @@ export async function parsePricelistBuffer(
     const landedCost = getNum("Landed Cost");
     const dealerPrice = getNum("Dealer's Price");
     // "10" or "10%" = 10%; a cell formatted as a percentage holds 0.1.
-    const discCol = headers.findIndex((h) => h != null && MAX_DISCOUNT_HEADERS.includes(h.trim().toLowerCase().replace(/\s+/g, " ")));
     let maxDiscountPct: number | null = null;
     if (discCol !== -1) {
       const cell = row.getCell(discCol);
-      const raw = typeof cell.value === "object" && cell.value && "result" in cell.value ? (cell.value as { result: unknown }).result : cell.value;
+      const raw = cellValue(cell.value);
       const text = String(raw ?? "").replace(/[%\s]/g, "");
       const n = typeof raw === "number" ? raw : text === "" ? NaN : Number(text);
       if (Number.isFinite(n)) {
@@ -115,5 +118,12 @@ export async function parsePricelistBuffer(
     rows.push({ productCode, model, category, month, quantity, landedCost, dealerPrice, maxDiscountPct });
   });
 
-  return { rows, skippedRows };
+  // Every discount 1 or less (0.1, 0.15 typed without % formatting): they're
+  // fractions - 0.1 = 10%.
+  const discounts = rows.map((r) => r.maxDiscountPct).filter((v): v is number => v != null);
+  if (discounts.length && discounts.some((v) => v > 0) && discounts.every((v) => v <= 1)) {
+    for (const r of rows) if (r.maxDiscountPct != null) r.maxDiscountPct = Math.round(r.maxDiscountPct * 10000) / 100;
+  }
+
+  return { rows, skippedRows, discountColumn: discCol === -1 ? null : headers[discCol], headers: headers.filter(Boolean) };
 }

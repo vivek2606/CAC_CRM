@@ -13,6 +13,9 @@ export type ImportSummary = {
   priceEntriesSet: number;
   stockEntriesSet: number;
   maxDiscountsSet: number;
+  // The heading read as the max discount, or null with the headings seen.
+  discountColumn: string | null;
+  headers: string[];
   stockAsOfDate: string;
   skippedFileRows: number;
 };
@@ -40,11 +43,15 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
 
   let rows: Awaited<ReturnType<typeof parsePricelistBuffer>>["rows"];
   let skippedFileRows = 0;
+  let discountColumn: string | null = null;
+  let headers: string[] = [];
   try {
     const buffer = await file.arrayBuffer();
     const parsed = await parsePricelistBuffer(buffer);
     rows = parsed.rows;
     skippedFileRows = parsed.skippedRows;
+    discountColumn = parsed.discountColumn;
+    headers = parsed.headers;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not read the uploaded file." };
   }
@@ -135,6 +142,8 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
       priceEntriesSet,
       stockEntriesSet,
       maxDiscountsSet: result.products.filter((p) => p.maxDiscountPct != null).length,
+      discountColumn,
+      headers,
       stockAsOfDate: stockDateRaw.data,
       skippedFileRows,
     },

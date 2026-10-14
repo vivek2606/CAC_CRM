@@ -68,6 +68,17 @@ export function ImportForm() {
               <dd className="text-lg font-semibold text-slate-800">{state.summary.maxDiscountsSet}</dd>
             </div>
           </dl>
+          {state.summary.discountColumn == null ? (
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              No max discount column found - name its heading e.g. &quot;Max Discount %&quot;. Headings in your sheet: {state.summary.headers.join(", ")}
+            </p>
+          ) : (
+            state.summary.maxDiscountsSet === 0 && (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Read &quot;{state.summary.discountColumn}&quot; as the max discount, but none of its cells held a number from 0 to 100.
+              </p>
+            )
+          )}
           <p className="text-xs text-slate-400 mt-4">
             Opening stock set at the start of {state.summary.stockAsOfDate} - billing and arrivals from that date onward
             adjust it. Every product not in this file now reads as zero in stock.
