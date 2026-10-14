@@ -70,6 +70,8 @@ export function ProductsTable({
   isHead: boolean;
   deleteAction: (id: string) => Promise<void>;
 }) {
+  // The max discount % is shown to the Head only.
+  const COLS = isHead ? COLUMNS : COLUMNS.filter((c) => c.key !== "maxDiscountPct");
   const [allMonths, setAllMonths] = useState(false);
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
   const [sortKey, setSortKey] = useState<Key>("model");
@@ -156,8 +158,8 @@ export function ProductsTable({
         <div className="ml-auto">
           <ExportCsvButton
             filename="products.csv"
-            headers={COLUMNS.map((c) => c.label)}
-            rows={visible.map((r) => COLUMNS.map((c) => (c.key === "month" ? r.month : (r[c.key] ?? "") as string | number)))}
+            headers={COLS.map((c) => c.label)}
+            rows={visible.map((r) => COLS.map((c) => (c.key === "month" ? r.month : (r[c.key] ?? "") as string | number)))}
           />
         </div>
       </div>
@@ -165,7 +167,7 @@ export function ProductsTable({
         <table className="w-full text-xs">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
-              {COLUMNS.map((c) => (
+              {COLS.map((c) => (
                 <th key={c.key} className={`px-2 py-1.5 font-medium whitespace-nowrap ${c.numeric ? "text-right" : ""}`}>
                   <button type="button" onClick={() => sortBy(c.key)} className="inline-flex items-center gap-1 hover:text-slate-800">
                     {c.label}
@@ -176,7 +178,7 @@ export function ProductsTable({
               {isHead && <th className="px-2 py-1.5" />}
             </tr>
             <tr className="border-b border-slate-200 bg-white">
-              {COLUMNS.map((c) => (
+              {COLS.map((c) => (
                 <th key={c.key} className="px-1 py-1">
                   <input
                     value={filters[c.key] ?? ""}
@@ -194,14 +196,14 @@ export function ProductsTable({
           <tbody className="divide-y divide-slate-100">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length + (isHead ? 1 : 0)} className="px-3 py-10 text-center text-sm text-slate-500">
+                <td colSpan={COLS.length + (isHead ? 1 : 0)} className="px-3 py-10 text-center text-sm text-slate-500">
                   {anyFilter ? "No products match these filters." : "No products with a price yet."}
                 </td>
               </tr>
             )}
             {visible.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50">
-                {COLUMNS.map((c) => (
+                {COLS.map((c) => (
                   <td key={c.key} className={`px-2 py-1.5 whitespace-nowrap ${c.width ?? ""} ${c.numeric ? "text-right tabular-nums" : ""} ${c.key === "model" ? "font-medium" : "text-slate-600"}`}>
                     <div className={c.width ? "truncate" : ""} title={c.width ? display(r, c.key) : undefined}>
                       {c.key === "model" ? (

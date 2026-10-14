@@ -49,7 +49,8 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
       select: { id: true },
     });
     await notifyQuoteDiscountRequested(q.id);
-    const lines = excess.map((l) => `${l.description}: ${l.discountPct}% (max ${l.maxPct}%)`).join("; ");
+    // The limits themselves are the Head's to know - just which items.
+    const lines = excess.map((l) => l.description).join("; ");
     return {
       error: Response.json(
         { error: `Not generated - only the Head of Sales can prepare a quote below the permissible discount (${lines}). It has been sent to the Head of Sales; or bring the discount within the limit.`, approval: "pending" },

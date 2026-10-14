@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser, isBackOffice } from "@/lib/rbac";
+import { requireUser } from "@/lib/rbac";
 import { getAvailableStockByProduct } from "@/lib/pricing";
 import { PageHeader, NewButton } from "@/components/ui";
 import { deletePricelistEntry } from "../pricelist/actions";
@@ -8,8 +8,10 @@ import { RecomputeCapacityButton } from "./recompute-capacity-button";
 import { ProductsTable } from "./products-table";
 import { Tag } from "lucide-react";
 
+// Changing products and prices, and the max discount %, are the Head's only.
 export default async function ProductsPage() {
   const user = await requireUser();
+  const isHead = user.role === "HEAD";
 
   const [entries, availableStockByProduct] = await Promise.all([
     prisma.pricelist.findMany({
@@ -27,7 +29,7 @@ export default async function ProductsPage() {
     capacityKw: entry.product.capacityKw,
     month: entry.month,
     dealerPrice: entry.dealerPrice,
-    maxDiscountPct: entry.product.maxDiscountPct,
+    maxDiscountPct: isHead ? entry.product.maxDiscountPct : null,
     availableQty: availableStockByProduct.get(entry.product.id) ?? null,
   }));
 
@@ -45,7 +47,7 @@ export default async function ProductsPage() {
               <Tag className="h-4 w-4" />
               Tentative Prices for Unavailable Items
             </Link>
-            {isBackOffice(user) && (
+            {isHead && (
               <>
                 <RecomputeCapacityButton />
                 <NewButton href="/pricelist/new" label="New Product / Price" />
@@ -55,7 +57,7 @@ export default async function ProductsPage() {
         }
       />
       <div className="p-6 space-y-4">
-        <ProductsTable entries={tableEntries} isHead={isBackOffice(user)} deleteAction={deletePricelistEntry} />
+        <ProductsTable entries={tableEntries} isHead={isHead} deleteAction={deletePricelistEntry} />
       </div>
     </div>
   );

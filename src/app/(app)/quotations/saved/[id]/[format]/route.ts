@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const excess = await excessDiscounts(doc);
     if (excess.length && !(q.discountStatus === "approved" && coveredByApproval(excess, q.discountApproved))) {
       const why = q.discountStatus === "rejected" ? "was declined by the Head of Sales - revise it with the discount within the limit" : "is below the permissible discount - only the Head of Sales can prepare it (it has been sent to them)";
-      return new Response(`Quotation ${q.ref}: the discount (${excess.map((l) => `${l.description} ${l.discountPct}%, max ${l.maxPct}%`).join("; ")}) ${why}.`, {
+      return new Response(`Quotation ${q.ref}: the discount (${excess.map((l) => l.description).join("; ")}) ${why}.`, {
         status: 403,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });

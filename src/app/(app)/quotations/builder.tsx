@@ -744,13 +744,13 @@ export function QuotationBuilder({
                 </div>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-slate-500">
-                    Discount %{opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
+                    Discount %{isHead && opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
                   </span>
                   <input inputMode="decimal" value={r.discountPct ?? ""} placeholder="0" onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { discountPct: e.target.value })} className={big} />
                   {discOf(r) > 0 && <span className="mt-1 block text-xs text-slate-500">Net rate {naira(inclusive ? round2(netRate(r) / vatFactor) : netRate(r))} excl. VAT</span>}
                   {(() => {
                     const o = overMax(r, opt);
-                    return o ? <span className="mt-1 block text-xs font-medium text-rose-700">{o.off}% off the dealer rate - over the {o.max}% maximum; only the Head of Sales can quote this</span> : null;
+                    return o ? <span className="mt-1 block text-xs font-medium text-rose-700">Beyond the permissible discount - only the Head of Sales can quote this</span> : null;
                   })()}
                 </label>
                 {withInstallation && (
@@ -893,12 +893,12 @@ export function QuotationBuilder({
                           Net {naira(inclusive ? round2(netRate(r) / vatFactor) : netRate(r))} excl. VAT
                         </p>
                       )}
-                      {opt?.maxDiscountPct != null && <p className="mt-0.5 text-right text-[11px] text-slate-400">Max {opt.maxDiscountPct}%</p>}
+                      {isHead && opt?.maxDiscountPct != null && <p className="mt-0.5 text-right text-[11px] text-slate-400">Max {opt.maxDiscountPct}%</p>}
                       {(() => {
                         const o = overMax(r, opt);
                         return o ? (
                           <p className="mt-0.5 text-right text-[11px] font-medium text-rose-700" title="Over the permissible discount - only the Head of Sales can prepare this quote">
-                            {o.off}% off - over max
+                            Over the limit
                           </p>
                         ) : null;
                       })()}
