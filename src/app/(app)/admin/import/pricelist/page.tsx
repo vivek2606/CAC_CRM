@@ -24,7 +24,7 @@ export default async function ImportPricelistPage() {
           <h2 className="text-sm font-semibold text-slate-900 mb-2">Before you upload</h2>
           <ul className="text-sm text-slate-600 space-y-1.5 list-disc list-inside">
             <li>
-              Columns required: <strong>PRODUCT CODE</strong>, <strong>MODEL</strong>, <strong>CATEGORY</strong> and{" "}
+              Columns required: <strong>PRODUCT CODE</strong> (or <strong>ITEM CODE</strong>, as in the Sales Register), <strong>MODEL</strong>, <strong>CATEGORY</strong> and{" "}
               <strong>Quantity</strong>. Optional: <strong>Dealer&apos;s Price</strong>, <strong>Landed Cost</strong>, <strong>MONTH</strong> and{" "}
               <strong>Max Discount %</strong> - leave them out for a quantities-only opening stock.
             </li>
@@ -38,7 +38,7 @@ export default async function ImportPricelistPage() {
               both mean 10%). A bigger discount is held for the Head&apos;s approval before it can be downloaded. A blank cell keeps
               the item&apos;s current limit.
             </li>
-            <li>Products are matched by Product Code — a known code updates that product; a new one is created.</li>
+            <li>Products are matched by Product Code / Item Code — a known code updates that product; a new one is created.</li>
             <li>
               This file should list every item currently available, with its quantity — anything not in this file
               is treated as out of stock as of the date you pick below, even if a previous upload had a quantity for

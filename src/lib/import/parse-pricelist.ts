@@ -17,7 +17,10 @@ export type RawPricelistRow = {
 
 const MAX_DISCOUNT_HEADERS = ["max discount %", "max discount", "maximum discount %", "maximum discount", "max disc %", "max disc", "permissible discount %", "permissible discount", "max. discount %"];
 
-const REQUIRED_COLUMNS = ["PRODUCT CODE", "MODEL", "CATEGORY", "Quantity"];
+// The product's code: "PRODUCT CODE" or "ITEM CODE" (as in the Sales
+// Register) - with both, a row's Product Code, else its Item Code.
+const REQUIRED_COLUMNS = ["MODEL", "CATEGORY", "Quantity"];
+const CODE_COLUMNS = ["PRODUCT CODE", "ITEM CODE"];
 
 function parseMonthCell(value: unknown): Date | null {
   if (value instanceof Date) return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
@@ -46,7 +49,7 @@ export async function parsePricelistBuffer(
   });
 
   const idx = (name: string) => headers.findIndex((h) => h?.trim().toLowerCase() === name.toLowerCase());
-  const missing = REQUIRED_COLUMNS.filter((c) => idx(c) === -1);
+  const missing = [...(CODE_COLUMNS.every((c) => idx(c) === -1) ? ["PRODUCT CODE (or ITEM CODE)"] : []), ...REQUIRED_COLUMNS.filter((c) => idx(c) === -1)];
   if (missing.length > 0) {
     throw new Error(`Missing expected column(s): ${missing.join(", ")}`);
   }
@@ -81,7 +84,7 @@ export async function parsePricelistBuffer(
       return Number.isNaN(n) ? null : n;
     };
 
-    const productCode = getStr("PRODUCT CODE");
+    const productCode = getStr("PRODUCT CODE") ?? getStr("ITEM CODE");
     const model = getStr("MODEL");
     const rawCategory = getStr("CATEGORY");
     const category = rawCategory ? normalizeCategory(rawCategory) : null;
