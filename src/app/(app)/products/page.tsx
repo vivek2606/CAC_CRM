@@ -14,7 +14,7 @@ export default async function ProductsPage() {
   const [entries, availableStockByProduct] = await Promise.all([
     prisma.pricelist.findMany({
       orderBy: [{ month: "desc" }, { createdAt: "desc" }],
-      include: { product: { select: { id: true, code: true, model: true, category: true, capacityKw: true } } },
+      include: { product: { select: { id: true, code: true, model: true, category: true, capacityKw: true, maxDiscountPct: true } } },
     }),
     getAvailableStockByProduct(),
   ]);
@@ -27,6 +27,7 @@ export default async function ProductsPage() {
     capacityKw: entry.product.capacityKw,
     month: entry.month,
     dealerPrice: entry.dealerPrice,
+    maxDiscountPct: entry.product.maxDiscountPct,
     availableQty: availableStockByProduct.get(entry.product.id) ?? null,
   }));
 
@@ -34,7 +35,7 @@ export default async function ProductsPage() {
     <div>
       <PageHeader
         title="Products"
-        description={`${entries.length} price entr${entries.length === 1 ? "y" : "ies"}`}
+        description={`${new Set(entries.map((e) => e.product.id)).size} products with a price - sort, filter or search any column`}
         action={
           <div className="flex items-center gap-3">
             <Link
