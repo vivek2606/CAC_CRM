@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
-import { reserveQuoteRef, importQuoteSheet } from "./actions";
+import { reserveQuoteRef, importQuoteSheet, createDealForQuote } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
 export type ModelOption = {
@@ -166,7 +166,14 @@ export function QuotationBuilder({
   const companyFor = (key: string) => companies.find((c) => c.key === key) ?? companies[0];
 
   // The deal a downloaded quote is saved against.
-  const linkedDealId = fromDeal?.dealId ?? fromQuote?.dealId ?? null;
+  // A deal made for this quote after it was downloaded (see the prompt below).
+  const [createdDealId, setCreatedDealId] = useState<string | null>(null);
+  const linkedDealId = fromDeal?.dealId ?? fromQuote?.dealId ?? createdDealId;
+  // Downloaded without a deal: prompt to create one and link it.
+  const [unlinkedRef, setUnlinkedRef] = useState<string | null>(null);
+  const [dealTitle, setDealTitle] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const prefilled = fromDeal != null || fromQuote != null;
 
   const fromSaved = (q: QuotePrefill): Draft => {
@@ -458,6 +465,10 @@ export function QuotationBuilder({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      if (!linkedDealId) {
+        setUnlinkedRef(ref);
+        setDealTitle((t) => t || [d.to.split("\n")[0]?.trim(), d.title.trim()].filter(Boolean).join(" - ").slice(0, 200));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the file.");
     } finally {
@@ -1087,6 +1098,51 @@ export function QuotationBuilder({
           </div>
         </div>
       </div>
+
+      {unlinkedRef && !linkedDealId && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+          <p className="text-sm font-medium text-indigo-900">
+            Quotation {unlinkedRef} is saved, but not linked to a deal. Create a deal for it now, so it&apos;s followed up in the pipeline.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block w-full sm:w-96">
+              <span className="mb-1 block text-xs font-medium text-indigo-800">Deal name</span>
+              <input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="Customer - project" className={input} />
+            </label>
+            <button
+              type="button"
+              disabled={linking}
+              onClick={async () => {
+                setLinking(true);
+                setLinkError(null);
+                const res = await createDealForQuote(unlinkedRef, dealTitle);
+                setLinking(false);
+                if (res.error) setLinkError(res.error);
+                else if (res.dealId) setCreatedDealId(res.dealId);
+              }}
+              className="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {linking ? "Creating…" : "Create deal & link quotation"}
+            </button>
+            <Link href={`/quotations/saved?q=${encodeURIComponent(unlinkedRef)}`} className="pb-2 text-sm font-medium text-indigo-700 hover:text-indigo-900">
+              Link to an existing deal instead
+            </Link>
+            <button type="button" onClick={() => setUnlinkedRef(null)} className="pb-2 text-sm text-slate-500 hover:text-slate-700">
+              Later
+            </button>
+          </div>
+          <p className="text-xs text-indigo-800/80">The deal goes in at the Quotation stage under the quote&apos;s sales person, with the quote&apos;s products and quantities.</p>
+          {linkError && <p className="text-sm text-red-600">{linkError}</p>}
+        </div>
+      )}
+      {createdDealId && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Deal created and the quotation linked to it.{" "}
+          <Link href={`/deals/${createdDealId}`} className="font-medium underline">
+            Open the deal
+          </Link>
+        </div>
+      )}
 
       {/* Downloads */}
       <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">

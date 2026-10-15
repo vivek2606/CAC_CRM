@@ -93,3 +93,41 @@ export async function importQuoteSheet(formData: FormData): Promise<ImportedQuot
   }
   return first ?? { ...empty, problems: ["The file has no worksheets."] };
 }
+
+// After a quotation is downloaded with no deal: make one for it - in the
+// Quotation stage, under the quote's sales person, for its customer - and
+// link the quote, which fills the deal's products (and account, when the
+// customer name matches one).
+export async function createDealForQuote(ref: string, title: string): Promise<{ dealId?: string; quoteId?: string; error?: string }> {
+  const user = await requireUser();
+  const q = await prisma.quotation.findUnique({
+    where: { ref },
+    select: { id: true, ownerId: true, createdById: true, dealId: true, customerName: true, total: true, data: true, deal: { select: { ownerId: true } } },
+  });
+  if (!q || !canSeeQuotation(user, q)) return { error: "Download the quotation first - then it can be linked to a deal." };
+  if (q.dealId) return { dealId: q.dealId, quoteId: q.id };
+  const name = title.trim() || q.customerName || ref;
+  const { STAGE_DEFAULT_PROBABILITY } = await import("@/lib/constants");
+  const deal = await prisma.deal.create({
+    data: {
+      title: name.slice(0, 200),
+      stage: "PROPOSAL",
+      stageChangedAt: new Date(),
+      probability: STAGE_DEFAULT_PROBABILITY.PROPOSAL,
+      customerName: q.customerName || null,
+      ownerId: q.ownerId,
+    },
+    select: { id: true },
+  });
+  await prisma.quotation.update({ where: { id: q.id }, data: { dealId: deal.id } });
+  const filled = await applyQuoteToDeal(q.id, true);
+  // Only custom lines (no products): the deal takes the quote's value (excl. VAT).
+  if (filled.count === 0) {
+    const { getCompanySettings } = await import("@/lib/company-profile");
+    const vat = 1 + (await getCompanySettings()).vatRatePct / 100;
+    await prisma.deal.update({ where: { id: deal.id }, data: { value: Math.round((q.total / vat) * 100) / 100 } });
+  }
+  revalidatePath("/quotations/saved");
+  revalidatePath("/deals");
+  return { dealId: deal.id, quoteId: q.id };
+}
