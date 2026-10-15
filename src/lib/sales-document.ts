@@ -27,8 +27,9 @@ const rowSchema = z.discriminatedUnion("kind", [
     // Supply & installation quotes: installation per unit, on top of the
     // supply rate (unitPrice).
     installRate: z.number().finite().min(0).default(0),
-    // Discount off the (supply) rate, in %; the document shows the net rate.
-    // Over the item's permissible maximum it needs the Head's approval.
+    // Discount off the (supply) rate, in % - not printed: the document's
+    // rate is the rate less it. Beyond the item's permissible maximum only
+    // the Head can generate the document.
     discountPct: z.number().finite().min(0).max(100).default(0),
   }),
 ]);
@@ -101,8 +102,6 @@ export type SalesDocument = {
   rows: DocRow[];
   vatInclusive: boolean;
   withInstallation: boolean;
-  // Some line has a discount: Disc. % and Net rate columns are shown.
-  withDiscount: boolean;
   supplyTotal: number;
   installTotal: number;
   subtotal: number;
@@ -148,7 +147,6 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     rows,
     vatInclusive,
     withInstallation: input.withInstallation,
-    withDiscount: rows.some((r) => r.kind === "item" && r.discountPct > 0),
     supplyTotal: round2(subtotal - installTotal),
     installTotal,
     subtotal,

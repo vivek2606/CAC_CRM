@@ -18,15 +18,12 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.45, right: 0.45, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } },
     views: [{ showGridLines: false }],
   });
-  // Columns: # | Description | Unit | Qty | Rate (E) | [Disc. % | Net rate]
-  // | [Installation rate] | Amount. A discount adds Disc. % and Net rate
-  // (a formula); supply & installation adds an Installation rate column.
+  // Columns: # | Description | Unit | Qty | Rate (E) | [Installation rate]
+  // | Amount. The rate is after any discount (a discount isn't shown).
   // L = last column, A = its letter.
   const inst = doc.withInstallation;
-  const disc = doc.withDiscount;
   const letter = (n: number) => String.fromCharCode(64 + n);
-  const DISC = disc ? 6 : 0; // Disc. % column
-  const NET = disc ? 7 : 5; // the rate the amount is worked from
+  const NET = 5;
   const INST = inst ? NET + 1 : 0;
   const L = (inst ? INST : NET) + 1;
   const A = letter(L);
@@ -34,7 +31,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   const lineFormula = (row: number) => (inst ? `D${row}*(${N}${row}+${letter(INST)}${row})` : `D${row}*${N}${row}`);
   const rateCount = L - 5;
   const descWidth = 56 - 10 * (rateCount - 1);
-  ws.columns = [{ width: 6 }, { width: Math.max(30, descWidth) }, { width: 7 }, { width: 8 }, ...Array.from({ length: rateCount }, (_, i) => ({ width: disc && i === 1 ? 9 : rateCount > 1 ? 15 : 17 })), { width: 19 }];
+  ws.columns = [{ width: 6 }, { width: Math.max(30, descWidth) }, { width: 7 }, { width: 8 }, ...Array.from({ length: rateCount }, () => ({ width: rateCount > 1 ? 16 : 17 })), { width: 19 }];
   const put = (row: number, col: number, value: ExcelJS.CellValue, style: Partial<ExcelJS.Style> = {}) => {
     const cell = ws.getCell(row, col);
     cell.value = value;
@@ -95,7 +92,6 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     "Unit",
     "Qty",
     inst ? (vi ? "Supply rate incl. VAT (NGN)" : "Supply rate (NGN)") : vi ? "Rate incl. VAT (NGN)" : "Rate (NGN)",
-    ...(disc ? ["Disc. %", vi ? "Net rate incl. VAT (NGN)" : "Net rate (NGN)"] : []),
     ...(inst ? [vi ? "Installation rate incl. VAT (NGN)" : "Installation rate (NGN)"] : []),
     vi ? "Amount incl. VAT (NGN)" : "Amount (NGN)",
   ].forEach((h, i) =>
@@ -124,11 +120,7 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     });
     put(r, 3, row.unit, { alignment: { horizontal: "center", vertical: "top" }, border: rowBorder });
     put(r, 4, row.qty, { numFmt: "#,##0.##", alignment: { vertical: "top" }, border: rowBorder });
-    put(r, 5, row.unitPrice, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
-    if (disc) {
-      put(r, DISC, row.discountPct, { numFmt: "0.##", alignment: { vertical: "top" }, border: rowBorder });
-      put(r, NET, { formula: `ROUND(E${r}*(1-${letter(DISC)}${r}/100),2)`, result: row.netRate }, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
-    }
+    put(r, 5, row.netRate, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
     if (inst) put(r, INST, row.installRate, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
     put(r, L, { formula: lineFormula(r), result: row.amount }, { numFmt: MONEY, alignment: { vertical: "top" }, border: rowBorder });
   }
@@ -136,7 +128,6 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   for (let k = 0; k < 3; k++) {
     r++;
     for (let col = 1; col <= L; col++) ws.getCell(r, col).border = rowBorder;
-    if (disc) put(r, NET, { formula: `IF(E${r}="","",ROUND(E${r}*(1-N(${letter(DISC)}${r})/100),2))`, result: "" }, { numFmt: MONEY, border: rowBorder });
     put(r, L, { formula: `IF(D${r}="","",${lineFormula(r)})`, result: "" }, { numFmt: MONEY, border: rowBorder });
   }
   const last = r;

@@ -58,7 +58,8 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       stock: stock.get(p.id) ?? 0,
       inTransit: inTransit.get(p.id)?.qty ?? 0,
       availability: availability(p.id),
-      maxDiscountPct: p.maxDiscountPct,
+      // The limits are the Head's only - the check runs on the server.
+      maxDiscountPct: user.role === "HEAD" ? p.maxDiscountPct : null,
     })),
     // Models only on the tentative price list (not stocked).
     ...tentative

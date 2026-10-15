@@ -18,7 +18,8 @@ export type ModelOption = {
   inTransit: number;
   availability: string;
   tentative: boolean;
-  // Most it may be discounted off the dealer rate, in % (null = no limit).
+  // Most it may be discounted off the dealer rate, in % - sent to the Head
+  // only (shown as a hint); the check itself runs on the server.
   maxDiscountPct: number | null;
 };
 export type CompanyOption = {
@@ -381,17 +382,8 @@ export function QuotationBuilder({
   // Discount %, kept to 0-100; the net rate is the rate less it.
   const discOf = (r: Extract<Row, { kind: "item" }>) => Math.min(100, Math.max(0, num(r.discountPct ?? "")));
   const netRate = (r: Extract<Row, { kind: "item" }>) => round2(num(r.unitPrice) * (1 - discOf(r) / 100));
-  // How far below the dealer rate the net rate is, and whether that's over
-  // the item's permissible maximum (then the Head has to approve it).
-  const overMax = (r: Extract<Row, { kind: "item" }>, opt: ModelOption | undefined) => {
-    // (A tentative price isn't a dealer's price - no limit applies to it.)
-    if (isHead || !opt || opt.tentative || opt.rate == null || opt.maxDiscountPct == null || !suggested(opt.rate)) return null;
-    const off = round2(Math.max(0, (1 - netRate(r) / suggested(opt.rate)) * 100));
-    return off > opt.maxDiscountPct + 0.005 ? { off, max: opt.maxDiscountPct } : null;
-  };
   // Line amount: qty x net rate, plus installation on supply & installation quotes.
   const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
-  const overLines = d.rows.filter((r) => r.kind === "item" && overMax(r, r.productId ? optionById.get(r.productId) : undefined)).length;
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
   const installTotal = withInstallation ? d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.installRate ?? "") * 100) / 100 : 0), 0) : 0;
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
@@ -744,14 +736,10 @@ export function QuotationBuilder({
                 </div>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-slate-500">
-                    Discount %{isHead && opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
+                    Discount % (not printed){isHead && opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
                   </span>
                   <input inputMode="decimal" value={r.discountPct ?? ""} placeholder="0" onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { discountPct: e.target.value })} className={big} />
                   {discOf(r) > 0 && <span className="mt-1 block text-xs text-slate-500">Net rate {naira(inclusive ? round2(netRate(r) / vatFactor) : netRate(r))} excl. VAT</span>}
-                  {(() => {
-                    const o = overMax(r, opt);
-                    return o ? <span className="mt-1 block text-xs font-medium text-rose-700">Beyond the permissible discount - only the Head of Sales can quote this</span> : null;
-                  })()}
                 </label>
                 {withInstallation && (
                   <label className="block">
@@ -777,7 +765,7 @@ export function QuotationBuilder({
                 <th className="px-3 py-2 w-40 text-right">
                   {withInstallation ? "Supply rate" : "Rate"} {inclusive ? "incl." : "excl."} VAT (₦)
                 </th>
-                <th className="px-3 py-2 w-28 text-right">Disc. %</th>
+                <th className="px-3 py-2 w-28 text-right" title="Not printed - the document shows the rate after the discount">Disc. % (not printed)</th>
                 {withInstallation && <th className="px-3 py-2 w-36 text-right">Installation rate (₦)</th>}
                 <th className="px-3 py-2 w-36 text-right">Amount (₦)</th>
                 <th className="px-2 py-2 w-24" />
@@ -886,7 +874,7 @@ export function QuotationBuilder({
                         value={r.discountPct ?? ""}
                         placeholder="0"
                         onChange={(e) => setRow(r.uid, { discountPct: e.target.value })}
-                        className={`${input} text-right ${overMax(r, opt) ? "border-rose-400 bg-rose-50" : ""}`}
+                        className={`${input} text-right`}
                       />
                       {discOf(r) > 0 && (
                         <p className="mt-1 text-right text-[11px] text-slate-500">
@@ -894,14 +882,6 @@ export function QuotationBuilder({
                         </p>
                       )}
                       {isHead && opt?.maxDiscountPct != null && <p className="mt-0.5 text-right text-[11px] text-slate-400">Max {opt.maxDiscountPct}%</p>}
-                      {(() => {
-                        const o = overMax(r, opt);
-                        return o ? (
-                          <p className="mt-0.5 text-right text-[11px] font-medium text-rose-700" title="Over the permissible discount - only the Head of Sales can prepare this quote">
-                            Over the limit
-                          </p>
-                        ) : null;
-                      })()}
                     </td>
                     {withInstallation && (
                       <td className="px-3 py-2 align-top">
@@ -1114,12 +1094,6 @@ export function QuotationBuilder({
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {held && <p className="basis-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 order-last">{held}</p>}
-        {!held && overLines > 0 && (
-          <p className="text-sm text-rose-700">
-            Can&apos;t be generated: {overLines} line{overLines === 1 ? " is" : "s are"} below the permissible discount - only the Head of Sales can prepare
-            such a quote. Download sends it to the Head of Sales instead; or bring the discount within the limit.
-          </p>
-        )}
         <div className="ml-auto flex flex-wrap gap-2">
           {linkedDealId && (
             <Link href={`/deals/${linkedDealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">

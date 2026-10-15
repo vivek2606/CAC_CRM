@@ -22,8 +22,7 @@ const accent = "#1e4f9c"; // Sakuragi logo blue
 
 // Column widths (#, Unit, Qty, Rate, Amount fixed; Description flexes).
 // Supply & installation quotes add an Installation rate column.
-// A discount adds Disc. % and Net rate columns (rates narrow to fit).
-const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72, drate: 62, disc: 34 };
+const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72 };
 
 const s = StyleSheet.create({
   // paddingTop leaves room for the continuation header on pages 2+.
@@ -78,24 +77,18 @@ type ItemRow = Extract<SalesDocument["rows"][number], { kind: "item" }>;
 type RateCol = { header: string; width: number; value: (r: ItemRow) => string };
 
 // The rate columns between Qty and Amount: the rate (supply rate with
-// installation), then Disc. % and Net rate when a line is discounted, then
-// the installation rate.
+// installation), then the installation rate. A discount isn't shown - the
+// rate printed is the rate after it.
 function rateCols(doc: SalesDocument): RateCol[] {
   const vi = doc.vatInclusive;
   const inst = doc.withInstallation;
-  const disc = doc.withDiscount;
-  const w = disc ? W.drate : inst ? W.inst : W.rate;
+  const w = inst ? W.inst : W.rate;
   const cols: RateCol[] = [
-    { header: inst ? (vi ? "Supply rate incl. VAT" : "Supply rate (NGN)") : vi ? "Rate incl. VAT (NGN)" : "Rate (NGN)", width: w, value: (r) => money(r.unitPrice) },
+    { header: inst ? (vi ? "Supply rate incl. VAT" : "Supply rate (NGN)") : vi ? "Rate incl. VAT (NGN)" : "Rate (NGN)", width: w, value: (r) => money(r.netRate) },
   ];
-  if (disc) {
-    cols.push({ header: "Disc. %", width: W.disc, value: (r) => (r.discountPct ? `${pct(r.discountPct)}%` : "-") });
-    cols.push({ header: vi ? "Net rate incl. VAT" : "Net rate (NGN)", width: w, value: (r) => money(r.netRate) });
-  }
   if (inst) cols.push({ header: vi ? "Installation incl. VAT" : "Installation rate (NGN)", width: w, value: (r) => (r.installRate ? money(r.installRate) : "-") });
   return cols;
 }
-const pct = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
 const rateStyle = (c: RateCol) => [s.cell, { width: c.width, textAlign: "right" as const }];
 
 function TableHeader({ doc }: { doc: SalesDocument }) {

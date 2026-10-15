@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import { documentInputSchema } from "@/lib/sales-document";
+import { documentInputSchema, netOf } from "@/lib/sales-document";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { getCompanySettings } from "@/lib/company-profile";
 import { visibleQuotationsWhere } from "@/lib/saved-quotes";
@@ -76,7 +76,7 @@ export default async function QuoteReportPage({ searchParams }: { searchParams: 
         const lp = prices.get(r.productId);
         if (lp == null) continue;
         list += r.qty * lp;
-        quoted += r.qty * (r.unitPrice / vat);
+        quoted += r.qty * (netOf(r.unitPrice, r.discountPct) / vat);
       }
     }
     for (const g of groups) {

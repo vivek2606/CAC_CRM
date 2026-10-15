@@ -1077,7 +1077,7 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   }
   if (onlyIfEmpty && deal._count.items > 0) return { count: 0 };
 
-  const { documentInputSchema } = await import("@/lib/sales-document");
+  const { documentInputSchema, netOf } = await import("@/lib/sales-document");
   const parsed = documentInputSchema.safeParse(q.data);
   if (!parsed.success) return { count: 0, error: "This saved quotation can't be read." };
   const doc = parsed.data;
@@ -1091,7 +1091,7 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p.id);
   const lines = doc.rows
     .filter((r) => r.kind === "item")
-    .map((r) => (r.kind === "item" ? { productId: r.productId && ids.has(r.productId) ? r.productId : byModel.get(norm(r.description)), qty: r.qty, rate: r.unitPrice } : null))
+    .map((r) => (r.kind === "item" ? { productId: r.productId && ids.has(r.productId) ? r.productId : byModel.get(norm(r.description)), qty: r.qty, rate: netOf(r.unitPrice, r.discountPct) } : null))
     .filter((l): l is { productId: string; qty: number; rate: number } => l != null && Boolean(l.productId) && l.qty > 0 && l.rate > 0)
     .map((l) => ({ dealId: deal.id, productId: l.productId, qty: l.qty, unitPrice: Math.round((l.rate / vatFactor) * 100) / 100 }));
   if (lines.length === 0) return { count: 0, error: onlyIfEmpty ? undefined : "No products from the product list on this quotation (only custom lines)." };
