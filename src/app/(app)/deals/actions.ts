@@ -1,5 +1,6 @@
 "use server";
 
+import { dealOwnerProblem } from "@/lib/deal-owner";
 import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
 import { z } from "zod";
 import { redirect, unstable_rethrow } from "next/navigation";
@@ -265,6 +266,8 @@ export async function createDeal(formData: FormData) {
   const parsed = dealSchema.parse(raw);
   requireContact(user, parsed.customerName, parsed.customerPhone);
   const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
+  const ownerProblem = await dealOwnerProblem(ownerId);
+  if (ownerProblem) throw new Error(ownerProblem);
   const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
 
   const deal = await prisma.deal.create({
@@ -307,6 +310,10 @@ export async function updateDeal(dealId: string, formData: FormData) {
   const parsed = dealSchema.parse(raw);
   requireContact(user, parsed.customerName, parsed.customerPhone);
   const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
+  if (ownerId !== existing.ownerId) {
+    const ownerProblem = await dealOwnerProblem(ownerId);
+    if (ownerProblem) throw new Error(ownerProblem);
+  }
 
   // A Won/Lost deal can only change stage through the dedicated Mark
   // Won/Lost flow on the Kanban board or the deal's own page - there's no

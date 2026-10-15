@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { dealOwnerProblem } from "@/lib/deal-owner";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import { canSeeQuotation, resolveQuoteOwner } from "@/lib/saved-quotes";
 import { applyQuoteToDeal } from "../deals/actions";
@@ -95,10 +96,12 @@ export async function importQuoteSheet(formData: FormData): Promise<ImportedQuot
 }
 
 // After a quotation is downloaded with no deal: make one for it - in the
-// Quotation stage, under the quote's sales person, for its customer - and
-// link the quote, which fills the deal's products (and account, when the
-// customer name matches one).
-export async function createDealForQuote(ref: string, title: string): Promise<{ dealId?: string; quoteId?: string; error?: string }> {
+// Quotation stage, for its customer - and link the quote, which fills the
+// deal's products (and account, when the customer name matches one). A
+// sales person's goes under them; the Head / Coordinator pick the sales
+// person (the Head may keep it), never the Coordinator - and the quote
+// moves under that sales person too.
+export async function createDealForQuote(ref: string, title: string, ownerId?: string): Promise<{ dealId?: string; quoteId?: string; error?: string }> {
   const user = await requireUser();
   const q = await prisma.quotation.findUnique({
     where: { ref },
@@ -106,6 +109,10 @@ export async function createDealForQuote(ref: string, title: string): Promise<{ 
   });
   if (!q || !canSeeQuotation(user, q)) return { error: "Download the quotation first - then it can be linked to a deal." };
   if (q.dealId) return { dealId: q.dealId, quoteId: q.id };
+  const dealOwner = isBackOffice(user) ? ownerId || (user.role === "HEAD" ? user.id : "") : user.id;
+  if (!dealOwner) return { error: "Pick the sales person this deal is for." };
+  const ownerProblem = await dealOwnerProblem(dealOwner);
+  if (ownerProblem) return { error: ownerProblem };
   const name = title.trim() || q.customerName || ref;
   const { STAGE_DEFAULT_PROBABILITY } = await import("@/lib/constants");
   const deal = await prisma.deal.create({
@@ -115,11 +122,11 @@ export async function createDealForQuote(ref: string, title: string): Promise<{ 
       stageChangedAt: new Date(),
       probability: STAGE_DEFAULT_PROBABILITY.PROPOSAL,
       customerName: q.customerName || null,
-      ownerId: q.ownerId,
+      ownerId: dealOwner,
     },
     select: { id: true },
   });
-  await prisma.quotation.update({ where: { id: q.id }, data: { dealId: deal.id } });
+  await prisma.quotation.update({ where: { id: q.id }, data: { dealId: deal.id, ownerId: dealOwner } });
   const filled = await applyQuoteToDeal(q.id, true);
   // Only custom lines (no products): the deal takes the quote's value (excl. VAT).
   if (filled.count === 0) {

@@ -12,6 +12,7 @@ import {
 } from "@/lib/pricing";
 import { documentInputSchema } from "@/lib/sales-document";
 import { canSeeQuotation, quoteSalesPeople } from "@/lib/saved-quotes";
+import { dealOwnerOptions } from "@/lib/deal-owner";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
 
@@ -184,6 +185,8 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           fromDeal={fromQuote ? null : fromDeal}
           fromQuote={fromQuote}
           salesPeople={salesPeople}
+          dealOwners={isBackOffice(user) ? await dealOwnerOptions() : null}
+          myId={user.id}
           isHead={user.role === "HEAD"}
         />
       </div>

@@ -146,6 +146,8 @@ export function QuotationBuilder({
   fromDeal,
   fromQuote,
   salesPeople,
+  dealOwners,
+  myId,
   isHead,
 }: {
   options: ModelOption[];
@@ -159,6 +161,9 @@ export function QuotationBuilder({
   fromQuote: QuotePrefill | null;
   // Head / Coordinator only: who they can prepare a quote for.
   salesPeople: { id: string; name: string }[] | null;
+  // Head / Coordinator: the sales people a deal made from the quote can go to.
+  dealOwners: { id: string; name: string }[] | null;
+  myId: string;
   // The Head may also quote below an item's permissible discount.
   isHead: boolean;
 }) {
@@ -172,6 +177,10 @@ export function QuotationBuilder({
   // Downloaded without a deal: prompt to create one and link it.
   const [unlinkedRef, setUnlinkedRef] = useState<string | null>(null);
   const [dealTitle, setDealTitle] = useState("");
+  // Who the deal goes to (Head / Coordinator): the quote's sales person when
+  // that's a sales person; the Head defaults to themself, the Coordinator
+  // must pick.
+  const [dealOwner, setDealOwner] = useState("");
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const prefilled = fromDeal != null || fromQuote != null;
@@ -467,6 +476,7 @@ export function QuotationBuilder({
       URL.revokeObjectURL(url);
       if (!linkedDealId) {
         setUnlinkedRef(ref);
+        if (dealOwners) setDealOwner((cur) => cur || (dealOwners.some((o) => o.id === d.ownerId) ? d.ownerId! : isHead ? myId : ""));
         setDealTitle((t) => t || [d.to.split("\n")[0]?.trim(), d.title.trim()].filter(Boolean).join(" - ").slice(0, 200));
       }
     } catch (e) {
@@ -1109,13 +1119,30 @@ export function QuotationBuilder({
               <span className="mb-1 block text-xs font-medium text-indigo-800">Deal name</span>
               <input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="Customer - project" className={input} />
             </label>
+            {dealOwners && (
+              <label className="block w-full sm:w-64">
+                <span className="mb-1 block text-xs font-medium text-indigo-800">Sales person</span>
+                <select value={dealOwner} onChange={(e) => setDealOwner(e.target.value)} className={input}>
+                  {isHead ? <option value={myId}>Me (Head of Sales)</option> : <option value="">Pick the sales person…</option>}
+                  {dealOwners.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               type="button"
               disabled={linking}
               onClick={async () => {
                 setLinking(true);
                 setLinkError(null);
-                const res = await createDealForQuote(unlinkedRef, dealTitle);
+                if (dealOwners && !isHead && !dealOwner) {
+                  setLinking(false);
+                  return setLinkError("Pick the sales person this deal is for.");
+                }
+                const res = await createDealForQuote(unlinkedRef, dealTitle, dealOwner || undefined);
                 setLinking(false);
                 if (res.error) setLinkError(res.error);
                 else if (res.dealId) setCreatedDealId(res.dealId);
@@ -1131,7 +1158,10 @@ export function QuotationBuilder({
               Later
             </button>
           </div>
-          <p className="text-xs text-indigo-800/80">The deal goes in at the Quotation stage under the quote&apos;s sales person, with the quote&apos;s products and quantities.</p>
+          <p className="text-xs text-indigo-800/80">
+            The deal goes in at the Quotation stage{dealOwners ? " under the sales person picked (the quotation moves to them too)" : ""}, with the quote&apos;s products and
+            quantities.
+          </p>
           {linkError && <p className="text-sm text-red-600">{linkError}</p>}
         </div>
       )}

@@ -1,5 +1,6 @@
 "use server";
 
+import { dealOwnerProblem } from "@/lib/deal-owner";
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -175,6 +176,8 @@ export async function deleteLead(leadId: string) {
 // manual checkbox-selected bulk) - creates the Deal with everything carried
 // over from the Lead, and marks the Lead Converted.
 async function createDealFromLead(lead: Lead, stage: DealStage, probability: number) {
+  const ownerProblem = await dealOwnerProblem(lead.ownerId);
+  if (ownerProblem) throw new Error(`${ownerProblem} (Assign the lead to a sales person first.)`);
   const deal = await prisma.deal.create({
     data: {
       title: lead.title,
@@ -237,7 +240,8 @@ export async function bulkConvertSelectedLeads(leadIds: string[]): Promise<BulkC
   let totalValue = 0;
 
   for (const lead of leads) {
-    if (!canAccessOwner(user, lead.ownerId) || lead.status === "CONVERTED") {
+    // Not the caller's, already converted, or not under a sales person.
+    if (!canAccessOwner(user, lead.ownerId) || lead.status === "CONVERTED" || (await dealOwnerProblem(lead.ownerId))) {
       skipped++;
       continue;
     }
