@@ -24,24 +24,23 @@ export function canSeeQuotation(user: SessionUser, q: { ownerId: string; created
 }
 
 // People a quote can be made for, in the Head / Coordinator's sales person
-// picker: the sales and service managers, and the Head.
+// picker: the sales and service managers, the Head and the Coordinator.
 export async function quoteSalesPeople(): Promise<{ id: string; name: string }[]> {
   return prisma.user.findMany({
-    where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }, { role: "HEAD" }] },
+    where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }, { role: "HEAD" }, { role: "COORDINATOR" }] },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
 }
 
 // Who a quote is for: a sales person can only make quotes for themself; the
-// Head / Coordinator pick one (null when they haven't).
+// Head / Coordinator pick one - or, picking no one, it's their own.
 export async function resolveQuoteOwner(user: SessionUser, requested: string | null): Promise<{ id: string; name: string } | null> {
-  if (!isBackOffice(user) || !requested) {
-    if (isBackOffice(user)) return null;
-    const me = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true } });
-    return me ?? { id: user.id, name: user.name ?? "" };
+  if (isBackOffice(user) && requested) {
+    return prisma.user.findUnique({ where: { id: requested }, select: { id: true, name: true } });
   }
-  return prisma.user.findUnique({ where: { id: requested }, select: { id: true, name: true } });
+  const me = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true } });
+  return me ?? { id: user.id, name: user.name ?? "" };
 }
 
 // Saves (or, for a later download of the same quote, updates) the quote.

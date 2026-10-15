@@ -275,7 +275,8 @@ export function QuotationBuilder({
   // A reference already issued with another person's initials is replaced
   // (on the next download) when the sales person changes.
   const changeOwner = (ownerId: string) => {
-    const name = salesPeople?.find((p) => p.id === ownerId)?.name;
+    // No one picked: the quote is the preparer's own.
+    const name = ownerId ? salesPeople?.find((p) => p.id === ownerId)?.name : signatory.name;
     const initials = isIssuedQuoteRef(d.ref) ? d.ref.split("/")[3] : null;
     update({ ownerId, ...(initials && name && nameInitials(name) !== initials ? { ref: "" } : {}) });
   };
@@ -426,7 +427,6 @@ export function QuotationBuilder({
     setError(null);
     setHeld(null);
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
-    if (salesPeople && !d.ownerId) return setError("Pick the sales person this quotation is for.");
     setBusy(format);
     try {
       // The first download issues this quote's unique reference; later
@@ -519,7 +519,7 @@ export function QuotationBuilder({
             <div className="w-full sm:w-72">
               <label className={label}>Sales person</label>
               <select value={d.ownerId ?? ""} onChange={(e) => changeOwner(e.target.value)} className={input}>
-                <option value="">Pick the sales person…</option>
+                <option value="">None - my own quotation</option>
                 {salesPeople.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -527,7 +527,9 @@ export function QuotationBuilder({
                 ))}
               </select>
             </div>
-            <p className="pb-2 text-xs text-slate-500">The quotation is saved under this sales person, with their initials in the ref no.</p>
+            <p className="pb-2 text-xs text-slate-500">
+              The quotation is saved under this sales person, with their initials in the ref no. Left on &quot;None&quot;, it is saved under your name.
+            </p>
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
