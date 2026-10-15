@@ -20,7 +20,10 @@ export default async function EditDealPage({
 
   const deal = await prisma.deal.findUnique({
     where: { id },
-    include: { items: { orderBy: { createdAt: "asc" }, select: { productId: true, qty: true, unitPrice: true, product: { select: { model: true, code: true } } } } },
+    include: {
+      items: { orderBy: { createdAt: "asc" }, select: { productId: true, qty: true, unitPrice: true, product: { select: { model: true, code: true } } } },
+      sourceLead: { select: { createdAt: true } },
+    },
   });
   if (!deal) notFound();
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
@@ -103,6 +106,9 @@ export default async function EditDealPage({
                 : null,
               tags: deal.tags,
               createdAt: deal.createdAt.toISOString().slice(0, 10),
+              leadDate: deal.sourceLead ? deal.sourceLead.createdAt.toISOString().slice(0, 10) : null,
+              // A closed deal's conversion date: no later than its closing date.
+              latestCreatedAt: deal.closedAt && deal.sourceTxnNo == null ? deal.closedAt.toISOString().slice(0, 10) : null,
               billingCompany: deal.billingCompany,
             }}
             productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}

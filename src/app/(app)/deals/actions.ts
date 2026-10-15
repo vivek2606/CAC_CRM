@@ -1,5 +1,6 @@
 "use server";
 
+import { keepConversionBeforeClose } from "@/lib/conversion-date";
 import { dealOwnerProblem } from "@/lib/deal-owner";
 import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
 import { z } from "zod";
@@ -372,6 +373,11 @@ export async function updateDeal(dealId: string, formData: FormData) {
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
+  // A closed deal converted after it closed goes to 3 days before closing;
+  // and the lead it came from can't be dated after the deal.
+  if (isClosed) await keepConversionBeforeClose(dealId);
+  const convertedOn = (await prisma.deal.findUnique({ where: { id: dealId }, select: { createdAt: true } }))!.createdAt;
+  await prisma.lead.updateMany({ where: { convertedDealId: dealId, createdAt: { gt: convertedOn } }, data: { createdAt: convertedOn } });
   // Products edited in the form (sent whenever the form shows the editor).
   if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
     const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
@@ -544,6 +550,7 @@ async function setDealStage(
       invoiceNo: stage === "WON" ? invoiceNo!.trim().slice(0, 60) : existing.invoiceNo,
     },
   });
+  if (isClosed) await keepConversionBeforeClose(dealId);
   await syncSaleLineItemsForDeal(dealId);
 
   revalidatePath("/deals");
@@ -722,6 +729,7 @@ async function setDealInvoiceImpl(dealId: string, invoiceNo: string, invoiceDate
   const clash = await invoiceClash([{ invoiceNo: no, company: billingCompany, type: invoiceTypeOf(deal.value) }], [dealId]);
   if (clash) throw new Error(clash);
   await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate), billingCompany } });
+  await keepConversionBeforeClose(dealId);
   await logDealChange(dealId, user.id, `Invoice no. set: ${no} (${billingCompany}), dated ${invoiceDate}.`);
   await syncSaleLineItemsForDeal(dealId);
   revalidatePath(`/deals/${dealId}`);
@@ -935,6 +943,7 @@ async function recordWonInvoice(dealId: string, closedAt: string, invoiceNo: str
     where: { id: dealId },
     data: { stage: "WON", probability: STAGE_DEFAULT_PROBABILITY.WON, closedAt: parseDateInput(closedAt), invoiceNo: invoiceNo.trim().slice(0, 60) },
   });
+  await keepConversionBeforeClose(dealId);
   await syncSaleLineItemsForDeal(dealId);
 }
 

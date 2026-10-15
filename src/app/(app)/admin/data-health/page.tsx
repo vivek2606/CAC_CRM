@@ -4,6 +4,8 @@ import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { CompanyFix } from "./company-fix";
+import { FixConversionButton } from "./fix-conversion-button";
+import { DAYS_BEFORE_CLOSE } from "@/lib/conversion-date";
 
 // Everything that needs fixing in one place, for the Head and the Sales
 // Coordinator: won sales with details missing, the same invoice recorded
@@ -96,6 +98,17 @@ export default async function DataHealthPage() {
     if (clash.length > 1) duplicates.push(clash);
   }
 
+  // Closed deals converted from their lead on a later day than they closed
+  // (billed before being converted) - CRM deals only.
+  const lateConversions = (
+    await prisma.$queryRaw<{ id: string; title: string; createdAt: Date; closedAt: Date; stage: string; owner: string }[]>`
+      SELECT d.id, d.title, d."createdAt", d."closedAt", d.stage::text AS stage, u.name AS owner
+      FROM "Deal" d JOIN "User" u ON u.id = d."ownerId"
+      WHERE d."closedAt" IS NOT NULL AND d."sourceTxnNo" IS NULL
+        AND date_trunc('day', d."createdAt") > date_trunc('day', d."closedAt")
+      ORDER BY d."closedAt" DESC`
+  );
+
   const missing = (d: (typeof incompleteWon)[number]) =>
     [!d.accountId && "account", !d.billingCompany && "company", !d.invoiceNo && "invoice no.", d._count.items === 0 && "products"].filter(Boolean).join(", ");
   const orphanTotal = orphanLines.reduce((s, g) => s + g._count, 0);
@@ -111,6 +124,7 @@ export default async function DataHealthPage() {
   const sections = [
     { key: "dup", label: "Same invoice recorded twice", count: duplicates.length },
     { key: "won", label: "Won sales with details missing", count: incompleteWon.length },
+    { key: "conv", label: "Converted after closing", count: lateConversions.length },
     { key: "orphan", label: "Sales Register lines with no deal", count: orphanTotal },
     { key: "code", label: "Accounts with no customer code", count: noCodeCount },
     { key: "quiet", label: `Leads with no activity for ${QUIET_DAYS}+ days`, count: quietLeads.length },
@@ -123,7 +137,7 @@ export default async function DataHealthPage() {
     <div>
       <PageHeader title="Data health" description="What needs fixing - each line links to the fix" />
       <div className="p-6 space-y-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
           {sections.map((s) => (
             <a
               key={s.key}
@@ -173,6 +187,50 @@ export default async function DataHealthPage() {
                 )}
               </tbody>
             </table>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 id="conv" className="text-sm font-semibold text-slate-900 scroll-mt-24">Deals converted after they closed</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Converted from the lead after the invoice date - the lead wasn&apos;t converted before the sale was billed. Their conversion date becomes{" "}
+            {DAYS_BEFORE_CLOSE} days before the invoice date. New ones are corrected automatically when marked won / lost; these are from before. Any deal&apos;s
+            date can also be changed on its Edit page (&quot;Converted to deal on&quot;).
+          </p>
+          {lateConversions.length === 0 ? (
+            <p className="text-sm text-emerald-700">None.</p>
+          ) : (
+            <div className="space-y-3">
+              <FixConversionButton count={lateConversions.length} />
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className={th}>Deal</th>
+                    <th className={th}>Sales person</th>
+                    <th className={th}>Converted</th>
+                    <th className={th}>Closed</th>
+                    <th className={th}>Becomes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lateConversions.slice(0, SHOW).map((d) => (
+                    <tr key={d.id} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-3">
+                        <Link href={`/deals/${d.id}?returnTo=/admin/data-health`} className={link}>
+                          {d.title}
+                        </Link>
+                        <span className="ml-1 text-xs text-slate-400">{d.stage === "WON" ? "won" : "lost"}</span>
+                      </td>
+                      <td className="py-1.5 pr-3 text-slate-600">{d.owner}</td>
+                      <td className="py-1.5 pr-3 text-rose-700">{formatDate(d.createdAt)}</td>
+                      <td className="py-1.5 pr-3 text-slate-600">{formatDate(d.closedAt)}</td>
+                      <td className="py-1.5 pr-3 text-emerald-700">{formatDate(new Date(Date.UTC(d.closedAt.getUTCFullYear(), d.closedAt.getUTCMonth(), d.closedAt.getUTCDate()) - DAYS_BEFORE_CLOSE * DAY))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {lateConversions.length > SHOW && <p className="text-xs text-slate-500">…and {lateConversions.length - SHOW} more (all fixed by the button).</p>}
+            </div>
           )}
         </Card>
 

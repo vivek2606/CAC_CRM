@@ -73,6 +73,11 @@ export function DealForm({
     expectedDeliveryDate?: string | null;
     invoiceNo?: string | null;
     createdAt?: string;
+    // Converted from a lead: the lead's own date (the deal's date is then
+    // when it was converted).
+    leadDate?: string | null;
+    // A closed deal: its date can't be later than its closing date.
+    latestCreatedAt?: string | null;
     billingCompany?: string | null;
     tags?: string[];
   };
@@ -311,15 +316,21 @@ export function DealForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Lead date</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">{defaultValues?.leadDate ? "Converted to deal on" : "Lead date"}</label>
           <input
             name="createdAt"
             type="date"
-            max={today}
+            max={defaultValues?.latestCreatedAt && defaultValues.latestCreatedAt < today ? defaultValues.latestCreatedAt : today}
             defaultValue={defaultValues?.createdAt ?? today}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          <p className="mt-1 text-xs text-slate-400">When the enquiry first came in - defaults to today, backdate it if you&apos;re entering the deal later. Counts from this date in the reports (sales cycle, monthly figures).</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {defaultValues?.leadDate
+              ? `When the lead (entered ${defaultValues.leadDate.split("-").reverse().join("/")}) became a deal.`
+              : "When the enquiry first came in - defaults to today, backdate it if you're entering the deal later."}
+            {defaultValues?.latestCreatedAt ? " It can't be after the deal closed." : ""} Counts from this date in the reports (sales cycle,
+            monthly figures).
+          </p>
         </div>
 
         <div>
