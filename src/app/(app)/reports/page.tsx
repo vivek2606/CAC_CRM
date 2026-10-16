@@ -1,893 +1,461 @@
 import Link from "next/link";
+import { requireBackOffice } from "@/lib/rbac";
+import { PageHeader, Card, StatCard } from "@/components/ui";
+import { formatCompactCurrency, formatDuration } from "@/lib/format";
+import { DEAL_STAGE_LABELS, LEAD_SOURCE_LABELS, END_USE_SEGMENT_LABELS, LOST_REASON_LABELS } from "@/lib/constants";
 import { getMonthlyPipeline, monthsBetween } from "@/lib/monthly-pipeline";
 import { MonthlyPipelineTables } from "@/components/monthly-pipeline-table";
-import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
-import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
-import { formatCompactCurrency, formatCurrency, formatDuration } from "@/lib/format";
-import {
-  OPEN_DEAL_STAGES,
-  CLOSED_LEAD_STATUSES,
-  DEAL_STAGES,
-  LEAD_SOURCES,
-  LEAD_SOURCE_LABELS,
-  LEAD_SOURCE_COLORS,
-  END_USE_SEGMENTS,
-  END_USE_SEGMENT_LABELS,
-  END_USE_SEGMENT_COLORS,
-} from "@/lib/constants";
-import { RepMonthHeatmap, type HeatmapRow } from "@/components/rep-month-heatmap";
-import type { TargetChartRow } from "@/components/target-chart";
-import { StageValueChart, type StageValueRow } from "./stage-value-chart";
-import { ProbabilityExposureChart } from "./probability-exposure-chart";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { getProjectBillings, sumByOwner } from "@/lib/project-billing";
-import { Wallet, TrendingUp, Percent, Users, Target, Building2, Gauge, Clock, Swords, Zap } from "lucide-react";
+import { getTeamReport, type RepScore } from "@/lib/team-report";
+import type { LeadSource, EndUseSegment, LostReason } from "@prisma/client";
+import { Wallet, TrendingUp, Target, Percent, Gauge, Timer, Repeat, Layers } from "lucide-react";
 
-function startOfQuarter(date: Date): Date {
-  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
-  return new Date(date.getFullYear(), quarterStartMonth, 1);
-}
+// Team Reports, laid out like the standard CRM sales reports: headline KPIs,
+// a scorecard per sales person, the monthly trend, pipeline health and
+// forecast, win / loss, and where the business comes from - all for one
+// period (whole months; the last 6 by default).
 
-// Only these are counted as "the CAC sales team" for individual rows -
-// everyone else (historical staff, other divisions, service) rolls up
-// into a single "Others" row instead of cluttering the report.
-const CAC_SALES_TITLE = "Sales Manager";
-
-// "YYYY-MM" -> first of that month (UTC), else the fallback.
 function parseMonthParam(raw: string | undefined, fallback: Date): Date {
   const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : fallback;
 }
 const monthInput = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+const monthLong = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const money = (v: number | null | undefined) => (v ? formatCompactCurrency(v) : "-");
+const num = (v: number | null | undefined) => (v ? String(v) : "-");
+const pctTxt = (v: number | null) => (v == null ? "-" : `${v}%`);
+const days = (v: number | null) => (v == null ? "-" : `${Math.round(v)} d`);
+const hrs = (v: number | null) => (v == null ? "-" : formatDuration(v * 3600000));
+
+// A thin bar behind a figure, scaled to the column's largest value.
+function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+  if (!(value > 0) || !(max > 0)) return null;
+  const w = Math.max(3, Math.round((value / max) * 100));
+  return (
+    <div className="mt-0.5 h-1 w-full rounded-full bg-slate-100">
+      <div className={`h-1 rounded-full ${color} transition-all duration-700`} style={{ width: `${w}%` }} />
+    </div>
+  );
+}
+
+function Section({ id, title, note, children, right }: { id?: string; title: string; note?: string; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <Card className="p-5">
+      <div id={id} className="mb-3 flex flex-wrap items-end justify-between gap-2 scroll-mt-24">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+          {note && <p className="text-xs text-slate-500">{note}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
+    </Card>
+  );
+}
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   await requireBackOffice();
   const params = await searchParams;
 
-  const qStart = startOfQuarter(new Date());
+  const now = new Date();
+  const nowMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  let to = parseMonthParam(params.to, nowMonth);
+  let from = parseMonthParam(params.from, new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth() - 5, 1)));
+  if (from > to) [from, to] = [to, from];
+  const monthList = monthsBetween(from, to).slice(-24);
+  from = monthList[0];
 
-  const allReps = await prisma.user.findMany({
-    where: { role: "SALES_MANAGER" },
-    orderBy: { name: "asc" },
-    include: {
-      deals: {
-        select: {
-          stage: true,
-          value: true,
-          probability: true,
-          closedAt: true,
-          createdAt: true,
-          lostReasonCategory: true,
-          sourceTxnNo: true,
-          endUseSegment: true,
-          competitorBrand: true,
-          activities: { select: { type: true, createdAt: true } },
-        },
-      },
-      leads: {
-        select: {
-          status: true,
-          source: true,
-          winProbability: true,
-          value: true,
-          createdAt: true,
-          convertedDeal: { select: { stage: true, createdAt: true, value: true } },
-          activities: { select: { type: true, createdAt: true } },
-        },
-      },
-      activities: { select: { status: true, type: true, callOutcome: true, createdAt: true } },
-    },
-  });
+  const r = await getTeamReport(from, to, now);
+  const pipeline = await getMonthlyPipeline(r.reps.map((x) => ({ id: x.id, name: x.name })), monthList, now);
+  const t = r.team;
+  const period = `${monthLong(from)} - ${monthLong(to)}`;
+  const wonChange = r.prevWonValue > 0 ? Math.round(((t.wonValue - r.prevWonValue) / r.prevWonValue) * 100) : null;
+  const coverage = r.thisMonthTarget > 0 ? t.openValue / r.thisMonthTarget : null;
+  const max = (k: keyof RepScore) => Math.max(0, ...r.reps.map((x) => Number(x[k] ?? 0)));
+  const achPct = (x: RepScore) => (x.target > 0 ? Math.round((x.achieved / x.target) * 100) : null);
+  const tone = (p: number | null) => (p == null ? "text-slate-400" : p >= 100 ? "text-emerald-700" : p >= 70 ? "text-amber-700" : "text-rose-700");
 
-  const salesReps = allReps.filter((r) => r.isActive && r.title === CAC_SALES_TITLE);
-  const others = allReps.filter((r) => !(r.isActive && r.title === CAC_SALES_TITLE));
-
-  function computeStats(id: string, name: string, avatarColor: string, group: typeof allReps) {
-    const deals = group.flatMap((r) => r.deals);
-    const leads = group.flatMap((r) => r.leads);
-    const activities = group.flatMap((r) => r.activities);
-
-    const openDeals = deals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
-    const wonDeals = deals.filter((d) => d.stage === "WON");
-    const wonThisQuarter = wonDeals.filter((d) => d.closedAt && d.closedAt >= qStart);
-    // Win rate only makes sense over deals actually run through the pipeline
-    // here - the historical Sales Register import is a billing export of
-    // completed sales only, with no "Lost" counterpart, so including it
-    // would always show ~100% regardless of real performance.
-    const pipelineWonDeals = wonDeals.filter((d) => d.sourceTxnNo == null);
-    const pipelineLostDeals = deals.filter((d) => d.stage === "LOST" && d.sourceTxnNo == null);
-    const closedCount = pipelineWonDeals.length + pipelineLostDeals.length;
-    const winRate = closedCount > 0 ? Math.round((pipelineWonDeals.length / closedCount) * 100) : 0;
-    const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status)).length;
-    const pendingActivities = activities.filter((a) => a.status === "PENDING").length;
-    const completedActivities = activities.filter((a) => a.status === "COMPLETED").length;
-
-    // Lead response time (HubSpot's time-to-first-contact): average time
-    // from a lead's creation to the earliest CALL/EMAIL/MEETING activity
-    // logged on it - only over leads that HAVE been contacted, so leads
-    // still sitting untouched don't drag this toward a misleadingly low
-    // "average". uncontactedLeads (still-open, never-contacted) is the
-    // companion figure that surfaces those separately.
-    const responseTimesMs: number[] = [];
-    for (const lead of leads) {
-      const contacted = lead.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
-      if (contacted.length === 0) continue;
-      const firstAt = contacted.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contacted[0].createdAt);
-      responseTimesMs.push(firstAt.getTime() - lead.createdAt.getTime());
-    }
-    const avgResponseHours =
-      responseTimesMs.length > 0
-        ? responseTimesMs.reduce((s, ms) => s + ms, 0) / responseTimesMs.length / (1000 * 60 * 60)
-        : null;
-    const uncontactedLeads = leads.filter(
-      (l) =>
-        !CLOSED_LEAD_STATUSES.includes(l.status) &&
-        !l.activities.some((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING")
-    ).length;
-
-    // Deal response time - the same time-to-first-contact idea, but sourced
-    // from the Deal itself rather than a Lead: for a capital-goods business
-    // where enquiries mostly land directly as a Deal (leads are rare), THIS
-    // is the number that actually reflects "how fast did we respond to the
-    // enquiry," not the Lead-based figure above.
-    const dealResponseTimesMs: number[] = [];
-    for (const deal of deals) {
-      const contacted = deal.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
-      if (contacted.length === 0) continue;
-      const firstAt = contacted.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contacted[0].createdAt);
-      dealResponseTimesMs.push(firstAt.getTime() - deal.createdAt.getTime());
-    }
-    const avgDealResponseHours =
-      dealResponseTimesMs.length > 0
-        ? dealResponseTimesMs.reduce((s, ms) => s + ms, 0) / dealResponseTimesMs.length / (1000 * 60 * 60)
-        : null;
-    const uncontactedDeals = deals.filter(
-      (d) =>
-        OPEN_DEAL_STAGES.includes(d.stage) &&
-        !d.activities.some((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING")
-    ).length;
-
-    // Activity leaderboard + call connect rate, this quarter only - all-time
-    // volume would be swamped by whatever historical activity happens to
-    // exist and wouldn't reflect current performance.
-    const activitiesThisQuarter = activities.filter((a) => a.createdAt >= qStart);
-    const callsThisQuarter = activitiesThisQuarter.filter((a) => a.type === "CALL");
-    const callsWithOutcome = callsThisQuarter.filter((a) => a.callOutcome != null);
-    const connectedCalls = callsWithOutcome.filter((a) => a.callOutcome === "CONNECTED").length;
-    const connectRate = callsWithOutcome.length > 0 ? Math.round((connectedCalls / callsWithOutcome.length) * 100) : null;
-    const activityTypeCounts = {
-      CALL: callsThisQuarter.length,
-      EMAIL: activitiesThisQuarter.filter((a) => a.type === "EMAIL").length,
-      MEETING: activitiesThisQuarter.filter((a) => a.type === "MEETING").length,
-      TASK: activitiesThisQuarter.filter((a) => a.type === "TASK").length,
-    };
-
-    return {
-      id,
-      name,
-      avatarColor,
-      openValue: openDeals.reduce((s, d) => s + d.value, 0),
-      // Weighted forecast: each open deal's value x its own win probability
-      // - HubSpot's Deal Forecast approach, so two reps with the same raw
-      // pipeline don't look identical if one's mostly Negotiation and the
-      // other's mostly fresh Qualification.
-      weightedOpenValue: openDeals.reduce((s, d) => s + d.value * (d.probability / 100), 0),
-      openCount: openDeals.length,
-      wonQuarterValue: wonThisQuarter.reduce((s, d) => s + d.value, 0),
-      // Imported returns (negative-value Won entries) net into the value
-      // above but aren't deals won.
-      wonQuarterCount: wonThisQuarter.filter((d) => d.value > 0).length,
-      winRate,
-      activeLeads,
-      pendingActivities,
-      completedActivities,
-      avgResponseHours,
-      respondedLeadsCount: responseTimesMs.length,
-      totalResponseHours: responseTimesMs.reduce((s, ms) => s + ms, 0) / (1000 * 60 * 60),
-      uncontactedLeads,
-      avgDealResponseHours,
-      respondedDealsCount: dealResponseTimesMs.length,
-      totalDealResponseHours: dealResponseTimesMs.reduce((s, ms) => s + ms, 0) / (1000 * 60 * 60),
-      uncontactedDeals,
-      connectRate,
-      activityTypeCounts,
-    };
-  }
-
-  const repStats = salesReps.map((rep) => computeStats(rep.id, rep.name, rep.avatarColor, [rep]));
-  const othersStats =
-    others.length > 0 ? computeStats("others", "Others", "#94a3b8", others) : null;
-
-  // Headline team stats reflect only the current 6-person CAC sales team,
-  // not the historical/other-division data folded into "Others".
-  const teamOpenValue = repStats.reduce((s, r) => s + r.openValue, 0);
-  const teamWeightedOpenValue = repStats.reduce((s, r) => s + r.weightedOpenValue, 0);
-  const teamWonQuarter = repStats.reduce((s, r) => s + r.wonQuarterValue, 0);
-  const teamAvgWinRate =
-    repStats.length > 0 ? Math.round(repStats.reduce((s, r) => s + r.winRate, 0) / repStats.length) : 0;
-  // Weighted (not average-of-averages) so a rep with one 2-day-old response
-  // doesn't skew the team figure as much as a rep with fifty logged responses.
-  const teamRespondedLeadsCount = repStats.reduce((s, r) => s + r.respondedLeadsCount, 0);
-  const teamAvgResponseHours =
-    teamRespondedLeadsCount > 0
-      ? repStats.reduce((s, r) => s + r.totalResponseHours, 0) / teamRespondedLeadsCount
-      : null;
-  const teamUncontactedLeads = repStats.reduce((s, r) => s + r.uncontactedLeads, 0);
-  const teamRespondedDealsCount = repStats.reduce((s, r) => s + r.respondedDealsCount, 0);
-  const teamAvgDealResponseHours =
-    teamRespondedDealsCount > 0
-      ? repStats.reduce((s, r) => s + r.totalDealResponseHours, 0) / teamRespondedDealsCount
-      : null;
-  const teamUncontactedDeals = repStats.reduce((s, r) => s + r.uncontactedDeals, 0);
-
-  const tableRows = othersStats ? [...repStats, othersStats] : repStats;
-
-  // Rep x month heatmap: each active rep's Won value for the last 6
-  // calendar months, so a stretch of hot or cold months per rep is
-  // visible at a glance - the quarter comparison chart above can't show
-  // that shape since it only has one "won" number per rep.
-  const HEATMAP_MONTHS = 6;
-  const heatmapNow = new Date();
-  const heatmapMonthKeys = Array.from({ length: HEATMAP_MONTHS }, (_, i) => {
-    const d = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() - (HEATMAP_MONTHS - 1 - i), 1));
-    return { key: `${d.getUTCFullYear()}-${d.getUTCMonth()}`, label: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) };
-  });
-  const heatmapData: HeatmapRow[] = salesReps.map((rep) => {
-    const byMonth = new Map<string, number>();
-    for (const deal of rep.deals) {
-      if (deal.stage !== "WON" || !deal.closedAt) continue;
-      const key = `${deal.closedAt.getUTCFullYear()}-${deal.closedAt.getUTCMonth()}`;
-      byMonth.set(key, (byMonth.get(key) ?? 0) + deal.value);
-    }
-    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
-  });
-  const heatmapTotalRow: HeatmapRow = {
-    repName: "Total",
-    values: heatmapMonthKeys.map((_, i) => heatmapData.reduce((s, r) => s + r.values[i], 0)),
+  const scoreCols: { label: string; key: string; title?: string; cell: (x: RepScore) => React.ReactNode; csv: (x: RepScore) => string | number; group: string }[] = [
+    { group: "Target", label: "Target", key: "target", cell: (x) => money(x.target), csv: (x) => Math.round(x.target) },
+    { group: "Target", label: "Achieved", key: "achieved", title: "Won deals + project billing", cell: (x) => money(x.achieved), csv: (x) => Math.round(x.achieved) },
+    { group: "Target", label: "%", key: "ach", cell: (x) => <span className={`font-semibold ${tone(achPct(x))}`}>{pctTxt(achPct(x))}</span>, csv: (x) => achPct(x) ?? "" },
+    { group: "Won", label: "Deals", key: "wonCount", cell: (x) => num(x.wonCount), csv: (x) => x.wonCount },
+    { group: "Won", label: "Value", key: "wonValue", cell: (x) => (<>{money(x.wonValue)}<Bar value={x.wonValue} max={max("wonValue")} color="bg-emerald-400" /></>), csv: (x) => Math.round(x.wonValue) },
+    { group: "Won", label: "Win rate", key: "winRate", title: "Won ÷ (won + lost), deals closed in the CRM", cell: (x) => pctTxt(x.winRate), csv: (x) => x.winRate ?? "" },
+    { group: "Won", label: "Avg deal", key: "avgDeal", cell: (x) => money(x.avgDeal), csv: (x) => Math.round(x.avgDeal ?? 0) },
+    { group: "Pipeline (now)", label: "Open", key: "openCount", cell: (x) => num(x.openCount), csv: (x) => x.openCount },
+    { group: "Pipeline (now)", label: "Value", key: "openValue", cell: (x) => (<>{money(x.openValue)}<Bar value={x.openValue} max={max("openValue")} color="bg-sky-400" /></>), csv: (x) => Math.round(x.openValue) },
+    { group: "Pipeline (now)", label: "Weighted", key: "weighted", title: "Value × win probability", cell: (x) => money(x.weighted), csv: (x) => Math.round(x.weighted) },
+    { group: "Pipeline (now)", label: "Overdue", key: "overdue", title: "Past expected close", cell: (x) => <span className={x.overdue ? "text-rose-700 font-semibold" : ""}>{num(x.overdue)}</span>, csv: (x) => x.overdue },
+    { group: "Pipeline (now)", label: "Stale", key: "stale", title: "No activity for 14+ days", cell: (x) => <span className={x.stale ? "text-amber-700 font-semibold" : ""}>{num(x.stale)}</span>, csv: (x) => x.stale },
+    { group: "Leads", label: "New", key: "newLeads", cell: (x) => num(x.newLeads), csv: (x) => x.newLeads },
+    { group: "Leads", label: "→ Deal", key: "convRate", title: "Converted to a deal", cell: (x) => (x.newLeads ? `${x.converted} · ${pctTxt(x.convRate)}` : "-"), csv: (x) => x.convRate ?? "" },
+    { group: "Speed", label: "Cycle", key: "cycleDays", title: "Deal created → won", cell: (x) => days(x.cycleDays), csv: (x) => (x.cycleDays == null ? "" : Math.round(x.cycleDays)) },
+    { group: "Speed", label: "Response", key: "responseHrs", title: "Deal created → first call / email / meeting", cell: (x) => hrs(x.responseHrs), csv: (x) => (x.responseHrs == null ? "" : Math.round(x.responseHrs * 10) / 10) },
+    { group: "Activity", label: "Calls", key: "calls", cell: (x) => num(x.calls), csv: (x) => x.calls },
+    { group: "Activity", label: "Meet", key: "meetings", cell: (x) => num(x.meetings), csv: (x) => x.meetings },
+    { group: "Activity", label: "Connect", key: "connectRate", title: "Calls that reached Connected", cell: (x) => pctTxt(x.connectRate), csv: (x) => x.connectRate ?? "" },
+    { group: "Activity", label: "New a/c", key: "newAccounts", title: "Accounts with their first won deal in the period", cell: (x) => num(x.newAccounts), csv: (x) => x.newAccounts },
+  ];
+  const groups = scoreCols.reduce<{ name: string; span: number }[]>((acc, c) => {
+    const last = acc.at(-1);
+    if (last && last.name === c.group) last.span++;
+    else acc.push({ name: c.group, span: 1 });
+    return acc;
+  }, []);
+  const groupTint: Record<string, string> = {
+    Target: "bg-violet-100 text-violet-800",
+    Won: "bg-emerald-100 text-emerald-800",
+    "Pipeline (now)": "bg-sky-100 text-sky-800",
+    Leads: "bg-amber-100 text-amber-800",
+    Speed: "bg-rose-100 text-rose-800",
+    Activity: "bg-slate-200 text-slate-700",
   };
 
-  // Target vs Achievement, this calendar month - Target.month is an exact
-  // UTC first-of-month DateTime (see /targets), computed separately from
-  // qStart above since that one isn't guaranteed UTC-aligned and an exact
-  // match is required to look targets up.
-  const targetMonth = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth(), 1));
-  const targetMonthEnd = new Date(Date.UTC(heatmapNow.getUTCFullYear(), heatmapNow.getUTCMonth() + 1, 1));
-
-  const [targets, newAccountsRaw, projectsForTargets] = await Promise.all([
-    prisma.target.findMany({ where: { userId: { in: salesReps.map((r) => r.id) }, month: targetMonth } }),
-    // No date filter - filtered in JS below for both the quarter stat and
-    // the 6-month heatmap, so one query covers both instead of fetching
-    // twice with slightly different windows.
-    prisma.account.findMany({
-      where: { ownerId: { in: salesReps.map((r) => r.id) } },
-      select: {
-        ownerId: true,
-        deals: { select: { stage: true, closedAt: true } },
-      },
-    }),
-    // Project & Service billing counts toward target achievement too.
-    getProjectBillings({ in: salesReps.map((r) => r.id) }, targetMonth, targetMonthEnd),
-  ]);
-  const projectByUserId = sumByOwner(projectsForTargets);
-  const targetByUserId = new Map(targets.map((t) => [t.userId, t.targetValue]));
-  const targetRows: TargetChartRow[] = salesReps.map((rep) => {
-    const wonThisMonth = rep.deals
-      .filter((d) => d.stage === "WON" && d.closedAt && d.closedAt >= targetMonth && d.closedAt < targetMonthEnd)
-      .reduce((s, d) => s + d.value, 0);
-    return {
-      name: rep.name.split(" ")[0],
-      target: targetByUserId.get(rep.id) ?? 0,
-      actual: wonThisMonth + (projectByUserId.get(rep.id) ?? 0),
-    };
-  });
-  const totalTarget = targetRows.reduce((s, r) => s + r.target, 0);
-  const totalActualForTarget = targetRows.reduce((s, r) => s + r.actual, 0);
-
-  // New accounts opened, per rep per month = the customer code first used to
-  // close a deal in that month, i.e. each account counts exactly once, in
-  // whichever month its first Won deal closed. Account.createdAt is NOT
-  // used for this: an account first brought in by the historical Sales
-  // Register import gets createdAt = whenever that import batch happened to
-  // run, not the real-world date it became a customer - which is what
-  // produced nonsense spikes (dozens of "new" accounts landing in whatever
-  // month an import was run). An account with no Won deal yet has never
-  // "opened" and isn't counted in any month.
-  function firstWonDate(account: (typeof newAccountsRaw)[number]): Date | null {
-    const wonClosedDates = account.deals.filter((d) => d.stage === "WON" && d.closedAt).map((d) => d.closedAt!.getTime());
-    return wonClosedDates.length > 0 ? new Date(Math.min(...wonClosedDates)) : null;
-  }
-  const newAccounts = newAccountsRaw
-    .map((a) => ({ ownerId: a.ownerId, openedAt: firstWonDate(a) }))
-    .filter((a): a is { ownerId: string; openedAt: Date } => a.openedAt != null);
-
-  // Same 6-month window as the Won-value heatmap above, so the two read as
-  // companion views.
-  const newAccountsHeatmapData: HeatmapRow[] = salesReps.map((rep) => {
-    const byMonth = new Map<string, number>();
-    for (const a of newAccounts) {
-      if (a.ownerId !== rep.id) continue;
-      const key = `${a.openedAt.getUTCFullYear()}-${a.openedAt.getUTCMonth()}`;
-      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
-    }
-    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
-  });
-  const newAccountsTotalRow: HeatmapRow = {
-    repName: "Total",
-    values: heatmapMonthKeys.map((_, i) => newAccountsHeatmapData.reduce((s, r) => s + r.values[i], 0)),
-  };
-  const newAccountsThisQuarter = newAccounts.filter((a) => a.openedAt >= qStart).length;
-
-  // Leads converted to a deal, per rep per month - per business priority
-  // (deals over leads), the one lead-centric metric that still earns a
-  // place here, since it tracks flow INTO the deal pipeline rather than
-  // lead volume for its own sake. Bucketed by the resulting deal's
-  // createdAt (when the conversion actually happened), same 6-month
-  // window as the heatmaps above.
-  const leadConversionHeatmapData: HeatmapRow[] = salesReps.map((rep) => {
-    const byMonth = new Map<string, number>();
-    for (const lead of rep.leads) {
-      if (!lead.convertedDeal) continue;
-      const key = `${lead.convertedDeal.createdAt.getUTCFullYear()}-${lead.convertedDeal.createdAt.getUTCMonth()}`;
-      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
-    }
-    return { repName: rep.name.split(" ")[0], values: heatmapMonthKeys.map((m) => byMonth.get(m.key) ?? 0) };
-  });
-  const leadConversionTotalRow: HeatmapRow = {
-    repName: "Total",
-    values: heatmapMonthKeys.map((_, i) => leadConversionHeatmapData.reduce((s, r) => s + r.values[i], 0)),
-  };
-
-  // The 4 analytics sections below are scoped to the 6 active CAC reps only,
-  // same as the headline stats above - mixing in "Others" would swamp them
-  // with 1800+ historical bulk-imported deals from before this system
-  // existed. That alone isn't enough, though: a current rep's OWN historical
-  // Sales Register import also carries sourceTxnNo and is excluded here too,
-  // for the same reason win rate above excludes it - it's years of
-  // already-completed billing records with no real stage history, so
-  // counting it into a stage-shaped chart (or a funnel that's cumulative
-  // through every earlier stage) balloons every bucket with lifetime
-  // revenue that was never actually run through this pipeline.
-  const teamDeals = salesReps.flatMap((r) => r.deals).filter((d) => d.sourceTxnNo == null);
-  const teamLeads = salesReps.flatMap((r) => r.leads);
-
-  // 1. Deal value by stage, per rep (stacked bar).
-  const stageValueData: StageValueRow[] = salesReps.map((rep) => {
-    const row = { name: rep.name.split(" ")[0] } as StageValueRow;
-    for (const stage of DEAL_STAGES) row[stage] = 0;
-    for (const deal of rep.deals) {
-      if (deal.sourceTxnNo != null) continue;
-      row[deal.stage] += deal.value;
-    }
-    return row;
-  });
-
-  // 2. Pipeline/leads exposure by win probability (open deals + open leads,
-  // bucketed to the nearest 10% so both fields line up on one scale).
-  function roundToBucket(pct: number): number {
-    return Math.min(100, Math.max(10, Math.round(pct / 10) * 10));
-  }
-  const openTeamDeals = teamDeals.filter((d) => OPEN_DEAL_STAGES.includes(d.stage));
-  const openTeamLeads = teamLeads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
-
-  // Sales velocity: (open deal count x avg deal value x win rate) / avg
-  // sales cycle days - one number in Naira/day that answers "is the
-  // pipeline actually moving," distinct from its size (raw open value,
-  // above) or its quality (weighted forecast) alone.
-  const wonTeamDealsAllTime = teamDeals.filter((d) => d.stage === "WON");
-  const avgDealValue =
-    wonTeamDealsAllTime.length > 0
-      ? wonTeamDealsAllTime.reduce((s, d) => s + d.value, 0) / wonTeamDealsAllTime.length
-      : 0;
-  const avgSalesCycleDays =
-    wonTeamDealsAllTime.length > 0
-      ? wonTeamDealsAllTime.reduce(
-          (s, d) => s + (d.closedAt ? (d.closedAt.getTime() - d.createdAt.getTime()) / 86400000 : 0),
-          0
-        ) / wonTeamDealsAllTime.length
-      : null;
-  const salesVelocity =
-    avgSalesCycleDays && avgSalesCycleDays > 0
-      ? (openTeamDeals.length * avgDealValue * (teamAvgWinRate / 100)) / avgSalesCycleDays
-      : null;
-  const probabilityExposureData = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((bucket) => ({
-    bucket: `${bucket}%`,
-    pipeline: openTeamDeals.filter((d) => roundToBucket(d.probability) === bucket).reduce((s, d) => s + d.value, 0),
-    leads: openTeamLeads
-      .filter((l) => l.winProbability != null && l.winProbability === bucket)
-      .reduce((s, l) => s + (l.value ?? 0), 0),
-  }));
-
-  // 2b. Activity leaderboard + call connect rate, this quarter - calls,
-  // emails, and meetings each rep has actually logged, plus how often a
-  // logged call reaches Connected. Distinct from the pending/completed task
-  // counts in the summary table below, which don't break down by type or
-  // outcome.
-
-
-  // 4. Lead source ROI - conversion rate and actual closed-won revenue by
-  // source, not just raw lead volume/potential value, so "which source
-  // brings in real business" is visible rather than just "which source
-  // brings in the most enquiries."
-  const sourceGroups = new Map<string, { count: number; converted: number; wonRevenue: number }>();
-  for (const lead of teamLeads) {
-    const g = sourceGroups.get(lead.source) ?? { count: 0, converted: 0, wonRevenue: 0 };
-    g.count += 1;
-    if (lead.convertedDeal) {
-      g.converted += 1;
-      if (lead.convertedDeal.stage === "WON") g.wonRevenue += lead.convertedDeal.value;
-    }
-    sourceGroups.set(lead.source, g);
-  }
-  const leadSourceData = LEAD_SOURCES.map((source) => {
-    const g = sourceGroups.get(source) ?? { count: 0, converted: 0, wonRevenue: 0 };
-    return {
-      source: LEAD_SOURCE_LABELS[source],
-      count: g.count,
-      conversionRate: g.count > 0 ? Math.round((g.converted / g.count) * 100) : 0,
-      wonRevenue: g.wonRevenue,
-      fill: LEAD_SOURCE_COLORS[source],
-    };
-  })
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.wonRevenue - a.wonRevenue);
-
-
-  // 5b. Win rate against each named competitor - competitorBrand is
-  // freeform text (not an enum, since reps type whatever's actually being
-  // quoted against), so group by a normalized (trimmed, lowercased) key and
-  // display using the first-seen casing, rather than fragmenting "Daikin" /
-  // "daikin" into separate rows.
-  const competitorGroups = new Map<string, { label: string; won: number; lost: number }>();
-  for (const deal of teamDeals) {
-    if (!deal.competitorBrand || (deal.stage !== "WON" && deal.stage !== "LOST")) continue;
-    const key = deal.competitorBrand.trim().toLowerCase();
-    if (!key) continue;
-    const g = competitorGroups.get(key) ?? { label: deal.competitorBrand.trim(), won: 0, lost: 0 };
-    if (deal.stage === "WON") g.won += 1;
-    else g.lost += 1;
-    competitorGroups.set(key, g);
-  }
-  const competitorData = Array.from(competitorGroups.values())
-    .map((g) => ({ ...g, total: g.won + g.lost, winRate: Math.round((g.won / (g.won + g.lost)) * 100) }))
-    .sort((a, b) => b.total - a.total);
-
-  // 6. End-use segment distribution - fed by the deal-form field, so only
-  // deals entered (or edited) since this feature shipped will have a value here.
-  const segmentGroups = new Map<string, { count: number; value: number }>();
-  for (const deal of teamDeals) {
-    if (!deal.endUseSegment) continue;
-    const g = segmentGroups.get(deal.endUseSegment) ?? { count: 0, value: 0 };
-    g.count += 1;
-    g.value += deal.value;
-    segmentGroups.set(deal.endUseSegment, g);
-  }
-  const segmentData = END_USE_SEGMENTS.map((segment) => ({
-    label: END_USE_SEGMENT_LABELS[segment],
-    count: segmentGroups.get(segment)?.count ?? 0,
-    value: segmentGroups.get(segment)?.value ?? 0,
-    fill: END_USE_SEGMENT_COLORS[segment],
-  }))
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  // Open / converted / won per sales person and month - the last 6 months
-  // by default, or the range picked (up to 24 months).
-  const nowMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
-  let pipelineTo = parseMonthParam(params.to, nowMonth);
-  let pipelineFrom = parseMonthParam(params.from, new Date(Date.UTC(pipelineTo.getUTCFullYear(), pipelineTo.getUTCMonth() - 5, 1)));
-  if (pipelineFrom > pipelineTo) [pipelineFrom, pipelineTo] = [pipelineTo, pipelineFrom];
-  const pipelineMonths = monthsBetween(pipelineFrom, pipelineTo).slice(-24);
-  pipelineFrom = pipelineMonths[0];
-  const pipeline = await getMonthlyPipeline(salesReps.map((r) => ({ id: r.id, name: r.name })), pipelineMonths);
-  const monthLabelLong = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  const stageMax = Math.max(0, ...r.stages.map((s) => s.value));
+  const lostTotal = r.lostReasons.reduce((s, x) => s + x.count, 0);
+  const th = "px-2 py-1.5 font-medium";
 
   return (
     <div>
       <PageHeader
         title="Team Reports"
-        description={`Performance across your ${salesReps.length} CAC sales managers${othersStats ? " (everyone else rolled into Others)" : ""}`}
+        description={`${r.reps.length} sales people · ${period}`}
         action={
-          <Link href="/reports/sales-register" className="text-sm text-indigo-600 hover:text-indigo-700">
-            Sales by category (Sales Register) →
-          </Link>
+          <form action="/reports" className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-slate-500">
+              From
+              <input type="month" name="from" defaultValue={monthInput(from)} className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs text-slate-500">
+              To
+              <input type="month" name="to" defaultValue={monthInput(to)} className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" />
+            </label>
+            <button type="submit" className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white">
+              Show
+            </button>
+            {(params.from || params.to) && (
+              <Link href="/reports" className="pb-1.5 text-sm text-slate-500 hover:text-slate-800">
+                Last 6 months
+              </Link>
+            )}
+          </form>
         }
       />
 
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="p-6 space-y-5">
+        {/* Headline KPIs */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <StatCard
-            label="Team Open Pipeline"
-            value={formatCompactCurrency(teamOpenValue)}
-            icon={<Wallet className="h-4 w-4 text-indigo-500" />}
-            accent="indigo"
-          />
-          <StatCard
-            label="Weighted Forecast"
-            value={formatCompactCurrency(teamWeightedOpenValue)}
-            sub={
-              teamOpenValue > 0 ? `${Math.round((teamWeightedOpenValue / teamOpenValue) * 100)}% of raw pipeline` : undefined
-            }
-            icon={<Gauge className="h-4 w-4 text-rose-500" />}
-            accent="rose"
-          />
-          <StatCard
-            label="Won This Quarter"
-            value={formatCompactCurrency(teamWonQuarter)}
-            icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+            label="Won revenue"
+            value={formatCompactCurrency(t.wonValue)}
+            sub={`${t.wonCount} deals${wonChange == null ? "" : ` · ${wonChange >= 0 ? "▲" : "▼"} ${Math.abs(wonChange)}% vs previous ${r.months} mo`}`}
+            icon={<TrendingUp className="h-4 w-4 text-emerald-600" />}
             accent="emerald"
           />
           <StatCard
-            label="Avg. Win Rate"
-            value={`${teamAvgWinRate}%`}
-            icon={<Percent className="h-4 w-4 text-amber-500" />}
-            accent="amber"
-          />
-          <StatCard
-            label="Team Size"
-            value={String(salesReps.length)}
-            sub="CAC sales managers"
-            icon={<Users className="h-4 w-4 text-sky-500" />}
-            accent="sky"
-          />
-          <StatCard
-            label="Dept. Target Achievement"
-            value={totalTarget > 0 ? `${Math.round((totalActualForTarget / totalTarget) * 100)}%` : "—"}
-            sub={`${formatCompactCurrency(totalActualForTarget)} of ${formatCompactCurrency(totalTarget)}, this month`}
-            icon={<Target className="h-4 w-4 text-violet-500" />}
+            label="Target achievement"
+            value={pctTxt(achPct(t))}
+            sub={`${formatCompactCurrency(t.achieved)} of ${t.target ? formatCompactCurrency(t.target) : "no target"} (incl. project billing)`}
+            icon={<Target className="h-4 w-4 text-violet-600" />}
             accent="violet"
           />
           <StatCard
-            label="New Accounts (Qtr)"
-            value={String(newAccountsThisQuarter)}
-            sub="Opened across the team"
-            icon={<Building2 className="h-4 w-4 text-rose-500" />}
-            accent="rose"
-          />
-          <StatCard
-            label="Avg. Response Time"
-            value={teamAvgResponseHours == null ? "—" : formatDuration(teamAvgResponseHours * 60 * 60 * 1000)}
-            sub={
-              teamUncontactedLeads > 0
-                ? `${teamUncontactedLeads} lead${teamUncontactedLeads === 1 ? "" : "s"} never contacted`
-                : "Lead created → first contact"
-            }
-            icon={<Clock className="h-4 w-4 text-sky-500" />}
+            label="Open pipeline"
+            value={formatCompactCurrency(t.openValue)}
+            sub={`${t.openCount} deals · weighted ${formatCompactCurrency(t.weighted)}`}
+            icon={<Wallet className="h-4 w-4 text-sky-600" />}
             accent="sky"
           />
           <StatCard
-            label="Sales Velocity"
-            value={salesVelocity == null ? "—" : `${formatCompactCurrency(salesVelocity)}/day`}
-            sub="Open pipeline × win rate ÷ cycle length"
-            icon={<Zap className="h-4 w-4 text-amber-500" />}
-            accent="amber"
+            label="Pipeline coverage"
+            value={coverage == null ? "-" : `${coverage.toFixed(1)}×`}
+            sub={coverage == null ? "No target this month" : "Open pipeline ÷ this month's target (3× is healthy)"}
+            icon={<Layers className="h-4 w-4 text-indigo-600" />}
+            accent="indigo"
+          />
+          <StatCard label="Win rate" value={pctTxt(t.winRate)} sub="Won ÷ closed, CRM deals in the period" icon={<Percent className="h-4 w-4 text-amber-600" />} accent="amber" />
+          <StatCard label="Avg deal size" value={money(t.avgDeal)} sub="Won deals in the period" icon={<Gauge className="h-4 w-4 text-rose-600" />} accent="rose" />
+          <StatCard
+            label="Avg sales cycle"
+            value={days(t.cycleDays)}
+            sub={`Response to new deals: ${hrs(t.responseHrs)}`}
+            icon={<Timer className="h-4 w-4 text-sky-600" />}
+            accent="sky"
           />
           <StatCard
-            label="Deal Response Time"
-            value={teamAvgDealResponseHours == null ? "—" : formatDuration(teamAvgDealResponseHours * 60 * 60 * 1000)}
-            sub={
-              teamUncontactedDeals > 0
-                ? `${teamUncontactedDeals} open deal${teamUncontactedDeals === 1 ? "" : "s"} never contacted`
-                : "Enquiry created → first contact"
-            }
-            icon={<Clock className="h-4 w-4 text-indigo-500" />}
+            label="Lead → deal conversion"
+            value={pctTxt(t.convRate)}
+            sub={`${t.converted} of ${t.newLeads} new leads`}
+            icon={<Repeat className="h-4 w-4 text-indigo-600" />}
             accent="indigo"
           />
         </div>
 
-        <Card className="p-5">
-          <div id="pipeline-months" className="flex flex-wrap items-end justify-between gap-3 scroll-mt-24">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Open, converted and won deals by sales person, per month</h2>
-              <p className="text-xs text-slate-500">
-                {monthLabelLong(pipelineFrom)} - {monthLabelLong(pipelineTo)}. Open = still open at the month&apos;s end (this month: now).
-              </p>
-            </div>
-            <form action="/reports#pipeline-months" className="flex flex-wrap items-end gap-2">
-              <label className="text-xs text-slate-500">
-                From
-                <input type="month" name="from" defaultValue={monthInput(pipelineFrom)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
-              </label>
-              <label className="text-xs text-slate-500">
-                To
-                <input type="month" name="to" defaultValue={monthInput(pipelineTo)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
-              </label>
-              <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
-                Show
-              </button>
-              {(params.from || params.to) && (
-                <Link href="/reports#pipeline-months" className="pb-1.5 text-sm text-slate-500 hover:text-slate-800">
-                  Last 6 months
-                </Link>
-              )}
-            </form>
-          </div>
-          <div className="mt-4">
-            <MonthlyPipelineTables data={pipeline} />
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">New accounts opened, last 6 months</h2>
-          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s new accounts per month - spot who&apos;s prospecting and when.</p>
-          {newAccountsHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No new accounts in the last 6 months yet.</p>
-          ) : (
-            <RepMonthHeatmap
-              months={heatmapMonthKeys.map((m) => m.label)}
-              data={newAccountsHeatmapData}
-              formatValue={(v) => String(v)}
-              legendLabel="More new accounts"
-              totalRow={newAccountsTotalRow}
+        {/* Scorecard */}
+        <Section
+          title="Sales scorecard"
+          note={`Per sales person for ${period}; pipeline columns are as of now. Hover a heading for how it's worked out.`}
+          right={
+            <ExportCsvButton
+              filename={`sales-scorecard-${monthInput(from)}-${monthInput(to)}.csv`}
+              headers={["Sales person", ...scoreCols.map((c) => `${c.group} - ${c.label}`)]}
+              rows={[...r.reps, t].map((x) => [x.name, ...scoreCols.map((c) => c.csv(x))])}
             />
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Leads converted to deals, last 6 months</h2>
-          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s lead-to-deal conversions per month.</p>
-          {leadConversionHeatmapData.every((r) => r.values.every((v) => v === 0)) ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No leads converted in the last 6 months yet.</p>
-          ) : (
-            <RepMonthHeatmap
-              months={heatmapMonthKeys.map((m) => m.label)}
-              data={leadConversionHeatmapData}
-              formatValue={(v) => String(v)}
-              legendLabel="More conversions"
-              totalRow={leadConversionTotalRow}
-            />
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Monthly won-value heatmap</h2>
-          <p className="text-xs text-slate-400 mb-3">Each rep&apos;s Won deal value over the last 6 months - spot hot and cold streaks at a glance.</p>
-          {heatmapData.every((r) => r.values.every((v) => v === 0)) ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No won deals in the last 6 months yet.</p>
-          ) : (
-            <RepMonthHeatmap months={heatmapMonthKeys.map((m) => m.label)} data={heatmapData} totalRow={heatmapTotalRow} />
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Deal value by status, per sales manager</h2>
-          <p className="text-xs text-slate-400 mb-3">Every deal each rep owns, split out by pipeline stage.</p>
-          <StageValueChart data={stageValueData} />
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Exposure by winning probability</h2>
-          <p className="text-xs text-slate-400 mb-3">Open deal and lead value, bucketed by confidence of closing.</p>
-          <ProbabilityExposureChart data={probabilityExposureData} />
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-semibold text-slate-900">Activity this quarter</h2>
-            <Link href="/leads?tab=activities" className="text-xs text-indigo-600 hover:text-indigo-700">
-              Activities →
-            </Link>
-          </div>
-          <p className="text-xs text-slate-400 mb-3">Calls, emails, meetings and tasks each sales person logged, and how often a call reached Connected.</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          }
+        >
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-xs" data-own-head>
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                  <th className="font-medium">Sales person</th>
-                  <th className="font-medium text-right">Calls</th>
-                  <th className="font-medium text-right">Emails</th>
-                  <th className="font-medium text-right">Meetings</th>
-                  <th className="font-medium text-right">Tasks</th>
-                  <th className="font-medium text-right">Call connect rate</th>
+                <tr className="text-[10px] uppercase tracking-wide">
+                  <th className="bg-slate-100" />
+                  {groups.map((g) => (
+                    <th key={g.name} colSpan={g.span} className={`px-2 py-1 text-center font-semibold ${groupTint[g.name]}`}>
+                      {g.name}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                  <th className={`${th} text-left`}>Sales person</th>
+                  {scoreCols.map((c) => (
+                    <th key={c.key} title={c.title} className={`${th} text-right whitespace-nowrap ${c.title ? "cursor-help underline decoration-dotted" : ""}`}>
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {repStats.map((r) => (
-                  <tr key={r.id} className="text-slate-700">
-                    <td>
-                      <Link href={`/deals?owner=${r.id}`} className="font-medium text-indigo-700 hover:underline">
-                        {r.name}
+              <tbody>
+                {r.reps.map((x) => (
+                  <tr key={x.id} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      <Link href={`/deals?owner=${x.id}`} className="font-medium text-indigo-700 hover:underline">
+                        {x.name}
                       </Link>
                     </td>
-                    <td className="text-right tabular-nums">{r.activityTypeCounts.CALL}</td>
-                    <td className="text-right tabular-nums">{r.activityTypeCounts.EMAIL}</td>
-                    <td className="text-right tabular-nums">{r.activityTypeCounts.MEETING}</td>
-                    <td className="text-right tabular-nums">{r.activityTypeCounts.TASK}</td>
-                    <td className="text-right tabular-nums">{r.connectRate == null ? "—" : `${r.connectRate}%`}</td>
+                    {scoreCols.map((c) => (
+                      <td key={c.key} className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+                        {c.cell(x)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-300 bg-indigo-50 font-semibold text-indigo-950">
+                  <td className="px-2 py-1.5">Team</td>
+                  {scoreCols.map((c) => (
+                    <td key={c.key} className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+                      {c.key === "wonValue" ? money(t.wonValue) : c.key === "openValue" ? money(t.openValue) : c.cell(t)}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Section>
+
+        {/* Monthly trend */}
+        <Section id="pipeline-months" title="Monthly trend" note="Open deals at each month's end (this month: now), deals converted from a lead, and deals won - per sales person.">
+          <MonthlyPipelineTables data={pipeline} filename={`deals-by-month-${monthInput(from)}-${monthInput(to)}.csv`} />
+        </Section>
+
+        {/* Pipeline health + forecast */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <Section title="Pipeline by stage" note="Open deals now - how much sits where, how long, and how many are past their expected close.">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide">
+                  <th className={th}>Stage</th>
+                  <th className={`${th} text-right`}>Deals</th>
+                  <th className={`${th} text-right`}>Value</th>
+                  <th className={`${th} text-right`}>Weighted</th>
+                  <th className={`${th} text-right`} title="Days since the deal entered this stage">
+                    Avg age
+                  </th>
+                  <th className={`${th} text-right`}>Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.stages.map((s) => (
+                  <tr key={s.stage} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5 font-medium text-slate-800">{DEAL_STAGE_LABELS[s.stage]}</td>
+                    <td className="px-2 py-1.5 text-right">{num(s.count)}</td>
+                    <td className="px-2 py-1.5 text-right w-40">
+                      {money(s.value)}
+                      <Bar value={s.value} max={stageMax} color="bg-gradient-to-r from-sky-400 to-indigo-500" />
+                    </td>
+                    <td className="px-2 py-1.5 text-right">{money(s.weighted)}</td>
+                    <td className={`px-2 py-1.5 text-right ${s.avgAgeDays != null && s.avgAgeDays > 30 ? "text-amber-700 font-semibold" : ""}`}>{days(s.avgAgeDays)}</td>
+                    <td className={`px-2 py-1.5 text-right ${s.overdue ? "text-rose-700 font-semibold" : ""}`}>{num(s.overdue)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </Card>
+          </Section>
 
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Lead source ROI</h2>
-          <p className="text-xs text-slate-400 mb-3">Leads, conversion to deals and won revenue by where the lead came from. Lost reasons: Sales Register &gt; Won &amp; lost deals.</p>
-          {leadSourceData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No leads yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="font-medium">Source</th>
-                    <th className="font-medium text-right">Leads</th>
-                    <th className="font-medium text-right">Converted to deal</th>
-                    <th className="font-medium text-right">Won revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {leadSourceData.map((r) => (
-                    <tr key={r.source} className="text-slate-700">
-                      <td className="font-medium text-slate-800">{r.source}</td>
-                      <td className="text-right tabular-nums">{r.count}</td>
-                      <td className="text-right tabular-nums">{r.conversionRate}%</td>
-                      <td className="text-right tabular-nums">{formatCurrency(r.wonRevenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Swords className="h-3.5 w-3.5 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-900">Win rate vs. competitors</h2>
-          </div>
-          <p className="text-xs text-slate-400 mb-3">
-            Closed deals where a competing brand was also being quoted (Deal form&apos;s Competing brand field).
-          </p>
-          {competitorData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No closed deals with a competing brand recorded yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="font-medium">Competing brand</th>
-                    <th className="font-medium text-right">Won</th>
-                    <th className="font-medium text-right">Lost</th>
-                    <th className="font-medium text-right">Win rate</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {competitorData.map((c) => (
-                    <tr key={c.label} className="text-slate-700">
-                      <td className="font-medium text-slate-800">{c.label}</td>
-                      <td className="text-right tabular-nums">{c.won}</td>
-                      <td className="text-right tabular-nums">{c.lost}</td>
-                      <td className={`text-right tabular-nums font-medium ${c.winRate >= 50 ? "text-emerald-700" : "text-rose-700"}`}>{c.winRate}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Deals by end-use segment</h2>
-          <p className="text-xs text-slate-400 mb-3">Which verticals the pipeline is coming from.</p>
-          {segmentData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-6 text-center">No deals with a segment set yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="font-medium">Segment</th>
-                    <th className="font-medium text-right">Deals</th>
-                    <th className="font-medium text-right">Value</th>
-                    <th className="font-medium text-right">Share of deals</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {segmentData.map((r) => (
-                    <tr key={r.label} className="text-slate-700">
-                      <td className="font-medium text-slate-800">{r.label}</td>
-                      <td className="text-right tabular-nums">{r.count}</td>
-                      <td className="text-right tabular-nums">{formatCurrency(r.value)}</td>
-                      <td className="text-right tabular-nums">{Math.round((r.count / segmentData.reduce((t, x) => t + x.count, 0)) * 100)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-end p-4 pb-0">
-            <ExportCsvButton
-              filename="team-reports-summary.csv"
-              headers={[
-                "Sales Manager",
-                "Open Pipeline",
-                "Open Deals",
-                "Won (Qtr)",
-                "Won Count (Qtr)",
-                "Win Rate %",
-                "Active Leads",
-                "Tasks Pending",
-                "Tasks Done",
-                "Avg. Lead Response Time (hrs)",
-                "Avg. Deal Response Time (hrs)",
-                "Call Connect Rate %",
-              ]}
-              rows={tableRows.map((r) => [
-                r.name,
-                r.openValue,
-                r.openCount,
-                r.wonQuarterValue,
-                r.wonQuarterCount,
-                r.winRate,
-                r.activeLeads,
-                r.pendingActivities,
-                r.completedActivities,
-                r.avgResponseHours == null ? "" : Math.round(r.avgResponseHours * 10) / 10,
-                r.avgDealResponseHours == null ? "" : Math.round(r.avgDealResponseHours * 10) / 10,
-                r.connectRate ?? "",
-              ])}
-            />
-          </div>
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-                <th className="px-4 py-3 font-medium">Sales Manager</th>
-                <th className="px-4 py-3 font-medium">Open Pipeline</th>
-                <th className="px-4 py-3 font-medium">Won (Qtr)</th>
-                <th className="px-4 py-3 font-medium">Win Rate</th>
-                <th className="px-4 py-3 font-medium">Active Leads</th>
-                <th className="px-4 py-3 font-medium">Tasks Pending</th>
-                <th className="px-4 py-3 font-medium">Tasks Done</th>
-                <th className="px-4 py-3 font-medium">Deal Response</th>
-                <th className="px-4 py-3 font-medium">Connect Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {tableRows.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`hover:bg-slate-50 transition-colors ${r.id === "others" ? "bg-slate-50/60" : ""}`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar name={r.name} color={r.avatarColor} size={7} />
-                      {r.id === "others" ? (
-                        <span className="font-medium text-slate-500 italic">{r.name}</span>
-                      ) : (
-                        <Link href={`/deals?owner=${r.id}`} className="font-medium text-indigo-700 hover:underline">
-                          {r.name}
-                        </Link>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {r.id === "others" ? formatCurrency(r.openValue) : <Link href={`/deals?owner=${r.id}`} className="hover:text-indigo-700 hover:underline">{formatCurrency(r.openValue)}</Link>}{" "}
-                    <span className="text-slate-400">({r.openCount})</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {r.id === "others" ? formatCurrency(r.wonQuarterValue) : <Link href={`/deals/closed?stage=WON&owner=${r.id}`} className="hover:text-indigo-700 hover:underline">{formatCurrency(r.wonQuarterValue)}</Link>}{" "}
-                    <span className="text-slate-400">({r.wonQuarterCount})</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{r.winRate}%</td>
-                  <td className="px-4 py-3 text-slate-700">{r.activeLeads}</td>
-                  <td className="px-4 py-3 text-slate-700">{r.pendingActivities}</td>
-                  <td className="px-4 py-3 text-slate-700">{r.completedActivities}</td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {r.avgDealResponseHours == null ? "—" : formatDuration(r.avgDealResponseHours * 60 * 60 * 1000)}
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{r.connectRate == null ? "—" : `${r.connectRate}%`}</td>
+          <Section title="Forecast" note="Open deals by expected close month. Commit = deals 70%+ likely; weighted = value × probability.">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide">
+                  <th className={th}>Expected close</th>
+                  <th className={`${th} text-right`}>Deals</th>
+                  <th className={`${th} text-right`}>Pipeline</th>
+                  <th className={`${th} text-right`}>Weighted</th>
+                  <th className={`${th} text-right`}>Commit</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </Card>
+              </thead>
+              <tbody>
+                {r.forecast.map((f, i) => (
+                  <tr key={f.label} className={`border-t border-slate-100 ${i === 0 && f.count ? "bg-rose-50/60" : ""}`}>
+                    <td className={`px-2 py-1.5 font-medium ${i === 0 ? "text-rose-700" : "text-slate-800"}`}>{f.label}</td>
+                    <td className="px-2 py-1.5 text-right">{num(f.count)}</td>
+                    <td className="px-2 py-1.5 text-right">{money(f.value)}</td>
+                    <td className="px-2 py-1.5 text-right">{money(f.weighted)}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold text-emerald-700">{money(f.commit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Section>
+        </div>
+
+        {/* Win / loss */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <Section title="Why deals are lost" note={`${lostTotal} deal${lostTotal === 1 ? "" : "s"} lost in the period.`}>
+            {r.lostReasons.length === 0 ? (
+              <p className="py-4 text-center text-sm text-slate-500">No lost deals in the period.</p>
+            ) : (
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide">
+                      <th className={th}>Reason</th>
+                      <th className={`${th} text-right`}>Deals</th>
+                      <th className={`${th} text-right`}>Share</th>
+                      <th className={`${th} text-right`}>Value lost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.lostReasons.map((x) => (
+                      <tr key={x.reason} className="border-t border-slate-100">
+                        <td className="px-2 py-1.5 text-slate-800">{x.reason === "UNSPECIFIED" ? "Not recorded" : LOST_REASON_LABELS[x.reason as LostReason]}</td>
+                        <td className="px-2 py-1.5 text-right">{x.count}</td>
+                        <td className="px-2 py-1.5 text-right w-32">
+                          {Math.round((x.count / lostTotal) * 100)}%
+                          <Bar value={x.count} max={lostTotal} color="bg-rose-400" />
+                        </td>
+                        <td className="px-2 py-1.5 text-right">{money(x.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {r.lostTo.length > 0 && (
+                  <p className="mt-3 text-xs text-slate-600">
+                    <span className="font-semibold">Lost to:</span> {r.lostTo.map((b) => `${b.brand} (${b.count})`).join(", ")}
+                  </p>
+                )}
+              </>
+            )}
+          </Section>
+
+          <Section title="Win rate against competitors" note="Closed deals where a competing brand was quoted.">
+            {r.competitors.length === 0 ? (
+              <p className="py-4 text-center text-sm text-slate-500">No closed deals with a competing brand recorded in the period.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide">
+                    <th className={th}>Competing brand</th>
+                    <th className={`${th} text-right`}>Won</th>
+                    <th className={`${th} text-right`}>Lost</th>
+                    <th className={`${th} text-right`}>Win rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.competitors.map((c) => (
+                    <tr key={c.label} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 font-medium text-slate-800">{c.label}</td>
+                      <td className="px-2 py-1.5 text-right text-emerald-700">{c.won}</td>
+                      <td className="px-2 py-1.5 text-right text-rose-700">{c.lost}</td>
+                      <td className={`px-2 py-1.5 text-right font-semibold ${c.winRate >= 50 ? "text-emerald-700" : "text-rose-700"}`}>{c.winRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Section>
+        </div>
+
+        {/* Where the business comes from */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <Section title="Lead sources" note="Leads created in the period - how many became deals, and the revenue won from them.">
+            {r.sources.length === 0 ? (
+              <p className="py-4 text-center text-sm text-slate-500">No leads in the period.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide">
+                    <th className={th}>Source</th>
+                    <th className={`${th} text-right`}>Leads</th>
+                    <th className={`${th} text-right`}>→ Deal</th>
+                    <th className={`${th} text-right`}>Won revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.sources.map((s) => (
+                    <tr key={s.source} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 font-medium text-slate-800">{LEAD_SOURCE_LABELS[s.source as LeadSource] ?? s.source}</td>
+                      <td className="px-2 py-1.5 text-right">{s.leads}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        {s.converted} · {s.convRate}%
+                      </td>
+                      <td className="px-2 py-1.5 text-right">{money(s.wonValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Section>
+
+          <Section title="End-use segments" note="Open pipeline now, and deals won in the period, by vertical.">
+            {r.segments.length === 0 ? (
+              <p className="py-4 text-center text-sm text-slate-500">No deals with a segment set.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide">
+                    <th className={th}>Segment</th>
+                    <th className={`${th} text-right`}>Open</th>
+                    <th className={`${th} text-right`}>Open value</th>
+                    <th className={`${th} text-right`}>Won</th>
+                    <th className={`${th} text-right`}>Won value</th>
+                    <th className={`${th} text-right`}>Win rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.segments.map((s) => (
+                    <tr key={s.segment} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 font-medium text-slate-800">{END_USE_SEGMENT_LABELS[s.segment as EndUseSegment] ?? s.segment}</td>
+                      <td className="px-2 py-1.5 text-right">{num(s.open)}</td>
+                      <td className="px-2 py-1.5 text-right">{money(s.openValue)}</td>
+                      <td className="px-2 py-1.5 text-right">{num(s.won)}</td>
+                      <td className="px-2 py-1.5 text-right">{money(s.wonValue)}</td>
+                      <td className="px-2 py-1.5 text-right">{pctTxt(s.winRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Section>
+        </div>
+
+        <p className="text-xs text-slate-500">
+          Revenue counts every won deal, Sales Register imports included. Win rate, sales cycle, stages and forecast use deals run through the CRM only (the
+          register has no lost deals or stage history).{" "}
+          <Link href="/reports/sales-register" className="text-indigo-600 hover:text-indigo-700">
+            Sales by product category → Sales Register
+          </Link>
+        </p>
       </div>
     </div>
   );
