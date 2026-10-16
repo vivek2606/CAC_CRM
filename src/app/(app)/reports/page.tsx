@@ -4,7 +4,7 @@ import { PageHeader, Card, StatCard } from "@/components/ui";
 import { formatCompactCurrency, formatDuration } from "@/lib/format";
 import { DEAL_STAGE_LABELS, LEAD_SOURCE_LABELS, END_USE_SEGMENT_LABELS, LOST_REASON_LABELS } from "@/lib/constants";
 import { getMonthlyPipeline, monthsBetween } from "@/lib/monthly-pipeline";
-import { MonthlyPipelineTables } from "@/components/monthly-pipeline-table";
+import { TeamMonthlyTrend, RepMonthMatrix } from "@/components/monthly-pipeline-table";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { getTeamReport, type RepScore } from "@/lib/team-report";
 import type { LeadSource, EndUseSegment, LostReason } from "@prisma/client";
@@ -255,9 +255,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </Section>
 
         {/* Monthly trend */}
-        <Section id="pipeline-months" title="Monthly trend" note="Open deals at each month's end (this month: now), deals converted from a lead, and deals won - per sales person.">
-          <MonthlyPipelineTables data={pipeline} filename={`deals-by-month-${monthInput(from)}-${monthInput(to)}.csv`} />
-        </Section>
+        <div className="grid grid-cols-1 gap-5 2xl:grid-cols-5">
+          <div className="2xl:col-span-3">
+            <Section id="pipeline-months" title="Monthly trend" note="The team, month by month - is the pipeline filling, converting and closing?">
+              <TeamMonthlyTrend data={pipeline} />
+            </Section>
+          </div>
+          <div className="2xl:col-span-2">
+            <Section title="Won value by sales person" note="Darker = more won that month - who's consistent, who's had a hot or cold month.">
+              <RepMonthMatrix data={pipeline} />
+            </Section>
+          </div>
+        </div>
 
         {/* Pipeline health + forecast */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

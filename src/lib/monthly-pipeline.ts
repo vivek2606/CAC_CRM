@@ -4,7 +4,16 @@ import { prisma } from "@/lib/prisma";
 // the current month), deals converted from a lead in the month, and deals
 // won in the month (by closing / invoice date).
 
-export type PipelineCell = { open: number; openValue: number; converted: number; won: number; wonValue: number };
+export type PipelineCell = {
+  open: number;
+  openValue: number;
+  converted: number;
+  won: number;
+  wonValue: number;
+  // CRM deals closed in the month (for win rate): won and lost.
+  wonCrm: number;
+  lost: number;
+};
 export type MonthlyPipeline = {
   months: Date[]; // first-of-month, oldest first
   people: { id: string; name: string }[];
@@ -32,7 +41,7 @@ export async function getMonthlyPipeline(people: { id: string; name: string }[],
     const start = m.getTime();
     const end = Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1);
     const current = start === thisMonth;
-    for (const p of people) cells.set(`${p.id}|${i}`, { open: 0, openValue: 0, converted: 0, won: 0, wonValue: 0 });
+    for (const p of people) cells.set(`${p.id}|${i}`, { open: 0, openValue: 0, converted: 0, won: 0, wonValue: 0, wonCrm: 0, lost: 0 });
     for (const d of deals) {
       const c = cells.get(`${d.ownerId}|${i}`);
       if (!c) continue;
@@ -51,10 +60,13 @@ export async function getMonthlyPipeline(people: { id: string; name: string }[],
         }
       }
       if (d.sourceLead && created >= start && created < end) c.converted++;
-      if (d.stage === "WON" && d.closedAt && d.closedAt.getTime() >= start && d.closedAt.getTime() < end) {
-        c.won++;
+      const closedIn = d.closedAt != null && d.closedAt.getTime() >= start && d.closedAt.getTime() < end;
+      if (d.stage === "WON" && closedIn) {
+        if (d.value > 0) c.won++;
         c.wonValue += d.value;
+        if (d.sourceTxnNo == null) c.wonCrm++;
       }
+      if (d.stage === "LOST" && closedIn && d.sourceTxnNo == null) c.lost++;
     }
   });
   return { months, people, cells };
