@@ -495,38 +495,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       />
 
       <div className="p-6 space-y-6">
-        <Card className="p-5">
-          <div id="pipeline-months" className="flex flex-wrap items-end justify-between gap-3 scroll-mt-24">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Open, converted and won deals by sales person, per month</h2>
-              <p className="text-xs text-slate-500">
-                {monthLabelLong(pipelineFrom)} - {monthLabelLong(pipelineTo)}. Open = still open at the month&apos;s end (this month: now).
-              </p>
-            </div>
-            <form action="/reports#pipeline-months" className="flex flex-wrap items-end gap-2">
-              <label className="text-xs text-slate-500">
-                From
-                <input type="month" name="from" defaultValue={monthInput(pipelineFrom)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
-              </label>
-              <label className="text-xs text-slate-500">
-                To
-                <input type="month" name="to" defaultValue={monthInput(pipelineTo)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
-              </label>
-              <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
-                Show
-              </button>
-              {(params.from || params.to) && (
-                <Link href="/reports#pipeline-months" className="pb-1.5 text-sm text-slate-500 hover:text-slate-800">
-                  Last 6 months
-                </Link>
-              )}
-            </form>
-          </div>
-          <div className="mt-4">
-            <MonthlyPipelineTables data={pipeline} />
-          </div>
-        </Card>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Team Open Pipeline"
@@ -606,6 +574,38 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             accent="indigo"
           />
         </div>
+
+        <Card className="p-5">
+          <div id="pipeline-months" className="flex flex-wrap items-end justify-between gap-3 scroll-mt-24">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Open, converted and won deals by sales person, per month</h2>
+              <p className="text-xs text-slate-500">
+                {monthLabelLong(pipelineFrom)} - {monthLabelLong(pipelineTo)}. Open = still open at the month&apos;s end (this month: now).
+              </p>
+            </div>
+            <form action="/reports#pipeline-months" className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-slate-500">
+                From
+                <input type="month" name="from" defaultValue={monthInput(pipelineFrom)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+              </label>
+              <label className="text-xs text-slate-500">
+                To
+                <input type="month" name="to" defaultValue={monthInput(pipelineTo)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+              </label>
+              <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
+                Show
+              </button>
+              {(params.from || params.to) && (
+                <Link href="/reports#pipeline-months" className="pb-1.5 text-sm text-slate-500 hover:text-slate-800">
+                  Last 6 months
+                </Link>
+              )}
+            </form>
+          </div>
+          <div className="mt-4">
+            <MonthlyPipelineTables data={pipeline} />
+          </div>
+        </Card>
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-1">New accounts opened, last 6 months</h2>
