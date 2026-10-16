@@ -89,7 +89,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     { group: "Pipeline (now)", label: "Overdue", key: "overdue", title: "Past expected close", cell: (x) => <span className={x.overdue ? "text-rose-700 font-semibold" : ""}>{num(x.overdue)}</span>, csv: (x) => x.overdue },
     { group: "Pipeline (now)", label: "Stale", key: "stale", title: "No activity for 14+ days", cell: (x) => <span className={x.stale ? "text-amber-700 font-semibold" : ""}>{num(x.stale)}</span>, csv: (x) => x.stale },
     { group: "Leads", label: "New", key: "newLeads", cell: (x) => num(x.newLeads), csv: (x) => x.newLeads },
-    { group: "Leads", label: "→ Deal", key: "convRate", title: "Converted to a deal", cell: (x) => (x.newLeads ? `${x.converted} · ${pctTxt(x.convRate)}` : "-"), csv: (x) => x.convRate ?? "" },
+    { group: "Leads", label: "→ Deal", key: "converted", title: "Deals converted from a lead in the period (as in the monthly trend)", cell: (x) => num(x.converted), csv: (x) => x.converted },
+    { group: "Leads", label: "Conv %", key: "convRate", title: "Of the leads created in the period, the share converted to a deal", cell: (x) => pctTxt(x.convRate), csv: (x) => x.convRate ?? "" },
     { group: "Speed", label: "Cycle", key: "cycleDays", title: "Deal created → won", cell: (x) => days(x.cycleDays), csv: (x) => (x.cycleDays == null ? "" : Math.round(x.cycleDays)) },
     { group: "Speed", label: "Response", key: "responseHrs", title: "Deal created → first call / email / meeting", cell: (x) => hrs(x.responseHrs), csv: (x) => (x.responseHrs == null ? "" : Math.round(x.responseHrs * 10) / 10) },
     { group: "Activity", label: "Calls", key: "calls", cell: (x) => num(x.calls), csv: (x) => x.calls },
@@ -184,9 +185,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             accent="sky"
           />
           <StatCard
-            label="Lead → deal conversion"
-            value={pctTxt(t.convRate)}
-            sub={`${t.converted} of ${t.newLeads} new leads`}
+            label="Converted from lead"
+            value={String(t.converted)}
+            sub={`deals in the period · ${t.newLeads} new lead${t.newLeads === 1 ? "" : "s"}${t.newLeads ? `, ${pctTxt(t.convRate)} of them converted` : ""}`}
             icon={<Repeat className="h-4 w-4 text-indigo-600" />}
             accent="indigo"
           />

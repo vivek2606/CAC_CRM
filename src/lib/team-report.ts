@@ -27,7 +27,10 @@ export type RepScore = {
   overdue: number; // open, past expected close
   stale: number; // open, no activity for STALE_DAYS
   newLeads: number;
+  // Deals converted from a lead in the period (whenever the lead came in) -
+  // the same count as the monthly trend.
   converted: number;
+  // Of the leads created in the period, the share converted so far.
   convRate: number | null;
   cycleDays: number | null;
   responseHrs: number | null;
@@ -91,6 +94,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
         competitorBrand: true,
         endUseSegment: true,
         activities: { select: { type: true, createdAt: true }, orderBy: { createdAt: "asc" } },
+        sourceLead: { select: { id: true } },
       },
     }),
     prisma.lead.findMany({
@@ -135,7 +139,8 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
     const positive = won.filter((d) => d.value > 0);
     const projectValue = projects.filter(owner).reduce((s, p) => s + p.value, 0);
     const wonCrm = closed.filter((d) => d.stage === "WON").length;
-    const converted = l.filter((x) => x.convertedDeal).length;
+    const converted = deals.filter(owner).filter((d) => d.sourceLead && inRange(d.createdAt)).length;
+    const newLeadsConverted = l.filter((x) => x.convertedDeal).length;
     const newAccounts = accounts.filter(owner).filter((a) => {
       const first = a.deals.map((x) => x.closedAt?.getTime() ?? Infinity).reduce((m, t) => Math.min(m, t), Infinity);
       return first !== Infinity && first >= start.getTime() && first < end.getTime();
@@ -156,7 +161,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
       stale: o.filter((d) => (lastActivity(d) ?? d.createdAt) < staleBefore).length,
       newLeads: l.length,
       converted,
-      convRate: pct(converted, l.length),
+      convRate: pct(newLeadsConverted, l.length),
       cycleDays: avg(cycles),
       responseHrs: avg(responses),
       calls: calls.length,
