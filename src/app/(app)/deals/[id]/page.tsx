@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HistoryCard } from "@/components/history-card";
 import { NOT_DRAFT } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -463,6 +464,8 @@ export default async function DealDetailPage({
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Stakeholders</h2>
             <StakeholdersSection dealId={deal.id} stakeholders={deal.contactRoles} contacts={contacts} />
           </Card>
+
+          {user.role === "HEAD" && <HistoryCard entity="deal" id={deal.id} />}
         </div>
         </div>
       </div>

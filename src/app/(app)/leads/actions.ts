@@ -1,5 +1,6 @@
 "use server";
 
+import { audit, auditDiff, fmtDate, fmtMoney, userNames } from "@/lib/audit";
 import { dealOwnerProblem } from "@/lib/deal-owner";
 import { z } from "zod";
 import { redirect } from "next/navigation";
@@ -7,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { binLead } from "@/lib/recycle-bin";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
-import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
 import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe } from "@prisma/client";
 
@@ -110,6 +111,10 @@ export async function createLead(formData: FormData) {
       createdAt: toEntryDate(parsed.createdAt),
     },
   });
+  {
+    const owner = (await userNames([ownerId])).get(ownerId);
+    await audit("lead", lead.id, user.id, "created", `For ${owner ?? "-"}${parsed.value ? ` - ${fmtMoney(parsed.value)}` : ""}.`);
+  }
 
   revalidatePath("/leads");
   redirect(`/leads/${lead.id}`);
@@ -152,6 +157,29 @@ export async function updateLead(leadId: string, formData: FormData) {
       createdAt: toEntryDate(parsed.createdAt),
     },
   });
+  // History: what this edit changed.
+  {
+    const after = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } });
+    const names = await userNames([existing.ownerId, after.ownerId]);
+    const changes = auditDiff(existing as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, [
+      { key: "title", label: "Name" },
+      { key: "ownerId", label: "Sales person", fmt: (v) => names.get(String(v)) ?? String(v) },
+      { key: "status", label: "Status" },
+      { key: "customerName", label: "Customer" },
+      { key: "company", label: "Company" },
+      { key: "phone", label: "Phone" },
+      { key: "email", label: "Email" },
+      { key: "value", label: "Value", fmt: fmtMoney },
+      { key: "winProbability", label: "Win probability %" },
+      { key: "source", label: "Source" },
+      { key: "equipmentType", label: "Equipment" },
+      { key: "expectedPurchaseTimeframe", label: "Purchase timeframe" },
+      { key: "accountId", label: "Account" },
+      { key: "createdAt", label: "Lead date", fmt: fmtDate },
+      { key: "notes", label: "Notes" },
+    ]);
+    if (changes.length) await audit("lead", leadId, user.id, "edited", changes.join("; "));
+  }
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
@@ -167,6 +195,7 @@ export async function deleteLead(leadId: string) {
 
   // Into the recycle bin first (restorable for 30 days).
   await binLead(leadId, user.id);
+  await audit("lead", leadId, user.id, "deleted", `${existing.title} - moved to the recycle bin.`);
   await prisma.lead.delete({ where: { id: leadId } });
   revalidatePath("/leads");
   redirect("/leads");
@@ -175,7 +204,7 @@ export async function deleteLead(leadId: string) {
 // Shared by every conversion path (single, probability-based bulk, and
 // manual checkbox-selected bulk) - creates the Deal with everything carried
 // over from the Lead, and marks the Lead Converted.
-async function createDealFromLead(lead: Lead, stage: DealStage, probability: number) {
+async function createDealFromLead(lead: Lead, stage: DealStage, probability: number, byUserId: string) {
   const ownerProblem = await dealOwnerProblem(lead.ownerId);
   if (ownerProblem) throw new Error(`${ownerProblem} (Assign the lead to a sales person first.)`);
   const deal = await prisma.deal.create({
@@ -200,6 +229,8 @@ async function createDealFromLead(lead: Lead, stage: DealStage, probability: num
     where: { id: lead.id },
     data: { status: "CONVERTED", convertedDealId: deal.id },
   });
+  await audit("lead", lead.id, byUserId, "converted", `Converted to a deal (${DEAL_STAGE_LABELS[stage]}).`);
+  await audit("deal", deal.id, byUserId, "created", `Converted from the lead "${lead.title}".`);
 
   return deal;
 }
@@ -214,7 +245,7 @@ export async function convertLeadToDeal(leadId: string) {
     redirect(`/leads/${leadId}`);
   }
 
-  const deal = await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION);
+  const deal = await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION, user.id);
 
   revalidatePath("/leads");
   revalidatePath("/deals");
@@ -245,7 +276,7 @@ export async function bulkConvertSelectedLeads(leadIds: string[]): Promise<BulkC
       skipped++;
       continue;
     }
-    await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION);
+    await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION, user.id);
     converted++;
     totalValue += lead.value ?? 0;
   }

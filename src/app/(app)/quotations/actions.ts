@@ -1,5 +1,6 @@
 "use server";
 
+import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
@@ -130,6 +131,7 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
     select: { id: true },
   });
   await prisma.quotation.update({ where: { id: q.id }, data: { dealId: deal.id, ownerId: dealOwner } });
+  await audit("deal", deal.id, user.id, "created", `From quotation ${ref}.`);
   const filled = await applyQuoteToDeal(q.id, true);
   // Only custom lines (no products): the deal takes the quote's value (excl. VAT).
   if (filled.count === 0) {

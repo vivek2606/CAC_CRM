@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HistoryCard } from "@/components/history-card";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
@@ -229,6 +230,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{lead.notes}</p>
             </Card>
           )}
+
+          {user.role === "HEAD" && <HistoryCard entity="lead" id={lead.id} />}
         </div>
         </div>
       </div>

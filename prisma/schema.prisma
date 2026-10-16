@@ -147,6 +147,7 @@ model User {
   email         String    @unique
   passwordHash  String
   role          Role      @default(SALES_MANAGER)
+  auditLogs     AuditLog[] @relation("AuditUser")
   title         String?
   phone         String?
   avatarColor   String    @default("#6366f1")
@@ -777,3 +778,22 @@ model DeletedRecord {
 
   @@index([deletedAt])
 }
+
+// Who did what to a lead or deal, and when: created, edited (what changed),
+// stage / won / lost, invoices, products, reassigned, converted, deleted,
+// restored. Not linked to the record by a foreign key, so the history
+// outlives a deleted record.
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String   // "lead" | "deal"
+  entityId  String
+  action    String   // created / edited / stage / won / lost / converted / deleted / restored ...
+  details   String?
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation("AuditUser", fields: [userId], references: [id])
+
+  @@index([entity, entityId, createdAt])
+}
+

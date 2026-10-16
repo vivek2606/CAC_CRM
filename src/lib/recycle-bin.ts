@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
 // Recycle bin: before a deal or lead is deleted (or the imported leads are
@@ -164,6 +165,7 @@ export async function restoreRecord(id: string, restoredById: string): Promise<{
         await tx.note.create({ data: { body: "✎ Restored from the recycle bin.", authorId: restoredById, dealId: rec.recordId } });
         await tx.deletedRecord.delete({ where: { id: rec.id } });
       });
+      await audit("deal", rec.recordId, restoredById, "restored", "Restored from the recycle bin.");
       return { href: `/deals/${rec.recordId}` };
     }
     if (rec.kind === "leadBatch") {
@@ -197,6 +199,7 @@ export async function restoreRecord(id: string, restoredById: string): Promise<{
       if (s.noteIds.length) await tx.note.updateMany({ where: { id: { in: s.noteIds }, leadId: null }, data: { leadId: rec.recordId } });
       await tx.deletedRecord.delete({ where: { id: rec.id } });
     });
+    await audit("lead", rec.recordId, restoredById, "restored", "Restored from the recycle bin.");
     return { href: `/leads/${rec.recordId}` };
   } catch (e) {
     console.error("restoreRecord", e);

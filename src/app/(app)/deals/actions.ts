@@ -1,5 +1,6 @@
 "use server";
 
+import { audit, auditDiff, fmtDate, fmtMoney, userNames } from "@/lib/audit";
 import { keepConversionBeforeClose } from "@/lib/conversion-date";
 import { dealOwnerProblem } from "@/lib/deal-owner";
 import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
@@ -9,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
-import { STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
@@ -21,12 +22,9 @@ import { binDeal } from "@/lib/recycle-bin";
 // Change log: a note on the deal, by whoever made the change, for changes
 // to a won deal's invoice, company, account and products (shown on the
 // deal's timeline).
+// A change worth recording on a deal: into its history (seen by the Head).
 async function logDealChange(dealId: string, authorId: string, text: string) {
-  try {
-    await prisma.note.create({ data: { body: `✎ ${text}`, authorId, dealId } });
-  } catch (e) {
-    console.error("logDealChange", e);
-  }
+  await audit("deal", dealId, authorId, "edited", text);
 }
 const naira = (n: number) => `₦${n.toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
 
@@ -295,6 +293,10 @@ export async function createDeal(formData: FormData) {
     },
   });
   await syncDealValueFromItems(deal.id);
+  {
+    const owner = (await userNames([ownerId])).get(ownerId);
+    await audit("deal", deal.id, user.id, "created", `For ${owner ?? "-"} - ${DEAL_STAGE_LABELS[parsed.stage]}, ${fmtMoney(parsed.value)}${lineItems.length ? `, ${lineItems.length} product${lineItems.length === 1 ? "" : "s"}` : ""}.`);
+  }
   if (lineItems.length > 0) await notifyDiscountIfNeeded(deal.id);
   const wonError = await applySheetInvoices(deal.id, formData);
 
@@ -378,6 +380,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
   if (isClosed) await keepConversionBeforeClose(dealId);
   const convertedOn = (await prisma.deal.findUnique({ where: { id: dealId }, select: { createdAt: true } }))!.createdAt;
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, createdAt: { gt: convertedOn } }, data: { createdAt: convertedOn } });
+  let productsChanged = false;
   // Products edited in the form (sent whenever the form shows the editor).
   if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
     const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
@@ -385,6 +388,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
     const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
       rows.map((r) => `${r.productId}|${r.qty}|${Math.round(r.unitPrice * 100) / 100}`).sort().join(",");
     if (key(next) !== key(current)) {
+      productsChanged = true;
       if (existing.stage === "WON" && next.length === 0) throw new Error("A won deal needs at least one product billed.");
       if (existing.stage === "WON" && next.some((i) => i.unitPrice === 0)) throw new Error("Every product billed needs a basic rate (negative for a return).");
       await prisma.dealLineItem.deleteMany({ where: { dealId } });
@@ -395,20 +399,34 @@ export async function updateDeal(dealId: string, formData: FormData) {
   }
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
-  // Change log for a won deal: what changed in its sale.
-  if (existing.stage === "WON") {
-    const after = await prisma.deal.findUnique({
-      where: { id: dealId },
-      select: { invoiceNo: true, billingCompany: true, accountId: true, value: true, account: { select: { name: true } } },
-    });
-    if (after) {
-      const changes: string[] = [];
-      if (after.invoiceNo !== existing.invoiceNo) changes.push(`invoice no. ${existing.invoiceNo ?? "-"} → ${after.invoiceNo ?? "-"}`);
-      if (after.billingCompany !== existing.billingCompany) changes.push(`company ${existing.billingCompany ?? "not recorded"} → ${after.billingCompany ?? "not recorded"}`);
-      if (after.accountId !== existing.accountId) changes.push(`account → ${after.account?.name ?? "none"}`);
-      if (Math.abs(after.value - existing.value) >= 0.01) changes.push(`value ${naira(existing.value)} → ${naira(after.value)}`);
-      if (changes.length) await logDealChange(dealId, user.id, `Edited: ${changes.join("; ")}.`);
-    }
+  // History: what this edit changed.
+  {
+    const after = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
+    const [names, accounts] = await Promise.all([
+      userNames([existing.ownerId, after.ownerId]),
+      prisma.account.findMany({ where: { id: { in: [existing.accountId, after.accountId].filter((x): x is string => !!x) } }, select: { id: true, name: true } }),
+    ]);
+    const acc = new Map(accounts.map((a) => [a.id, a.name]));
+    const changes = auditDiff(existing as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, [
+      { key: "title", label: "Name" },
+      { key: "ownerId", label: "Sales person", fmt: (v) => names.get(String(v)) ?? String(v) },
+      { key: "stage", label: "Stage", fmt: (v) => DEAL_STAGE_LABELS[v as DealStage] ?? String(v) },
+      { key: "value", label: "Value", fmt: fmtMoney },
+      { key: "accountId", label: "Account", fmt: (v) => acc.get(String(v)) ?? String(v) },
+      { key: "customerName", label: "Customer" },
+      { key: "customerPhone", label: "Phone" },
+      { key: "expectedCloseDate", label: "Expected close", fmt: fmtDate },
+      { key: "createdAt", label: "Lead / conversion date", fmt: fmtDate },
+      { key: "closedAt", label: "Closed / invoice date", fmt: fmtDate },
+      { key: "invoiceNo", label: "Invoice no." },
+      { key: "billingCompany", label: "Company" },
+      { key: "paymentTerms", label: "Payment terms" },
+      { key: "expectedDeliveryDate", label: "Expected delivery", fmt: fmtDate },
+      { key: "equipmentType", label: "Equipment" },
+      { key: "competitorBrand", label: "Competitor" },
+    ]);
+    if (productsChanged) changes.push("products changed");
+    if (changes.length) await audit("deal", dealId, user.id, "edited", changes.join("; "));
   }
   const wonError = await applySheetInvoices(dealId, formData);
 
@@ -433,6 +451,7 @@ export async function deleteDeal(dealId: string, formData?: FormData) {
   // lines go with it (they'd otherwise stay counted with no deal), and the
   // lead it came from is open again.
   await binDeal(dealId, user.id);
+  await audit("deal", dealId, user.id, "deleted", `${existing.title} - moved to the recycle bin.`);
   await prisma.saleLineItem.deleteMany({ where: { dealId } });
   await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { convertedDealId: null, status: "QUALIFIED" } });
   await clearWonPlan(dealId);
@@ -551,6 +570,19 @@ async function setDealStage(
     },
   });
   if (isClosed) await keepConversionBeforeClose(dealId);
+  if (stage !== existing.stage) {
+    await audit(
+      "deal",
+      dealId,
+      user.id,
+      stage === "WON" ? "won" : stage === "LOST" ? "lost" : "stage",
+      stage === "WON"
+        ? `Marked Won - invoice ${invoiceNo?.trim()}, dated ${closedAtOverride}.`
+        : stage === "LOST"
+          ? `Marked Lost (${DEAL_STAGE_LABELS[existing.stage]} →)${lostReasonCategory ? ` - ${lostReasonCategory.replace(/_/g, " ").toLowerCase()}` : ""}${lostReasonNote ? `: ${lostReasonNote}` : ""}${lostToBrand ? `, bought ${lostToBrand}` : ""}.`
+          : `${DEAL_STAGE_LABELS[existing.stage]} → ${DEAL_STAGE_LABELS[stage]}.`,
+    );
+  }
   await syncSaleLineItemsForDeal(dealId);
 
   revalidatePath("/deals");
@@ -593,7 +625,7 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
   assertCanEditItems(user, deal.stage);
 
   const parsed = dealLineItemSchema.parse(Object.fromEntries(formData.entries()));
-  if (deal.stage === "WON") {
+  {
     const p = await prisma.product.findUnique({ where: { id: parsed.productId }, select: { model: true } });
     await logDealChange(dealId, user.id, `Product added: ${p?.model ?? "product"} - ${parsed.qty} x ${naira(parsed.unitPrice)}.`);
   }
@@ -616,7 +648,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   assertCanEditItems(user, deal.stage);
 
   const removed = await prisma.dealLineItem.delete({ where: { id: lineItemId }, include: { product: { select: { model: true } } } });
-  if (deal.stage === "WON") await logDealChange(dealId, user.id, `Product removed: ${removed.product.model} - ${removed.qty} x ${naira(removed.unitPrice)}.`);
+  await logDealChange(dealId, user.id, `Product removed: ${removed.product.model} - ${removed.qty} x ${naira(removed.unitPrice)}.`);
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
@@ -632,6 +664,7 @@ export async function approveDealDiscount(dealId: string) {
     where: { id: dealId },
     data: { discountApprovedAt: new Date(), discountApprovedById: head.id },
   });
+  await audit("deal", dealId, head.id, "edited", "Discount approved.");
   await notifyDiscountApproved(dealId);
 
   revalidatePath(`/deals/${dealId}`);
@@ -916,6 +949,7 @@ async function markDealWonImpl(dealId: string, invoices: WonInvoice[]) {
         items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
       },
     });
+    await audit("deal", copy.id, user.id, "created", `Further invoice ${inv.invoiceNo.trim()} of "${deal.title}" - its own won deal.`);
     if (alreadyWon) await recordWonInvoice(copy.id, inv.closedAt, inv.invoiceNo);
     else await setDealStage(copy.id, "WON", undefined, undefined, inv.closedAt, inv.invoiceNo.trim(), false);
   }
@@ -1064,6 +1098,7 @@ export async function linkDealAccount(dealId: string, input: AccountInput): Prom
   const accountId = acc.id;
 
   await prisma.deal.update({ where: { id: dealId }, data: { accountId } });
+  await audit("deal", dealId, user.id, "edited", `Account linked: ${acc.name}${"accountId" in input ? "" : " (new account)"}.`);
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, accountId: null }, data: { accountId } });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/deals");
