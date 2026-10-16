@@ -1,6 +1,6 @@
 import { formatCompactCurrency } from "@/lib/format";
 import type { MonthlyPipeline, PipelineCell } from "@/lib/monthly-pipeline";
-import { LineTrendChart, type LineSeries } from "@/components/line-trend-chart";
+import { ComboChart, type ComboSeries } from "@/components/combo-chart";
 
 const sum = (cells: PipelineCell[]): PipelineCell =>
   cells.reduce(
@@ -28,16 +28,17 @@ export function TeamMonthlyTrend({ data }: { data: MonthlyPipeline }) {
   const num = (n: number) => (n ? String(n) : "-");
   const td = "px-3 py-1.5 text-right tabular-nums whitespace-nowrap";
   const short = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
-  const chartData = rows.map(({ m, c }) => ({ label: short(m), won: c.wonValue, open: c.openValue, wonDeals: c.won, converted: c.converted }));
-  const series: LineSeries[] = [
-    { key: "won", name: "Won value", color: "#10b981", kind: "money" },
-    { key: "open", name: "Open pipeline", color: "#0ea5e9", kind: "money", dashed: true },
-    { key: "wonDeals", name: "Won deals", color: "#f59e0b", kind: "count" },
-    { key: "converted", name: "Converted from lead", color: "#8b5cf6", kind: "count" },
+  const chartData = rows.map(({ m, c }) => ({ label: short(m), won: c.wonValue, open: c.openValue || null, wonDeals: c.won }));
+  // Won value happens in a month (bars); open pipeline is a level carried
+  // month to month (line); won deals is a count (right axis).
+  const series: ComboSeries[] = [
+    { key: "won", name: "Won value", color: "#10b981", type: "bar" },
+    { key: "open", name: "Open pipeline (month end)", color: "#0ea5e9", type: "line" },
+    { key: "wonDeals", name: "Won deals", color: "#f59e0b", type: "line", axis: "count", dashed: true },
   ];
   return (
     <div className="space-y-3">
-    {rows.length > 1 && <LineTrendChart data={chartData} series={series} height={240} />}
+    {rows.length > 1 && <ComboChart data={chartData} series={series} height={250} />}
     <div className="overflow-x-auto">
       <table className="w-full text-sm" data-own-head>
         <thead>
@@ -93,7 +94,7 @@ export function TeamMonthlyTrend({ data }: { data: MonthlyPipeline }) {
 }
 
 // Won value per sales person per month, shaded by size (darker = more).
-export function RepMonthMatrix({ data }: { data: MonthlyPipeline }) {
+export function RepMonthMatrix({ data, targets }: { data: MonthlyPipeline; targets?: number[] }) {
   const { months, people, cells } = data;
   const at = (pid: string, i: number) => cells.get(`${pid}|${i}`)!;
   const max = Math.max(0, ...people.flatMap((p) => months.map((_, i) => at(p.id, i).wonValue)));
@@ -104,14 +105,20 @@ export function RepMonthMatrix({ data }: { data: MonthlyPipeline }) {
   };
   const teamCells = months.map((_, i) => sum(people.map((p) => at(p.id, i))));
   const palette = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#0ea5e9", "#8b5cf6", "#ef4444", "#14b8a6", "#84cc16", "#f97316"];
-  const lineData = months.map((m, i) => ({
+  // Each month's won value stacked by sales person, with the team target as
+  // a line - how much came in, from whom, and whether it made target.
+  const chartData = months.map((m, i) => ({
     label: m.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
-    ...Object.fromEntries(people.map((p) => [p.id, at(p.id, i).wonValue])),
+    ...Object.fromEntries(people.map((p) => [p.id, at(p.id, i).wonValue > 0 ? at(p.id, i).wonValue : 0])),
+    target: targets?.[i] || null,
   }));
-  const lineSeries: LineSeries[] = people.map((p, i) => ({ key: p.id, name: p.name.split(" ")[0], color: palette[i % palette.length], kind: "money" }));
+  const chartSeries: ComboSeries[] = [
+    ...people.map((p, i): ComboSeries => ({ key: p.id, name: p.name.split(" ")[0], color: palette[i % palette.length], type: "bar", stack: "won" })),
+    ...(targets?.some((x) => x > 0) ? [{ key: "target", name: "Team target", color: "#1e293b", type: "line", dashed: true } as ComboSeries] : []),
+  ];
   return (
     <div className="space-y-3">
-    {months.length > 1 && people.length > 0 && <LineTrendChart data={lineData} series={lineSeries} height={220} area={false} />}
+    {months.length > 0 && people.length > 0 && <ComboChart data={chartData} series={chartSeries} height={260} />}
     <div className="overflow-x-auto">
       <table className="w-full text-xs" data-own-head>
         <thead>

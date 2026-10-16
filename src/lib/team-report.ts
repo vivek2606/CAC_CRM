@@ -47,6 +47,8 @@ export type TeamReport = {
   reps: RepScore[];
   team: RepScore;
   prevWonValue: number;
+  // The team's target for each month of the period, oldest first.
+  monthlyTargets: number[];
   thisMonthTarget: number;
   stages: { stage: DealStage; count: number; value: number; weighted: number; avgAgeDays: number | null; overdue: number }[];
   forecast: { label: string; count: number; value: number; weighted: number; commit: number }[];
@@ -105,7 +107,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
       where: { ownerId: { in: ids }, createdAt: { gte: start, lt: end } },
       select: { ownerId: true, type: true, callOutcome: true },
     }),
-    prisma.target.findMany({ where: { userId: { in: ids }, month: { gte: start, lt: end } }, select: { userId: true, targetValue: true } }),
+    prisma.target.findMany({ where: { userId: { in: ids }, month: { gte: start, lt: end } }, select: { userId: true, targetValue: true, month: true } }),
     getProjectBillings({ in: ids }, start, end),
     prisma.account.findMany({ where: { ownerId: { in: ids } }, select: { ownerId: true, deals: { where: { stage: "WON" }, select: { closedAt: true } } } }),
     prisma.target.findMany({ where: { userId: { in: ids }, month: thisMonth }, select: { targetValue: true } }),
@@ -270,6 +272,10 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
     team,
     prevWonValue: deals.filter((d) => d.stage === "WON" && d.closedAt && d.closedAt >= prevStart && d.closedAt < start).reduce((s, d) => s + d.value, 0),
     thisMonthTarget: thisMonthTargets.reduce((s, t) => s + t.targetValue, 0),
+    monthlyTargets: Array.from({ length: months }, (_, i) => {
+      const m = Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + i, 1);
+      return targets.filter((t) => t.month.getTime() === m).reduce((s, t) => s + t.targetValue, 0);
+    }),
     stages,
     forecast,
     lostReasons,

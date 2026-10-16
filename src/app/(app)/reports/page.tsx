@@ -263,8 +263,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </Section>
           </div>
           <div className="2xl:col-span-2">
-            <Section title="Won value by sales person" note="Darker = more won that month - who's consistent, who's had a hot or cold month.">
-              <RepMonthMatrix data={pipeline} />
+            <Section title="Won value by sales person" note="Each month's won value stacked by sales person, against the team target; the grid below - darker = more.">
+              <RepMonthMatrix data={pipeline} targets={r.monthlyTargets} />
             </Section>
           </div>
         </div>
