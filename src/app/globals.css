@@ -136,3 +136,88 @@ main table th:not([class*="font-"]) {
     font-size: 16px !important;
   }
 }
+
+/* ---- Colour & motion ------------------------------------------------- */
+
+/* A richer backdrop: indigo, violet and emerald washes. */
+body {
+  background:
+    radial-gradient(ellipse 1200px 600px at 100% -10%, rgba(99, 102, 241, 0.12), transparent),
+    radial-gradient(ellipse 900px 520px at -10% 25%, rgba(16, 185, 129, 0.08), transparent),
+    radial-gradient(ellipse 800px 500px at 60% 110%, rgba(168, 85, 247, 0.08), transparent),
+    var(--background);
+  background-attachment: fixed;
+}
+
+@keyframes app-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes app-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Cards glide in, one after another within a grid. */
+.app-card {
+  animation: app-fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.grid > .app-card:nth-child(2) { animation-delay: 0.05s; }
+.grid > .app-card:nth-child(3) { animation-delay: 0.1s; }
+.grid > .app-card:nth-child(4) { animation-delay: 0.15s; }
+.grid > .app-card:nth-child(5) { animation-delay: 0.2s; }
+.grid > .app-card:nth-child(6) { animation-delay: 0.25s; }
+.grid > .app-card:nth-child(n + 7) { animation-delay: 0.3s; }
+
+/* Table rows ripple in (the first screenful) and light up on hover. */
+main table tbody tr {
+  transition: background-color 0.15s ease;
+}
+main table tbody tr:hover {
+  background-color: rgba(238, 242, 255, 0.75);
+}
+main table tbody tr:nth-child(-n + 24) {
+  animation: app-row-in 0.35s ease-out both;
+}
+main table tbody tr:nth-child(2) { animation-delay: 0.02s; }
+main table tbody tr:nth-child(3) { animation-delay: 0.04s; }
+main table tbody tr:nth-child(4) { animation-delay: 0.06s; }
+main table tbody tr:nth-child(5) { animation-delay: 0.08s; }
+main table tbody tr:nth-child(6) { animation-delay: 0.1s; }
+main table tbody tr:nth-child(7) { animation-delay: 0.12s; }
+main table tbody tr:nth-child(8) { animation-delay: 0.14s; }
+main table tbody tr:nth-child(n + 9) { animation-delay: 0.16s; }
+
+/* Table headings: a soft indigo -> violet band (tables that colour their
+   own headings opt out with data-own-head). */
+main table:not([data-own-head]) thead tr:first-child th {
+  background-image: linear-gradient(180deg, #eef2ff, #f5f3ff);
+  color: #4338ca;
+}
+
+/* Primary buttons: indigo -> violet. */
+.bg-indigo-600 {
+  background-image: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+.bg-indigo-600:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-card,
+  main table tbody tr {
+    animation: none !important;
+  }
+}

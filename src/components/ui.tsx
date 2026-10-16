@@ -13,11 +13,11 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 sticky top-[var(--app-top)] z-10">
+    <div className="border-b border-indigo-100 bg-gradient-to-r from-white via-indigo-50 to-violet-50 px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 sticky top-[var(--app-top)] z-10">
       <div className="flex items-center gap-2 min-w-0">
         <BackButton />
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 truncate">{title}</h1>
+          <h1 className="text-lg sm:text-xl font-bold truncate bg-gradient-to-r from-indigo-700 via-violet-700 to-fuchsia-600 bg-clip-text text-transparent">{title}</h1>
           {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
         </div>
       </div>
@@ -40,7 +40,7 @@ export function NewButton({ href, label }: { href: string; label: string }) {
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-200/50 ${className}`}>
+    <div className={`app-card rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-200/50 ${className}`}>
       {children}
     </div>
   );
@@ -83,13 +83,24 @@ const STAT_ACCENT_CHIP: Record<StatAccent, string> = {
   slate: "bg-slate-100",
 };
 
+// A soft wash of the accent colour across the tile.
+const STAT_ACCENT_TINT: Record<StatAccent, string> = {
+  indigo: "from-white to-indigo-50 hover:shadow-indigo-200/60",
+  emerald: "from-white to-emerald-50 hover:shadow-emerald-200/60",
+  violet: "from-white to-violet-50 hover:shadow-violet-200/60",
+  sky: "from-white to-sky-50 hover:shadow-sky-200/60",
+  amber: "from-white to-amber-50 hover:shadow-amber-200/60",
+  rose: "from-white to-rose-50 hover:shadow-rose-200/60",
+  slate: "from-white to-slate-50 hover:shadow-slate-200/60",
+};
+
 const STAT_ACCENT_BAR: Record<StatAccent, string> = {
-  indigo: "bg-indigo-500",
-  emerald: "bg-emerald-500",
-  violet: "bg-violet-500",
-  sky: "bg-sky-500",
-  amber: "bg-amber-500",
-  rose: "bg-rose-500",
+  indigo: "bg-gradient-to-r from-indigo-500 to-violet-500",
+  emerald: "bg-gradient-to-r from-emerald-500 to-teal-400",
+  violet: "bg-gradient-to-r from-violet-500 to-fuchsia-500",
+  sky: "bg-gradient-to-r from-sky-500 to-cyan-400",
+  amber: "bg-gradient-to-r from-amber-500 to-orange-400",
+  rose: "bg-gradient-to-r from-rose-500 to-pink-400",
   slate: "bg-slate-300",
 };
 
@@ -114,8 +125,8 @@ export function StatCard({
   accent?: StatAccent;
 }) {
   return (
-    <Card className="relative overflow-hidden p-4">
-      <span className={`absolute inset-x-0 top-0 h-0.5 ${STAT_ACCENT_BAR[accent]}`} aria-hidden />
+    <Card className={`relative overflow-hidden p-4 bg-gradient-to-br transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${STAT_ACCENT_TINT[accent]}`}>
+      <span className={`absolute inset-x-0 top-0 h-1 ${STAT_ACCENT_BAR[accent]}`} aria-hidden />
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">{label}</p>
         {icon && (
