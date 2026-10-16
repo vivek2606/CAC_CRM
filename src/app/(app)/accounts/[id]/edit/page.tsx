@@ -15,7 +15,7 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
 
   const owners =
     isBackOffice(user)
-      ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+      ? await prisma.user.findMany({ where: { role: "SALES_MANAGER", OR: [{ isActive: true }, { id: account.ownerId }] }, select: { id: true, name: true } })
       : [];
   const accounts = await prisma.account.findMany({ select: { id: true, name: true, code: true } });
   // Every contact, so a rep can link one that's already in the CRM to this

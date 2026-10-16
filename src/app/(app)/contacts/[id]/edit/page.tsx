@@ -15,7 +15,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
 
   const [owners, accounts] = await Promise.all([
     isBackOffice(user)
-      ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+      ? prisma.user.findMany({ where: { role: "SALES_MANAGER", OR: [{ isActive: true }, { id: contact.ownerId }] }, select: { id: true, name: true } })
       : Promise.resolve([]),
     // Any account can be linked - the whole account list, not just your own.
     prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),

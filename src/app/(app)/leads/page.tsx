@@ -55,7 +55,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       include: { owner: { select: { id: true, name: true, avatarColor: true } } },
     }),
     isBackOffice(user)
-      ? prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+      ? prisma.user.findMany({ where: { role: "SALES_MANAGER", isActive: true }, select: { id: true, name: true } })
       : Promise.resolve([]),
   ]);
 

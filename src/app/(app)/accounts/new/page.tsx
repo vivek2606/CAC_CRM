@@ -8,7 +8,7 @@ export default async function NewAccountPage() {
   const user = await requireUser();
   const owners =
     isBackOffice(user)
-      ? await prisma.user.findMany({ where: { role: "SALES_MANAGER" }, select: { id: true, name: true } })
+      ? await prisma.user.findMany({ where: { role: "SALES_MANAGER", isActive: true }, select: { id: true, name: true } })
       : [];
   // Every account name+code, across all reps - a duplicate customer can
   // already be registered under someone else's ownership, so the "already
