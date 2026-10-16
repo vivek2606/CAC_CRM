@@ -1,10 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { buildDocument, documentInputSchema, type SalesDocument } from "@/lib/sales-document";
-import { saveQuotation } from "@/lib/saved-quotes";
+import { saveQuotation, DRAFT_TYPE } from "@/lib/saved-quotes";
 import { isIssuedQuoteRef } from "@/lib/document-format";
-import { excessDiscounts } from "@/lib/quote-discount";
+import { coveredByApproval, excessDiscounts } from "@/lib/quote-discount";
 import { notifyQuoteDiscountDecided, notifyQuoteDiscountRequested } from "@/lib/push-events";
 
 // Shared by the PDF and Excel routes: read the builder's JSON body and turn
@@ -27,20 +27,26 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
   if (!parsed.success) return { error: Response.json({ error: parsed.error.issues[0]?.message ?? "Check the document." }, { status: 400 }) };
   if (!parsed.data.rows.some((r) => r.kind === "item")) return { error: Response.json({ error: "Add at least one item." }, { status: 400 }) };
   const doc = await buildDocument(parsed.data);
-  const extra = body as { dealId?: unknown; ownerId?: unknown };
+  const extra = body as { dealId?: unknown; ownerId?: unknown; draftId?: unknown };
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
   const excess = user.role === "HEAD" ? [] : await excessDiscounts(doc);
   const existing = isIssuedQuoteRef(parsed.data.ref)
     ? await prisma.quotation.findUnique({ where: { ref: parsed.data.ref }, select: { id: true, discountStatus: true, discountApproved: true } })
     : null;
-  const held = excess.length > 0;
+  // Approved by the Head: it goes through while every over-the-limit line is
+  // within what was approved for it (a bigger discount, or another item over
+  // its limit, needs approving again).
+  const held = excess.length > 0 && !(existing?.discountStatus === "approved" && coveredByApproval(excess, existing.discountApproved));
   if (held && !isIssuedQuoteRef(parsed.data.ref)) {
     return { error: Response.json({ error: "Only the Head of Sales can prepare a quote below the permissible discount." }, { status: 403 }) };
   }
 
   const saveError = await saveQuotation(user, parsed.data, doc, { dealId: str(extra.dealId), ownerId: str(extra.ownerId) });
   if (saveError) return { error: Response.json({ error: saveError }, { status: 409 }) };
+  // Saved as the quotation now - the draft it was made from goes.
+  const draftId = str(extra.draftId);
+  if (draftId) await prisma.quotation.deleteMany({ where: { id: draftId, type: DRAFT_TYPE, OR: [{ createdById: user.id }, { ownerId: user.id }, ...(isBackOffice(user) ? [{}] : [])] } });
 
   if (held) {
     const q = await prisma.quotation.update({

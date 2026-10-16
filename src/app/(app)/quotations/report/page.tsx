@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/format";
 import { documentInputSchema, netOf } from "@/lib/sales-document";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { getCompanySettings } from "@/lib/company-profile";
-import { visibleQuotationsWhere } from "@/lib/saved-quotes";
+import { visibleQuotationsWhere, NOT_DRAFT } from "@/lib/saved-quotes";
 import { QuotationTabs } from "../quotation-tabs";
 
 // Quote-to-win: quotations issued, the deals they were for, how many of
@@ -42,7 +42,7 @@ export default async function QuoteReportPage({ searchParams }: { searchParams: 
 
   const [quotes, prices, settings] = await Promise.all([
     prisma.quotation.findMany({
-      where: { AND: [visibleQuotationsWhere(user), { createdAt: { gte: from, lt: end } }] },
+      where: { AND: [visibleQuotationsWhere(user), NOT_DRAFT, { createdAt: { gte: from, lt: end } }] },
       select: {
         createdAt: true,
         total: true,

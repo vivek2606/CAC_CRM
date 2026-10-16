@@ -3,7 +3,9 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
-import { visibleQuotationsWhere, quoteSalesPeople } from "@/lib/saved-quotes";
+import { visibleQuotationsWhere, quoteSalesPeople, NOT_DRAFT, DRAFT_TYPE } from "@/lib/saved-quotes";
+import { formatDateTime } from "@/lib/format";
+import { DiscardDraftButton } from "./discard-draft-button";
 import { SavedQuotesTable, savedQuoteSelect } from "../saved-quotes-table";
 import { QuotationTabs } from "../quotation-tabs";
 
@@ -16,6 +18,7 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
   const where: Prisma.QuotationWhereInput = {
     AND: [
       visibleQuotationsWhere(user),
+      NOT_DRAFT,
       term
         ? {
             OR: [
@@ -29,6 +32,13 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
       unlinked === "1" ? { dealId: null } : {},
     ],
   };
+  // Saved but not downloaded yet.
+  const drafts = await prisma.quotation.findMany({
+    where: { AND: [visibleQuotationsWhere(user), { type: DRAFT_TYPE }] },
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+    select: { id: true, customerName: true, updatedAt: true, data: true, owner: { select: { name: true } }, createdBy: { select: { name: true } } },
+  });
   const [quotes, total, reps] = await Promise.all([
     prisma.quotation.findMany({ where, orderBy: { createdAt: "desc" }, take: 300, select: savedQuoteSelect }),
     prisma.quotation.count({ where }),
@@ -65,6 +75,36 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
             </Link>
           )}
         </form>
+        {drafts.length > 0 && (
+          <Card className="p-4">
+            <h2 className="text-sm font-semibold text-slate-900">Drafts - saved, not downloaded yet</h2>
+            <p className="mb-2 text-xs text-slate-500">Open one to finish it; it gets its quotation number when downloaded.</p>
+            <table className="w-full text-sm">
+              <tbody>
+                {drafts.map((q) => {
+                  const kind = { quote: "Quotation", proforma: "Proforma", boq: "BOQ" }[(q.data as { type?: string } | null)?.type ?? ""] ?? "Quotation";
+                  return (
+                    <tr key={q.id} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-3 text-slate-600">{kind}</td>
+                      <td className="py-1.5 pr-3 font-medium text-slate-800">{q.customerName || "No customer yet"}</td>
+                      <td className="py-1.5 pr-3 text-slate-600">
+                        {q.owner.name}
+                        {q.createdBy.name !== q.owner.name ? ` (by ${q.createdBy.name})` : ""}
+                      </td>
+                      <td className="py-1.5 pr-3 text-xs text-slate-500 whitespace-nowrap">Saved {formatDateTime(q.updatedAt)}</td>
+                      <td className="py-1.5 text-right whitespace-nowrap">
+                        <Link href={`/quotations?draft=${q.id}`} className="mr-3 text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                          Open
+                        </Link>
+                        <DiscardDraftButton id={q.id} label={q.customerName || "this quotation"} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        )}
         <Card className="p-4">
           {quotes.length === 0 ? (
             <EmptyState title="No saved quotations" description="A quotation is saved here the first time it's downloaded." />

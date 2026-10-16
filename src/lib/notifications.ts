@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { NOT_DRAFT } from "@/lib/quote-draft";
 import { isBackOffice, type SessionUser } from "@/lib/rbac";
 import { computeDealDiscount } from "@/lib/discount";
 import { getLatestPriceByProduct } from "@/lib/pricing";
@@ -69,6 +70,7 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     prisma.quotation.findMany({
       where: {
         ...(team ? {} : { ownerId: user.id }),
+        ...NOT_DRAFT,
         updatedAt: { lt: quoteBefore, gte: new Date(now.getTime() - 60 * day) },
         deal: { stage: { notIn: ["WON", "LOST"] }, activities: { none: { createdAt: { gte: quoteBefore } } } },
       },

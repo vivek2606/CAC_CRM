@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
-import { reserveQuoteRef, importQuoteSheet, createDealForQuote } from "./actions";
+import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 
 export type ModelOption = {
@@ -44,6 +44,8 @@ export type DealPrefill = {
 // A saved quotation reopened in the builder: as it was (same reference -
 // downloading again updates it), or as a revision (a new reference).
 export type QuotePrefill = {
+  // Opened from a saved draft (not downloaded yet): its id.
+  draftId?: string | null;
   ownerId: string;
   dealId: string | null;
   dealTitle: string | null;
@@ -173,6 +175,10 @@ export function QuotationBuilder({
   // The deal a downloaded quote is saved against.
   // A deal made for this quote after it was downloaded (see the prompt below).
   const [createdDealId, setCreatedDealId] = useState<string | null>(null);
+  // The saved draft this is (Save draft); gone once downloaded.
+  const [draftId, setDraftId] = useState<string | null>(fromQuote?.draftId ?? null);
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
   const linkedDealId = fromDeal?.dealId ?? fromQuote?.dealId ?? createdDealId;
   // Downloaded without a deal: prompt to create one and link it.
   const [unlinkedRef, setUnlinkedRef] = useState<string | null>(null);
@@ -326,6 +332,34 @@ export function QuotationBuilder({
       setError("Couldn't read the saved draft.");
     }
   };
+  // Save without downloading (it's saved anyway once downloaded).
+  const saveDraft = async () => {
+    setError(null);
+    setDraftNote(null);
+    if (!d.rows.some((r) => r.kind === "item" && r.description.trim()) && !d.to.trim()) return setError("Add the customer or an item before saving.");
+    setSavingDraft(true);
+    const res = await saveQuoteDraft(payload(""), { draftId, dealId: linkedDealId, ownerId: d.ownerId || null });
+    setSavingDraft(false);
+    if (res.error) return setError(res.error);
+    setDraftId(res.draftId ?? null);
+    setDraftNote(`Draft saved ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} - find it under Saved quotations → Drafts.`);
+  };
+  // Throw away what's been prepared (and its saved draft, if any).
+  const discard = async () => {
+    if (!window.confirm(draftId ? "Discard this quotation and its saved draft?" : "Discard this quotation?")) return;
+    if (draftId) {
+      const res = await discardQuoteDraft(draftId);
+      if (res.error) return setError(res.error);
+      setDraftId(null);
+    }
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    setD(fresh());
+    setDirty(false);
+    setError(null);
+    setDraftNote(null);
+  };
   const startOver = () => {
     if (!window.confirm("Clear this document and start a new one?")) return;
     try {
@@ -457,7 +491,7 @@ export function QuotationBuilder({
       const res = await fetch(`/quotations/${format}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload(ref), dealId: linkedDealId, ownerId: d.ownerId || null }),
+        body: JSON.stringify({ ...payload(ref), dealId: linkedDealId, ownerId: d.ownerId || null, draftId }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -474,6 +508,11 @@ export function QuotationBuilder({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      // Downloaded = saved as the quotation; the draft it came from is gone.
+      if (draftId) {
+        setDraftId(null);
+        setDraftNote(null);
+      }
       if (!linkedDealId) {
         setUnlinkedRef(ref);
         if (dealOwners) setDealOwner((cur) => cur || (dealOwners.some((o) => o.id === d.ownerId) ? d.ownerId! : isHead ? myId : ""));
@@ -492,7 +531,9 @@ export function QuotationBuilder({
     <div className="space-y-5">
       {fromQuote && (
         <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
-          {fromQuote.revisionOf
+          {fromQuote.draftId
+            ? "Saved draft - not downloaded yet. It gets its quotation number when downloaded; Save draft keeps your changes, Discard throws it away."
+            : fromQuote.revisionOf
             ? `Revision of ${fromQuote.revisionOf} - it gets a new reference number when downloaded.`
             : `Saved quotation ${fromQuote.ref} - downloading again keeps this number and saves any changes.`}
           {fromQuote.dealId && (
@@ -1181,8 +1222,31 @@ export function QuotationBuilder({
           <span className="font-bold text-slate-900 tabular-nums">{naira(total)}</span>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {draftNote && !error && <p className="text-sm text-emerald-700">{draftNote}</p>}
         {held && <p className="basis-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 order-last">{held}</p>}
         <div className="ml-auto flex flex-wrap gap-2">
+          {/* Not downloaded yet: save it as a draft, or throw it away. Once
+              downloaded it's saved as the quotation. */}
+          {!isIssuedQuoteRef(d.ref) && (
+            <>
+              <button
+                type="button"
+                onClick={discard}
+                disabled={busy != null || savingDraft}
+                className="rounded-lg px-3 py-2 text-sm text-rose-600 hover:text-rose-700 disabled:opacity-60"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={busy != null || savingDraft}
+                className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {savingDraft ? "Saving…" : draftId ? "Save draft" : "Save as draft"}
+              </button>
+            </>
+          )}
           {linkedDealId && (
             <Link href={`/deals/${linkedDealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">
               Back to deal

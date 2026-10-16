@@ -10,6 +10,8 @@ import { applyQuoteToDeal } from "@/app/(app)/deals/actions";
 // (optionally - it can be linked later) the deal it was made for, so it
 // can be downloaded again or revised.
 
+export { DRAFT_TYPE, NOT_DRAFT } from "@/lib/quote-draft";
+
 // Quotes the user may see: their own (as sales person or preparer), and
 // quotes on deals they can see. Head / Coordinator see all.
 export function visibleQuotationsWhere(user: SessionUser): Prisma.QuotationWhereInput {

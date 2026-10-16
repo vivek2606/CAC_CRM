@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NOT_DRAFT } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
@@ -89,7 +90,7 @@ export default async function DealDetailPage({
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true },
     }),
-    prisma.quotation.findMany({ where: { dealId: deal.id }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }),
+    prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,

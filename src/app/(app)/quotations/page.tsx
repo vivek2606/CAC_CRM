@@ -11,7 +11,7 @@ import {
   getQuotableProducts,
 } from "@/lib/pricing";
 import { documentInputSchema } from "@/lib/sales-document";
-import { canSeeQuotation, quoteSalesPeople } from "@/lib/saved-quotes";
+import { canSeeQuotation, quoteSalesPeople, DRAFT_TYPE } from "@/lib/saved-quotes";
 import { dealOwnerOptions } from "@/lib/deal-owner";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
@@ -24,9 +24,11 @@ import { QuotationTabs } from "./quotation-tabs";
 
 const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string }> }) {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string; draft?: string }> }) {
   const user = await requireUser();
-  const { deal: dealId, quote: quoteId, revise } = await searchParams;
+  const { deal: dealId, quote: quoteParam, revise, draft } = await searchParams;
+  // A saved draft opens like a saved quotation, still without its number.
+  const quoteId = quoteParam ?? draft;
   const [settings, products, prices, stock, inTransit, tentative, me] = await Promise.all([
     getCompanySettings(),
     getQuotableProducts(),
@@ -126,11 +128,13 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     const data = q && canSeeQuotation(user, q) ? documentInputSchema.safeParse(q.data) : null;
     if (q && data?.success) {
       const isRevision = revise === "1";
+      const isDraft = q.type === DRAFT_TYPE;
       fromQuote = {
+        draftId: isDraft ? q.id : null,
         ownerId: q.ownerId,
         dealId: q.deal?.id ?? null,
         dealTitle: q.deal?.title ?? null,
-        ref: isRevision ? "" : q.ref,
+        ref: isRevision || isDraft ? "" : q.ref,
         revisionOf: isRevision ? q.ref : null,
         data: data.data,
       };
@@ -156,7 +160,9 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         action={<QuotationTabs active={fromQuote ? "saved" : "new"} />}
         description={
           fromQuote
-            ? fromQuote.revisionOf
+            ? fromQuote.draftId
+              ? "Draft - finish it and download to issue its number"
+              : fromQuote.revisionOf
               ? `Revising ${fromQuote.revisionOf}`
               : `Saved quotation ${fromQuote.ref}`
             : fromDeal

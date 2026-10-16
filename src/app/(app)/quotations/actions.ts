@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { dealOwnerProblem } from "@/lib/deal-owner";
 import { nextQuoteRef } from "@/lib/quote-ref";
-import { canSeeQuotation, resolveQuoteOwner } from "@/lib/saved-quotes";
+import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
+import { canSeeQuotation, resolveQuoteOwner, DRAFT_TYPE } from "@/lib/saved-quotes";
+import { documentInputSchema } from "@/lib/sales-document";
 import { applyQuoteToDeal } from "../deals/actions";
 import { parseQuoteGrid, type Cell, type ImportedQuote } from "@/lib/import/parse-quote-sheet";
 
@@ -137,4 +140,55 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
   revalidatePath("/quotations/saved");
   revalidatePath("/deals");
   return { dealId: deal.id, quoteId: q.id };
+}
+
+// Saves the builder's quotation as a draft (not downloaded yet), for the
+// sales person it's for - creating it, or updating the draft it was opened
+// from. Returns the draft's id.
+export async function saveQuoteDraft(
+  input: unknown,
+  opts: { draftId?: string | null; dealId?: string | null; ownerId?: string | null },
+): Promise<{ draftId?: string; error?: string }> {
+  const user = await requireUser();
+  const parsed = documentInputSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the quotation." };
+  const owner = await resolveQuoteOwner(user, opts.ownerId ?? null);
+  if (!owner) return { error: "Pick the sales person this quotation is for." };
+  let dealId: string | null = null;
+  if (opts.dealId) {
+    const d = await prisma.deal.findUnique({ where: { id: opts.dealId }, select: { id: true, ownerId: true } });
+    if (d && canAccessOwner(user, d.ownerId)) dealId = d.id;
+  }
+  const data = { ...parsed.data, ref: "" };
+  const fields = {
+    customerName: parsed.data.to.split("\n")[0]?.trim() ?? "",
+    total: 0,
+    data: data as unknown as Prisma.InputJsonValue,
+    ownerId: owner.id,
+    dealId,
+  };
+  if (opts.draftId) {
+    const existing = await prisma.quotation.findUnique({ where: { id: opts.draftId }, select: { type: true, ownerId: true, createdById: true, deal: { select: { ownerId: true } } } });
+    if (existing && existing.type === DRAFT_TYPE && canSeeQuotation(user, existing)) {
+      await prisma.quotation.update({ where: { id: opts.draftId }, data: fields });
+      revalidatePath("/quotations/saved");
+      return { draftId: opts.draftId };
+    }
+  }
+  const created = await prisma.quotation.create({
+    data: { ...fields, type: DRAFT_TYPE, ref: `DRAFT-${crypto.randomUUID()}`, createdById: user.id },
+    select: { id: true },
+  });
+  revalidatePath("/quotations/saved");
+  return { draftId: created.id };
+}
+
+// Discards a saved draft (never a downloaded quotation).
+export async function discardQuoteDraft(draftId: string): Promise<{ error?: string }> {
+  const user = await requireUser();
+  const q = await prisma.quotation.findUnique({ where: { id: draftId }, select: { type: true, ownerId: true, createdById: true, deal: { select: { ownerId: true } } } });
+  if (!q || q.type !== DRAFT_TYPE || !canSeeQuotation(user, q)) return { error: "Draft not found." };
+  await prisma.quotation.delete({ where: { id: draftId } });
+  revalidatePath("/quotations/saved");
+  return {};
 }
