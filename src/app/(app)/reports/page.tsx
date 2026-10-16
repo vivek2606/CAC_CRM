@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getMonthlyPipeline, monthsBetween } from "@/lib/monthly-pipeline";
+import { MonthlyPipelineTables } from "@/components/monthly-pipeline-table";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, StatCard, Avatar } from "@/components/ui";
@@ -32,8 +34,16 @@ function startOfQuarter(date: Date): Date {
 // into a single "Others" row instead of cluttering the report.
 const CAC_SALES_TITLE = "Sales Manager";
 
-export default async function ReportsPage() {
+// "YYYY-MM" -> first of that month (UTC), else the fallback.
+function parseMonthParam(raw: string | undefined, fallback: Date): Date {
+  const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : fallback;
+}
+const monthInput = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   await requireBackOffice();
+  const params = await searchParams;
 
   const qStart = startOfQuarter(new Date());
 
@@ -461,6 +471,17 @@ export default async function ReportsPage() {
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count);
 
+  // Open / converted / won per sales person and month - the last 6 months
+  // by default, or the range picked (up to 24 months).
+  const nowMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  let pipelineTo = parseMonthParam(params.to, nowMonth);
+  let pipelineFrom = parseMonthParam(params.from, new Date(Date.UTC(pipelineTo.getUTCFullYear(), pipelineTo.getUTCMonth() - 5, 1)));
+  if (pipelineFrom > pipelineTo) [pipelineFrom, pipelineTo] = [pipelineTo, pipelineFrom];
+  const pipelineMonths = monthsBetween(pipelineFrom, pipelineTo).slice(-24);
+  pipelineFrom = pipelineMonths[0];
+  const pipeline = await getMonthlyPipeline(salesReps.map((r) => ({ id: r.id, name: r.name })), pipelineMonths);
+  const monthLabelLong = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
   return (
     <div>
       <PageHeader
@@ -474,6 +495,38 @@ export default async function ReportsPage() {
       />
 
       <div className="p-6 space-y-6">
+        <Card className="p-5">
+          <div id="pipeline-months" className="flex flex-wrap items-end justify-between gap-3 scroll-mt-24">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Open, converted and won deals by sales person, per month</h2>
+              <p className="text-xs text-slate-500">
+                {monthLabelLong(pipelineFrom)} - {monthLabelLong(pipelineTo)}. Open = still open at the month&apos;s end (this month: now).
+              </p>
+            </div>
+            <form action="/reports#pipeline-months" className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-slate-500">
+                From
+                <input type="month" name="from" defaultValue={monthInput(pipelineFrom)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+              </label>
+              <label className="text-xs text-slate-500">
+                To
+                <input type="month" name="to" defaultValue={monthInput(pipelineTo)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+              </label>
+              <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700">
+                Show
+              </button>
+              {(params.from || params.to) && (
+                <Link href="/reports#pipeline-months" className="pb-1.5 text-sm text-slate-500 hover:text-slate-800">
+                  Last 6 months
+                </Link>
+              )}
+            </form>
+          </div>
+          <div className="mt-4">
+            <MonthlyPipelineTables data={pipeline} />
+          </div>
+        </Card>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Team Open Pipeline"

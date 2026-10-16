@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getMonthlyPipeline } from "@/lib/monthly-pipeline";
+import { PipelineThisMonth } from "@/components/monthly-pipeline-table";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, Badge, StatCard, EmptyState } from "@/components/ui";
@@ -39,8 +41,8 @@ export default async function DashboardPage() {
 
   // Targets and sales: the sales team (Head / Coordinator) or yourself.
   const reps = team
-    ? await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, select: { id: true } })
-    : [{ id: user.id }];
+    ? await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+    : [{ id: user.id, name: user.name ?? "Me" }];
   const repIds = reps.map((r) => r.id);
 
   const [targets, wonDeals, projects, openDeals, ytd, leadStats, upcoming, overdueCount, myLeads, leadStatusGroups, pipeStart, pipeNew, pipeLost, pipeWon] = await Promise.all([
@@ -121,6 +123,8 @@ export default async function DashboardPage() {
     .map((st) => ({ label: LEAD_STATUS_LABELS[st], count: leadCount.get(st) ?? 0, value: 0, fill: LEAD_STATUS_CHART_COLORS[st] }))
     .filter((row) => row.count > 0);
   const monthSales = await getMonthSales(ownerIds, thisMonth, nextMonth, repIds);
+  // Open / converted / won, this month, per sales person.
+  const pipelineMonth = await getMonthlyPipeline(reps, [thisMonth], now);
   const monthLast = new Date(nextMonth.getTime() - 86400000).toISOString().slice(0, 10);
   const registerLink = (extra: Record<string, string>) =>
     `/reports/sales-register?${new URLSearchParams({ from: thisMonth.toISOString().slice(0, 10), to: monthLast, ...extra })}`;
@@ -240,6 +244,23 @@ export default async function DashboardPage() {
                 </tfoot>
               </table>
             </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-slate-900">
+              {team ? "Deals by sales person" : "My deals"}, {monthName}
+            </h2>
+            {team && (
+              <Link href="/reports#pipeline-months" className="text-xs text-indigo-600 hover:text-indigo-700">
+                Last 6 months →
+              </Link>
+            )}
+          </div>
+          <p className="mb-2 text-xs text-slate-400">Open deals now, deals converted from a lead this month, and deals won this month (by invoice date).</p>
+          <div className="overflow-x-auto">
+            <PipelineThisMonth data={pipelineMonth} />
           </div>
         </Card>
 
