@@ -26,6 +26,7 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
   const parsed = documentInputSchema.safeParse(body);
   if (!parsed.success) return { error: Response.json({ error: parsed.error.issues[0]?.message ?? "Check the document." }, { status: 400 }) };
   if (!parsed.data.rows.some((r) => r.kind === "item")) return { error: Response.json({ error: "Add at least one item." }, { status: 400 }) };
+  if (!parsed.data.to.split("\n")[0]?.trim()) return { error: Response.json({ error: "Enter the customer's name (first line of \"To\")." }, { status: 400 }) };
   const doc = await buildDocument(parsed.data);
   const extra = body as { dealId?: unknown; ownerId?: unknown; draftId?: unknown };
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);

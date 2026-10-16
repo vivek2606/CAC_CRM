@@ -274,6 +274,8 @@ export function QuotationBuilder({
   const [error, setError] = useState<string | null>(null);
   // The download was held: a discount is over the limit and went to the Head.
   const [held, setHeld] = useState<string | null>(null);
+  // The customer's name is required - flagged once a download is tried without it.
+  const [triedDownload, setTriedDownload] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState<{ summary: string; details: string[] } | null>(null);
   const hasSavedDraft = useHasSavedDraft();
@@ -420,6 +422,7 @@ export function QuotationBuilder({
   };
 
   const sns = serialNumbers(d.rows);
+  const missingCustomer = triedDownload && !d.to.split("\n")[0]?.trim();
   const showAvailability = d.showAvailability !== false;
   const inclusive = d.vatMode === "inclusive";
   const vatFactor = 1 + vatRatePct / 100;
@@ -476,6 +479,10 @@ export function QuotationBuilder({
   const download = async (format: "pdf" | "xlsx") => {
     setError(null);
     setHeld(null);
+    if (!d.to.split("\n")[0]?.trim()) {
+      setTriedDownload(true);
+      return setError("Enter the customer's name (first line of \"To\").");
+    }
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
     setBusy(format);
     try {
@@ -617,8 +624,17 @@ export function QuotationBuilder({
             <input inputMode="numeric" value={d.validityDays} onChange={(e) => update({ validityDays: e.target.value })} className={input} />
           </div>
           <div className="sm:col-span-2">
-            <label className={label}>To (customer name on the first line, then address / phone)</label>
-            <textarea rows={3} value={d.to} onChange={(e) => update({ to: e.target.value })} className={input} />
+            <label className={label}>
+              To - customer name on the first line <span className="text-rose-600">*</span> (then address / phone)
+            </label>
+            <textarea
+              rows={3}
+              value={d.to}
+              onChange={(e) => update({ to: e.target.value })}
+              placeholder="Customer name (required)"
+              className={`${input} ${missingCustomer ? "border-rose-400 bg-rose-50" : ""}`}
+            />
+            {missingCustomer && <p className="mt-1 text-xs text-rose-600">Enter the customer&apos;s name - a quotation can&apos;t be downloaded without it.</p>}
           </div>
           <div className="sm:col-span-2 space-y-3">
             <div>
