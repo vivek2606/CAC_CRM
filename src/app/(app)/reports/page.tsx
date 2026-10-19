@@ -124,6 +124,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         description={`${r.reps.length} sales people · ${period}`}
         action={
           <form action="/reports" className="flex flex-wrap items-end gap-2">
+            <Link href={`/reports/target-achievement?from=${monthInput(from)}&to=${monthInput(to)}`} className="pb-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700">
+              Target vs Achievement →
+            </Link>
             <label className="text-xs text-slate-500">
               From
               <input type="month" name="from" defaultValue={monthInput(from)} className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm" />

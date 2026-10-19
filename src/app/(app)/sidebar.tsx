@@ -11,6 +11,7 @@ import {
   KanbanSquare,
   Building2,
   BarChart3,
+  Crosshair,
   Package,
   Upload,
   Users,
@@ -87,6 +88,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
 // Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
 const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; headOnly?: boolean }[] = [
   { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
+  { href: "/reports/target-achievement", label: "Target vs Achievement", icon: Crosshair, color: "violet" },
   { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red" },
   { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink" },
   { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal" },
