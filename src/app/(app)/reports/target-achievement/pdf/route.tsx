@@ -1,9 +1,12 @@
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Font, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { requireBackOffice } from "@/lib/rbac";
 import { getTargetAchievement, rangeFrom, periodLabel, achievementPct, type TARow } from "@/lib/target-achievement";
 
 // Target vs achievement as a PDF (A4 landscape): the summary, then the
 // month-by-month detail.
+
+// Whole words only - no "Ami-nat" style hyphenation in names.
+Font.registerHyphenationCallback((word) => [word]);
 
 const money = (n: number) => n.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const compact = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : n.toFixed(0));
@@ -23,7 +26,7 @@ const s = StyleSheet.create({
 });
 
 function Summary({ rows, team }: { rows: TARow[]; team: TARow }) {
-  const w = [180, 110, 110, 110, 80];
+  const w = [246, 140, 140, 150, 110];
   const right = { textAlign: "right" as const };
   return (
     <View>
@@ -50,9 +53,45 @@ function Summary({ rows, team }: { rows: TARow[]; team: TARow }) {
   );
 }
 
+// A bullet chart: per sales person, achieved as a bar (coloured by %
+// achieved) with the target as a dark marker, and the % at the end.
+function BulletChart({ rows }: { rows: TARow[] }) {
+  const W = 486;
+  const max = Math.max(1, ...rows.map((x) => Math.max(x.achieved, x.target)));
+  const fill = (p: number | null) => (p == null ? "#94a3b8" : p >= 100 ? "#10b981" : p >= 70 ? "#f59e0b" : "#f43f5e");
+  return (
+    <View wrap={false} style={{ marginTop: 14, padding: 10, borderWidth: 0.5, borderColor: "#e2e8f0", borderRadius: 6 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+        <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>Achieved vs target</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ width: 10, height: 6, backgroundColor: "#10b981", marginRight: 3 }} />
+          <Text style={{ fontSize: 7, color: "#64748b", marginRight: 8 }}>100%+</Text>
+          <View style={{ width: 10, height: 6, backgroundColor: "#f59e0b", marginRight: 3 }} />
+          <Text style={{ fontSize: 7, color: "#64748b", marginRight: 8 }}>70-99%</Text>
+          <View style={{ width: 10, height: 6, backgroundColor: "#f43f5e", marginRight: 3 }} />
+          <Text style={{ fontSize: 7, color: "#64748b", marginRight: 8 }}>under 70%</Text>
+          <View style={{ width: 2, height: 9, backgroundColor: "#1e293b", marginRight: 3 }} />
+          <Text style={{ fontSize: 7, color: "#64748b" }}>target</Text>
+        </View>
+      </View>
+      {rows.map((x) => (
+        <View key={x.id} style={{ flexDirection: "row", alignItems: "center", marginVertical: 2.5 }}>
+          <Text style={{ width: 130, fontSize: 8 }}>{x.name}</Text>
+          <View style={{ width: W, height: 11, backgroundColor: "#f1f5f9", borderRadius: 2, position: "relative" }}>
+            <View style={{ position: "absolute", left: 0, top: 0, height: 11, width: Math.max(1, (x.achieved / max) * W), backgroundColor: fill(x.pct), borderRadius: 2 }} />
+            {x.target > 0 && <View style={{ position: "absolute", top: -2, height: 15, width: 2, left: Math.min(W - 2, (x.target / max) * W), backgroundColor: "#1e293b" }} />}
+          </View>
+          <Text style={{ width: 70, fontSize: 8, textAlign: "right", fontFamily: "Helvetica-Bold", color: tone(x.pct) }}>{pctTxt(x.pct)}</Text>
+          <Text style={{ width: 80, fontSize: 7.5, textAlign: "right", color: "#64748b" }}>{compact(x.achieved)} / {x.target ? compact(x.target) : "-"}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function Months({ rows, team, months }: { rows: TARow[]; team: TARow; months: Date[] }) {
-  const nameW = 120;
-  const colW = Math.min(70, (786 - nameW - 80) / months.length);
+  const nameW = 150;
+  const colW = (786 - nameW - 90) / months.length;
   const right = { textAlign: "right" as const };
   return (
     <View>
@@ -63,7 +102,7 @@ function Months({ rows, team, months }: { rows: TARow[]; team: TARow; months: Da
             {m.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" })}
           </Text>
         ))}
-        <Text style={[s.cell, { width: 80 }, right]}>Total</Text>
+        <Text style={[s.cell, { width: 90 }, right]}>Total</Text>
       </View>
       {[...rows, team].map((x) => (
         <View key={x.id} style={[s.row, x.id === "team" ? s.team : {}]} wrap={false}>
@@ -79,7 +118,7 @@ function Months({ rows, team, months }: { rows: TARow[]; team: TARow; months: Da
               </View>
             );
           })}
-          <View style={[s.cell, { width: 80 }]}>
+          <View style={[s.cell, { width: 90 }]}>
             <Text style={right}>
               {compact(x.achieved)} / {x.target ? compact(x.target) : "-"}
             </Text>
@@ -106,8 +145,9 @@ export async function GET(request: Request) {
         </Text>
         <Text style={s.h2}>Summary</Text>
         <Summary rows={r.rows} team={r.team} />
+        {r.rows.length > 0 && <BulletChart rows={r.rows} />}
         {months.length > 1 && (
-          <View break={r.rows.length > 10}>
+          <View break>
             <Text style={[s.h2, { marginTop: 16 }]}>Month by month (achieved / target, % achieved)</Text>
             <Months rows={r.rows} team={r.team} months={months} />
           </View>

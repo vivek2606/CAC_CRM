@@ -17,18 +17,42 @@ export async function GET(request: Request) {
   ws.addRow([`Target vs Achievement - ${periodLabel(r)}`]).font = { bold: true, size: 14 };
   ws.addRow(["Achieved = won deals (by invoice date) + project billing, excl. VAT"]).font = { italic: true, color: { argb: "FF64748B" } };
   ws.addRow([]);
-  const h = ws.addRow(["Sales person", "Target", "Achieved", "Shortfall / excess", "% Achieved"]);
+  const h = ws.addRow(["Sales person", "Target", "Achieved", "Shortfall / excess", "% Achieved", "Chart (each █ = 10% of target)"]);
   h.eachCell((c) => Object.assign(c, head));
   for (const x of [...r.rows, r.team]) {
     const n = ws.rowCount + 1;
-    const row = ws.addRow([x.name, x.target, x.achieved, { formula: `C${n}-B${n}` }, { formula: `IF(B${n}>0,C${n}/B${n},"")`, result: x.pct == null ? "" : x.pct / 100 }]);
+    // A text bar that draws itself in any spreadsheet: one block per 10% of
+    // target (capped at 20 = 200%).
+    const blocks = x.pct == null ? 0 : Math.min(20, Math.round(x.pct / 10));
+    const row = ws.addRow([
+      x.name,
+      x.target,
+      x.achieved,
+      { formula: `C${n}-B${n}` },
+      { formula: `IF(B${n}>0,C${n}/B${n},"")`, result: x.pct == null ? "" : x.pct / 100 },
+      { formula: `IF(B${n}>0,REPT("█",MIN(20,ROUND(C${n}/B${n}*10,0))),"")`, result: "█".repeat(blocks) },
+    ]);
+    row.getCell(6).font = { color: { argb: x.pct == null ? "FF94A3B8" : x.pct >= 100 ? "FF10B981" : x.pct >= 70 ? "FFF59E0B" : "FFF43F5E" } };
     row.getCell(2).numFmt = MONEY;
     row.getCell(3).numFmt = MONEY;
     row.getCell(4).numFmt = MONEY;
     row.getCell(5).numFmt = "0.0%";
     if (x.id === "team") row.font = { bold: true };
   }
-  ws.columns = [{ width: 30 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 14 }];
+  ws.columns = [{ width: 30 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 14 }, { width: 28 }];
+  // In-cell data bars on Achieved and % Achieved (sales people, not the team row).
+  const firstData = 5;
+  const lastRep = firstData + r.rows.length - 1;
+  if (r.rows.length) {
+    ws.addConditionalFormatting({
+      ref: `C${firstData}:C${lastRep}`,
+      rules: [{ type: "dataBar", priority: 1, cfvo: [{ type: "min" }, { type: "max" }], color: { argb: "FF10B981" } } as ExcelJS.ConditionalFormattingRule],
+    });
+    ws.addConditionalFormatting({
+      ref: `E${firstData}:E${lastRep}`,
+      rules: [{ type: "dataBar", priority: 2, cfvo: [{ type: "num", value: 0 }, { type: "num", value: 1.5 }], color: { argb: "FF6366F1" } } as ExcelJS.ConditionalFormattingRule],
+    });
+  }
 
   const wm = wb.addWorksheet("Month by month");
   wm.addRow([`Target vs Achievement by month - ${periodLabel(r)}`]).font = { bold: true, size: 14 };
@@ -54,6 +78,17 @@ export async function GET(request: Request) {
     });
   }
   wm.columns = [{ width: 28 }, { width: 12 }, ...months.map(() => ({ width: 16 })), { width: 18 }];
+  // % cells: green at 100%+, amber 70-99%, red under 70%.
+  const lastCol = String.fromCharCode(64 + months.length + 3);
+  const pctRef = `C4:${lastCol}${wm.rowCount}`;
+  wm.addConditionalFormatting({
+    ref: pctRef,
+    rules: [
+      { type: "expression", priority: 1, formulae: [`AND($B4="% Achieved",ISNUMBER(C4),C4>=1)`], style: { font: { color: { argb: "FF047857" }, bold: true }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFD1FAE5" } } } },
+      { type: "expression", priority: 2, formulae: [`AND($B4="% Achieved",ISNUMBER(C4),C4>=0.7,C4<1)`], style: { font: { color: { argb: "FFB45309" }, bold: true }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFEF3C7" } } } },
+      { type: "expression", priority: 3, formulae: [`AND($B4="% Achieved",ISNUMBER(C4),C4<0.7)`], style: { font: { color: { argb: "FFBE123C" }, bold: true }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFE4E6" } } } },
+    ],
+  });
 
   const buffer = await wb.xlsx.writeBuffer();
   return new Response(buffer, {
