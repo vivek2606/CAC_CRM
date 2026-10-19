@@ -37,6 +37,11 @@ export async function requireBackOffice(): Promise<SessionUser> {
 }
 
 /** Requires the current user to be the Head of Sales. */
+// Quotes in Excel (editable) - not for the Sales Coordinator, who gets the PDF.
+export function canDownloadQuoteExcel(user: { role: SessionUser["role"] }): boolean {
+  return user.role !== "COORDINATOR";
+}
+
 export async function requireHead(): Promise<SessionUser> {
   const user = await requireUser();
   if (user.role !== "HEAD") redirect("/");

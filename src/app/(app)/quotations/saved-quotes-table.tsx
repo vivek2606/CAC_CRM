@@ -28,10 +28,13 @@ export function SavedQuotesTable({
   quotes,
   showDeal = true,
   dealProducts,
+  canExcel = true,
 }: {
   quotes: SavedQuoteRow[];
   showDeal?: boolean;
   dealProducts?: { hasProducts: boolean };
+  // Not for the Sales Coordinator (PDF only).
+  canExcel?: boolean;
 }) {
   const link = "text-indigo-600 hover:text-indigo-500 font-medium";
   return (
@@ -96,10 +99,12 @@ export function SavedQuotesTable({
                     <FileDown className="h-4 w-4" />
                     <span className="sr-only">PDF</span>
                   </a>
-                  <a href={`/quotations/saved/${q.id}/xlsx`} className={`${link} inline-flex items-center gap-1`} title="Download Excel">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span className="sr-only">Excel</span>
-                  </a>
+                  {canExcel && (
+                    <a href={`/quotations/saved/${q.id}/xlsx`} className={`${link} inline-flex items-center gap-1`} title="Download Excel">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      <span className="sr-only">Excel</span>
+                    </a>
+                  )}
                   <Link href={`/quotations?quote=${q.id}&revise=1`} className={link} title="Copy into a new quotation with a new reference number">
                     Revise
                   </Link>

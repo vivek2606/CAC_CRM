@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireUser, isBackOffice } from "@/lib/rbac";
+import { requireUser, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { visibleQuotationsWhere, quoteSalesPeople, NOT_DRAFT, DRAFT_TYPE } from "@/lib/saved-quotes";
 import { formatDateTime } from "@/lib/format";
@@ -110,7 +110,7 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
             <EmptyState title="No saved quotations" description="A quotation is saved here the first time it's downloaded." />
           ) : (
             <>
-              <SavedQuotesTable quotes={quotes} />
+              <SavedQuotesTable quotes={quotes} canExcel={canDownloadQuoteExcel(user)} />
               {total > quotes.length && <p className="mt-3 text-xs text-slate-500">Showing the latest {quotes.length} of {total} - search to narrow down.</p>}
             </>
           )}

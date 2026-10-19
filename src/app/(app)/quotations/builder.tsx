@@ -151,6 +151,7 @@ export function QuotationBuilder({
   dealOwners,
   myId,
   isHead,
+  canExcel,
 }: {
   options: ModelOption[];
   companies: CompanyOption[];
@@ -168,6 +169,8 @@ export function QuotationBuilder({
   myId: string;
   // The Head may also quote below an item's permissible discount.
   isHead: boolean;
+  // Not the Sales Coordinator: she downloads the PDF only.
+  canExcel: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const companyFor = (key: string) => companies.find((c) => c.key === key) ?? companies[0];
@@ -1277,6 +1280,7 @@ export function QuotationBuilder({
             <FileDown className="h-4 w-4" />
             {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}
           </button>
+          {canExcel && (
           <button
             type="button"
             disabled={busy != null}
@@ -1286,6 +1290,7 @@ export function QuotationBuilder({
             <FileSpreadsheet className="h-4 w-4" />
             {busy === "xlsx" ? "Preparing Excel…" : "Download Excel"}
           </button>
+          )}
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { HistoryCard } from "@/components/history-card";
 import { NOT_DRAFT } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
+import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
@@ -261,6 +261,7 @@ export default async function DealDetailPage({
               <SavedQuotesTable
                 quotes={quotations}
                 showDeal={false}
+                canExcel={canDownloadQuoteExcel(user)}
                 dealProducts={deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null ? { hasProducts: deal.items.length > 0 } : undefined}
               />
             </Card>

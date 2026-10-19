@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { requireUser, canAccessOwner, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { getCompanySettings, defaultTermsLines } from "@/lib/company-profile";
 import { PAYMENT_TERMS_LABELS } from "@/lib/constants";
@@ -194,6 +194,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           dealOwners={isBackOffice(user) ? await dealOwnerOptions() : null}
           myId={user.id}
           isHead={user.role === "HEAD"}
+          canExcel={canDownloadQuoteExcel(user)}
         />
       </div>
     </div>

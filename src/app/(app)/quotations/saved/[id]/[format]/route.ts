@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, canDownloadQuoteExcel } from "@/lib/rbac";
 import { buildDocument, documentFilename, documentInputSchema } from "@/lib/sales-document";
 import { renderSalesDocumentPdf } from "@/lib/pdf/sales-document-pdf";
 import { buildSalesDocumentXlsx } from "@/lib/sales-document-xlsx";
@@ -11,6 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const user = await requireUser();
   const { id, format } = await params;
   if (format !== "pdf" && format !== "xlsx") return new Response("Not found", { status: 404 });
+  if (format === "xlsx" && !canDownloadQuoteExcel(user)) return new Response("Quotes download as PDF only for you.", { status: 403 });
   const q = await prisma.quotation.findUnique({ where: { id }, include: { deal: { select: { ownerId: true } } } });
   if (!q || !canSeeQuotation(user, q)) return new Response("Not found", { status: 404 });
   if (q.type === DRAFT_TYPE) return new Response("This is a draft - open it in the Quotations builder and download it there.", { status: 400 });
