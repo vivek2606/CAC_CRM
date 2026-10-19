@@ -4,7 +4,7 @@ import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
-import { dealOwnerProblem } from "@/lib/deal-owner";
+import { dealOwnerProblem, dealOwnerOptions } from "@/lib/deal-owner";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
@@ -47,6 +47,65 @@ export async function dealOptionsForQuote(quoteId: string): Promise<{ id: string
     id: d.id,
     label: [d.title, d.account?.name ?? d.customerName, d.stage === "WON" ? "Won" : d.stage === "LOST" ? "Lost" : null].filter(Boolean).join(" · "),
   }));
+}
+
+// Everything the "Link deal" dialog needs: the sales person's deals, and
+// for creating a new deal / lead - the people it can be under (Head /
+// Coordinator only; others create their own) and the quote's customer.
+export async function quoteLinkContext(quoteId: string): Promise<{
+  deals: { id: string; label: string }[];
+  owners: { id: string; name: string }[] | null;
+  defaultOwnerId: string;
+  customerName: string;
+}> {
+  const { user } = await quoteForLinking(quoteId);
+  const q = await prisma.quotation.findUniqueOrThrow({ where: { id: quoteId }, select: { ownerId: true, customerName: true } });
+  const owners = isBackOffice(user) ? await dealOwnerOptions() : null;
+  return {
+    deals: await dealOptionsForQuote(quoteId),
+    owners,
+    defaultOwnerId: owners ? (owners.some((o) => o.id === q.ownerId) ? q.ownerId : user.role === "HEAD" ? user.id : "") : user.id,
+    customerName: q.customerName ?? "",
+  };
+}
+
+// "Link deal" when the deal doesn't exist yet: a new deal for the quote
+// (at Proposal, with the quote's products), or a new lead converted to
+// that deal straight away - so the enquiry counts in lead-to-deal
+// conversion. A quote always sits on a deal, never on a lead alone.
+export async function createForQuote(
+  quoteId: string,
+  input: { kind: "deal" | "lead"; title: string; ownerId?: string; phone?: string },
+): Promise<{ dealId?: string; leadId?: string; error?: string }> {
+  const { user } = await quoteForLinking(quoteId);
+  const q = await prisma.quotation.findUniqueOrThrow({ where: { id: quoteId }, select: { ref: true, dealId: true, customerName: true } });
+  if (q.dealId) return { error: "This quotation is already linked to a deal." };
+  const title = input.title.trim();
+  if (!title) return { error: `Enter a name for the ${input.kind}.` };
+  const res = await createDealForQuote(q.ref, title, input.ownerId);
+  if (res.error || !res.dealId) return { error: res.error ?? "Couldn't create the deal." };
+  const phone = input.phone?.trim() || null;
+  if (phone) await prisma.deal.update({ where: { id: res.dealId }, data: { customerPhone: phone.slice(0, 40) } });
+  if (input.kind === "deal") return { dealId: res.dealId };
+
+  const deal = await prisma.deal.findUniqueOrThrow({ where: { id: res.dealId }, select: { ownerId: true, value: true, createdAt: true } });
+  const lead = await prisma.lead.create({
+    data: {
+      title: title.slice(0, 200),
+      customerName: q.customerName || null,
+      company: q.customerName || null,
+      phone,
+      status: "CONVERTED",
+      value: deal.value,
+      ownerId: deal.ownerId,
+      convertedDealId: res.dealId,
+      createdAt: deal.createdAt,
+    },
+    select: { id: true },
+  });
+  await audit("lead", lead.id, user.id, "created", `From quotation ${q.ref} - converted to its deal straight away.`);
+  revalidatePath("/leads");
+  return { dealId: res.dealId, leadId: lead.id };
 }
 
 export async function linkQuotationDeal(quoteId: string, dealId: string | null): Promise<{ error?: string }> {
