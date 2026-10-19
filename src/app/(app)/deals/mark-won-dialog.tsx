@@ -12,7 +12,10 @@ export type WonProductOption = { id: string; label: string; defaultPrice: number
 export type WonExistingItem = { productId: string; label: string; qty: number; unitPrice: number };
 export type WonInvoiceInput = { invoiceNo: string; closedAt: string; billingCompany: string; items: { productId: string; qty: number; unitPrice: number }[] };
 
-type Row = { key: string; productId: string; qty: string; rate: string };
+// dealLine: the deal's own product line this row bills (index into
+// existingItems). On the first invoice such a row is "auto" until its qty is
+// typed: it takes whatever of that line the other invoices don't bill.
+type Row = { key: string; productId: string; qty: string; rate: string; dealLine?: number; auto?: boolean };
 // company: the billing company ("Sakuragi" / "Somotex").
 type Block = { key: string; invoiceNo: string; closedAt: string; company: string; rows: Row[] };
 
@@ -76,7 +79,7 @@ export function MarkWonDialog({
       closedAt: wonInvoice?.closedAt || today,
       company: billingCompany ?? DEFAULT_BILLING_COMPANY,
       rows: existingItems.length
-        ? existingItems.map((i) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice) }))
+        ? existingItems.map((i, k) => ({ key: newKey(), productId: i.productId, qty: String(i.qty), rate: String(i.unitPrice), dealLine: k, auto: true }))
         : [blankRow()],
     },
   ]);
@@ -92,8 +95,27 @@ export function MarkWonDialog({
     setError(null);
     setBlocks((bs) => bs.map((b) => (b.key === bkey ? { ...b, rows: b.rows.map((r) => (r.key === rkey ? { ...r, ...patch } : r)) } : b)));
   };
-  const blockTotal = (b: Block) => b.rows.reduce((s, r) => s + num(r.qty) * num(r.rate), 0);
-  const grand = blocks.reduce((s, b) => s + blockTotal(b), 0);
+  // How much of each deal line the later invoices bill; the first invoice's
+  // auto rows take the rest.
+  const billedElsewhere = (line: number) =>
+    blocks.slice(1).reduce((s, b) => s + b.rows.filter((r) => r.dealLine === line).reduce((t, r) => t + num(r.qty), 0), 0);
+  const qtyOf = (r: Row, n: number) =>
+    n === 0 && r.auto && r.dealLine != null ? Math.max(0, (existingItems[r.dealLine]?.qty ?? 0) - billedElsewhere(r.dealLine)) : num(r.qty);
+  const qtyText = (r: Row, n: number) => (n === 0 && r.auto && r.dealLine != null ? String(qtyOf(r, n)) : r.qty);
+  // A deal line left at 0 on an invoice simply isn't billed on it.
+  const skipped = (r: Row, n: number) => r.dealLine != null && qtyOf(r, n) === 0;
+  const blockTotal = (b: Block, n: number) => b.rows.reduce((s, r) => s + qtyOf(r, n) * num(r.rate), 0);
+  const grand = blocks.reduce((s, b, n) => s + blockTotal(b, n), 0);
+  // Per product on the deal: billed on all invoices vs on the deal.
+  const billedVsDeal = existingItems.length && blocks.length > 1
+    ? [...new Map(existingItems.map((i) => [i.productId, i.label])).entries()].map(([productId, label]) => ({
+        label,
+        onDeal: existingItems.filter((i) => i.productId === productId).reduce((s, i) => s + i.qty, 0),
+        billed: blocks.reduce((s, b, n) => s + b.rows.filter((r) => r.productId === productId).reduce((t, r) => t + qtyOf(r, n), 0), 0),
+        perInvoice: blocks.map((b, n) => b.rows.filter((r) => r.productId === productId).reduce((t, r) => t + qtyOf(r, n), 0)),
+      }))
+    : [];
+  const fmtQty = (q: number) => q.toLocaleString("en-NG", { maximumFractionDigits: 2 });
 
   const upload = (bkey: string, file: File) =>
     startUpload(async () => {
@@ -142,14 +164,14 @@ export function MarkWonDialog({
     const invoices: WonInvoiceInput[] = [];
     for (const [n, b] of blocks.entries()) {
       const label = blocks.length > 1 ? ` on invoice ${n + 1}` : "";
-      const filled = b.rows.filter((r) => r.productId || r.rate.trim());
+      const filled = b.rows.filter((r) => (r.productId || r.rate.trim()) && !skipped(r, n));
       if (filled.length === 0) return setError(`Add the products billed${label} - model, quantity and basic rate.`);
       if (filled.some((r) => !r.productId)) return setError(`Pick the product on every row${label} (or remove the empty row).`);
       if (filled.some((r) => num(r.qty) === 0 || num(r.rate) === 0)) return setError(`Every product${label} needs a quantity and a basic rate (use a minus sign for a sales return).`);
       if (!b.invoiceNo.trim()) return setError(`Enter the invoice no.${label}.`);
       if (!b.closedAt) return setError(`Enter the invoice date${label}.`);
       if (!b.company) return setError(`Pick the company that raised the invoice${label} - Sakuragi or Somotex.`);
-      invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, billingCompany: b.company, items: filled.map((r) => ({ productId: r.productId, qty: num(r.qty), unitPrice: num(r.rate) })) });
+      invoices.push({ invoiceNo: b.invoiceNo.trim(), closedAt: b.closedAt, billingCompany: b.company, items: filled.map((r) => ({ productId: r.productId, qty: qtyOf(r, n), unitPrice: num(r.rate) })) });
     }
     // The same number is fine once per company and type (sale / sales
     // return) - they're numbered separately.
@@ -166,8 +188,9 @@ export function MarkWonDialog({
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-sm font-semibold text-slate-900 mb-1">{wonInvoice ? "Invoices & products billed" : "Mark this deal Won"}</h2>
         <p className="text-xs text-slate-500 mb-4">
-          Record the invoice and what was billed on it. If the order was billed on more than one invoice, add each invoice - the first stays on this deal and
-          each other one becomes its own won deal with the same customer and details. The invoice date is when the sale counts toward targets and incentives.
+          Record the invoice and what was billed on it. If the order was billed on more than one invoice, click Add another invoice and enter the quantities
+          billed on it - they come off the first invoice by themselves. The first invoice stays on this deal and each other one becomes its own won deal with
+          the same customer and details. The invoice date is when the sale counts toward targets and incentives.
         </p>
         {initialInvoices?.length ? (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -222,17 +245,30 @@ export function MarkWonDialog({
                   <span />
                 </div>
                 {b.rows.map((r) => (
-                  <div key={r.key} className="grid grid-cols-1 sm:grid-cols-[1fr_72px_140px_24px] gap-2 items-start">
+                  <div key={r.key} className={`grid grid-cols-1 sm:grid-cols-[1fr_72px_140px_24px] gap-2 items-start ${skipped(r, n) ? "opacity-50" : ""}`}>
                     <SearchableSelect
                       options={products}
                       value={r.productId}
                       placeholder="Search model or code…"
                       onSelect={(o) => {
                         const price = o ? priceById.get(o.id) : null;
-                        setRow(b.key, r.key, { productId: o?.id ?? "", rate: price != null && !r.rate ? String(price) : r.rate });
+                        // Another product isn't the deal's line any more.
+                        setRow(b.key, r.key, {
+                          productId: o?.id ?? "",
+                          rate: price != null && !r.rate ? String(price) : r.rate,
+                          ...(o?.id !== r.productId ? { dealLine: undefined, auto: false, qty: qtyText(r, n) } : {}),
+                        });
                       }}
                     />
-                    <input inputMode="decimal" value={r.qty} onChange={(e) => setRow(b.key, r.key, { qty: e.target.value })} aria-label="Quantity" className={`${input} text-right`} />
+                    <input
+                      inputMode="decimal"
+                      value={qtyText(r, n)}
+                      placeholder="0"
+                      onChange={(e) => setRow(b.key, r.key, { qty: e.target.value, auto: false })}
+                      aria-label="Quantity"
+                      title={n === 0 && r.auto && r.dealLine != null && blocks.length > 1 ? "What the other invoices don't bill - type to set it yourself" : undefined}
+                      className={`${input} text-right`}
+                    />
                     <input inputMode="decimal" value={r.rate} onChange={(e) => setRow(b.key, r.key, { rate: e.target.value })} aria-label="Basic rate" placeholder="0.00" className={`${input} text-right`} />
                     <button
                       type="button"
@@ -268,7 +304,7 @@ export function MarkWonDialog({
                   Download template
                 </a>
                 <span className="ml-auto text-sm text-slate-700">
-                  Invoice total (excl. VAT): <span className="font-semibold tabular-nums">{naira(blockTotal(b))}</span>
+                  Invoice total (excl. VAT): <span className="font-semibold tabular-nums">{naira(blockTotal(b, n))}</span>
                 </span>
               </div>
               {uploadNote?.block === b.key && <p className="mt-1 text-xs text-slate-600">{uploadNote.text}</p>}
@@ -279,7 +315,22 @@ export function MarkWonDialog({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setBlocks((bs) => [...bs, { key: newKey(), invoiceNo: "", closedAt: bs[bs.length - 1]?.closedAt ?? today, company: bs[bs.length - 1]?.company || DEFAULT_BILLING_COMPANY, rows: [blankRow()] }])}
+            onClick={() =>
+              setBlocks((bs) => [
+                ...bs,
+                {
+                  key: newKey(),
+                  invoiceNo: "",
+                  closedAt: bs[bs.length - 1]?.closedAt ?? today,
+                  company: bs[bs.length - 1]?.company || DEFAULT_BILLING_COMPANY,
+                  // The deal's products at their rates, qty to fill in - what
+                  // is billed here comes off the first invoice by itself.
+                  rows: bs[0]?.rows.some((r) => r.dealLine != null)
+                    ? existingItems.map((i, k) => ({ key: newKey(), productId: i.productId, qty: "", rate: String(i.unitPrice), dealLine: k }))
+                    : [blankRow()],
+                },
+              ])
+            }
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Plus className="h-4 w-4" />
@@ -290,6 +341,30 @@ export function MarkWonDialog({
             {quotedValue > 0 && Math.abs(grand - quotedValue) >= 0.01 && <span className="ml-2 text-xs text-slate-500">quoted {naira(quotedValue)}</span>}
           </p>
         </div>
+
+        {billedVsDeal.length > 0 && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">Billed vs the deal</p>
+            <ul className="space-y-0.5 text-xs">
+              {billedVsDeal.map((x) => {
+                const diff = Math.round((x.billed - x.onDeal) * 100) / 100;
+                return (
+                  <li key={x.label} className="flex flex-wrap gap-x-2">
+                    <span className="font-medium text-slate-800">{x.label}</span>
+                    <span className="text-slate-500">
+                      {fmtQty(x.onDeal)} on the deal · billed {x.perInvoice.map(fmtQty).join(" + ")} = {fmtQty(x.billed)}
+                    </span>
+                    {diff === 0 ? (
+                      <span className="font-medium text-emerald-700">✓</span>
+                    ) : (
+                      <span className="font-medium text-amber-700">{diff > 0 ? `${fmtQty(diff)} more than the deal` : `${fmtQty(-diff)} not billed`}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
         {!error && submitError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{submitError}</p>}
