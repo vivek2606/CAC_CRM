@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag, Receipt } from "lucide-react";
+import { FileSpreadsheet, Target, ChevronRight, TrendingUp, Boxes, Tag, Receipt, FilePen } from "lucide-react";
 
 // headOnly: the Head only (price uploads stay with the Head of Sales).
 const IMPORTS: { href: string; icon: typeof FileSpreadsheet; title: string; description: string; headOnly?: boolean }[] = [
@@ -10,6 +10,13 @@ const IMPORTS: { href: string; icon: typeof FileSpreadsheet; title: string; desc
     icon: FileSpreadsheet,
     title: "Sales Register",
     description: "Orion ERP historical sales export — accounts, products, price history, and Won deals.",
+  },
+  {
+    href: "/admin/import/won-deals",
+    headOnly: true,
+    icon: FilePen,
+    title: "Update Won Deals",
+    description: "Correct won deals by invoice no. - lead, conversion and won dates, customer, company, products and sales person.",
   },
   {
     href: "/project-billing",
