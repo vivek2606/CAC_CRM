@@ -386,6 +386,11 @@ model Deal {
   contact       Contact?    @relation(fields: [contactId], references: [id])
 
   sourceLead    Lead?       @relation("LeadConversion")
+  // An order billed across several invoices: each further invoice is its
+  // own won deal, pointing at the deal it was marked Won from.
+  orderDealId   String?
+  orderDeal     Deal?       @relation("DealOrder", fields: [orderDealId], references: [id], onDelete: SetNull)
+  orderInvoices Deal[]      @relation("DealOrder")
 
   // Set only for deals brought in via the historical sales-register import.
   // sourceDocKey ("<Txn Code>/<Txn No>") is what identifies the document, so
@@ -408,6 +413,7 @@ model Deal {
   quotations    Quotation[]
 
   @@index([sourceTxnNo])
+  @@index([orderDealId])
 }
 
 // Additional stakeholders on a deal beyond its one primary Contact (the

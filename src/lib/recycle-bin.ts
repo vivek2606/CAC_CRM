@@ -153,8 +153,11 @@ export async function restoreRecord(id: string, restoredById: string): Promise<{
     if (rec.kind === "deal") {
       const s = rec.data as unknown as DealSnapshot;
       if (await prisma.deal.findUnique({ where: { id: rec.recordId }, select: { id: true } })) return { error: "This deal already exists." };
+      // Its order's first deal may have been deleted since - then it comes back on its own.
+      const dealRow = revive(s.deal) as Prisma.DealUncheckedCreateInput;
+      if (dealRow.orderDealId && !(await prisma.deal.findUnique({ where: { id: dealRow.orderDealId }, select: { id: true } }))) dealRow.orderDealId = null;
       await prisma.$transaction(async (tx) => {
-        await tx.deal.create({ data: revive(s.deal) as Prisma.DealUncheckedCreateInput });
+        await tx.deal.create({ data: dealRow });
         if (s.items.length) await tx.dealLineItem.createMany({ data: s.items.map((r) => revive(r) as Prisma.DealLineItemCreateManyInput) });
         if (s.saleLines.length) await tx.saleLineItem.createMany({ data: s.saleLines.map((r) => revive(r) as Prisma.SaleLineItemCreateManyInput), skipDuplicates: true });
         if (s.contactRoles.length) await tx.dealContactRole.createMany({ data: s.contactRoles.map((r) => revive(r) as Prisma.DealContactRoleCreateManyInput) });

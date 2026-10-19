@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { HistoryCard } from "@/components/history-card";
+import { getOrderInvoices } from "@/lib/order-invoices";
+import { OrderInvoicesCard } from "@/components/order-invoices-card";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
@@ -39,6 +41,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (!lead) notFound();
   if (!canAccessOwner(user, lead.ownerId)) redirect("/leads");
 
+  const orderInvoices = lead.convertedDeal ? await getOrderInvoices(lead.convertedDeal.id) : [];
   const colors = LEAD_STATUS_COLORS[lead.status];
   // "First contacted" (HubSpot's time-to-first-contact): the earliest
   // logged CALL/EMAIL/MEETING activity on this lead, distinct from any
@@ -98,6 +101,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         {lead.tags.length > 0 && <TagChips tags={lead.tags} />}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <OrderInvoicesCard invoices={orderInvoices} title="Invoices from this lead's deal" />
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-900 mb-3">Timeline</h2>
             <RecordTimeline

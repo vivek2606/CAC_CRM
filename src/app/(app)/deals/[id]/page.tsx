@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getOrderInvoices } from "@/lib/order-invoices";
+import { OrderInvoicesCard } from "@/components/order-invoices-card";
 import { HistoryCard } from "@/components/history-card";
 import { NOT_DRAFT } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
@@ -82,7 +84,7 @@ export default async function DealDetailPage({
   const viewQuoteAction = viewQuote.bind(null, deal.id);
 
   const ownerIds = await visibleOwnerIds(user);
-  const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts, quotations] = await Promise.all([
+  const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts, quotations, orderInvoices] = await Promise.all([
     getQuotableProducts(),
     getLatestPriceByProduct(),
     getAvailableStockByProduct(),
@@ -92,6 +94,7 @@ export default async function DealDetailPage({
       select: { id: true, firstName: true, lastName: true },
     }),
     prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }),
+    getOrderInvoices(deal.id),
   ]);
   const productOptions = products.map((p) => ({
     id: p.id,
@@ -246,6 +249,8 @@ export default async function DealDetailPage({
               </>
             )}
           </Card>
+
+          {orderInvoices.length > 1 && <OrderInvoicesCard invoices={orderInvoices} currentId={deal.id} />}
 
           {quotations.length > 0 && (
             <Card className="p-5">

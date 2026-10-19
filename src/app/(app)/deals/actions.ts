@@ -944,6 +944,7 @@ async function markDealWonImpl(dealId: string, invoices: WonInvoice[]) {
         contactId: deal.contactId,
         createdAt: deal.createdAt,
         billingCompany: companyOf(inv),
+        orderDealId: deal.orderDealId ?? deal.id,
         discountApprovedAt: approval?.at ?? null,
         discountApprovedById: approval?.by ?? null,
         items: { createMany: { data: inv.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: round2(i.unitPrice) })) } },
