@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
-import { MAX_COMBINED_CODE, MAX_MODULE_CODE, MAX_MODULES, VRF_SERIES, kW, parseVrfModel, suggestBreakup, vrfModelName } from "@/lib/modular-outdoor";
+import { DEFAULT_VRF_SERIES, MAX_COMBINED_CODE, MAX_MODULE_CODE, MAX_MODULES, VRF_SERIES, kW, parseVrfModel, suggestBreakup, vrfModelName } from "@/lib/modular-outdoor";
 import type { ModelOption } from "./builder";
 
 export type ModularModule = { productId: string; model: string; rate: string };
@@ -35,7 +35,7 @@ export function ModularOutdoorDialog({
   onConfirm: (r: ModularResult) => void;
   onCancel: () => void;
 }) {
-  const [series, setSeries] = useState<string>(initial.series ?? initial.modules?.map((m) => parseVrfModel(m.model)?.series).find(Boolean) ?? "MVC");
+  const [series, setSeries] = useState<string>(initial.series ?? initial.modules?.map((m) => parseVrfModel(m.model)?.series).find(Boolean) ?? DEFAULT_VRF_SERIES);
   const [capacity, setCapacity] = useState(String(kW(initial.code)));
   const code = Math.round(num(capacity) * 10);
 
@@ -59,7 +59,7 @@ export function ModularOutdoorDialog({
     });
   };
   const [mods, setMods] = useState<Module[]>(() =>
-    initial.modules?.length ? initial.modules.map((m) => ({ productId: m.productId, rate: m.rate })) : suggest(initial.series ?? "MVC", initial.code),
+    initial.modules?.length ? initial.modules.map((m) => ({ productId: m.productId, rate: m.rate })) : suggest(initial.series ?? DEFAULT_VRF_SERIES, initial.code),
   );
   const [error, setError] = useState<string | null>(null);
 

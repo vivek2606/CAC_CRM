@@ -7,7 +7,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
 import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
-import { combinedOutdoorIn, kW, vrfModelName } from "@/lib/modular-outdoor";
+import { combinedOutdoorIn, kW, vrfModelName, DEFAULT_VRF_SERIES } from "@/lib/modular-outdoor";
 import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
 
 export type ModelOption = {
@@ -571,7 +571,7 @@ export function QuotationBuilder({
   const modularAction = (uid: string) => (q: string) => {
     const v = combinedOutdoorIn(q);
     return v
-      ? { label: `Modular outdoor ${vrfModelName(v.series ?? "MVC", v.code)} - ${kW(v.code)} kW: choose its modules…`, run: () => setModular({ uid, series: v.series, code: v.code }) }
+      ? { label: `Modular outdoor ${vrfModelName(v.series ?? DEFAULT_VRF_SERIES, v.code)} - ${kW(v.code)} kW: choose its modules…`, run: () => setModular({ uid, series: v.series, code: v.code }) }
       : null;
   };
   const modularNote = (r: Extract<Row, { kind: "item" }>) => (

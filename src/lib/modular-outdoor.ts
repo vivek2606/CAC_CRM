@@ -1,24 +1,28 @@
 // VRF outdoor units are modular: one module is at most 85 kW, and up to
 // three modules combine into one outdoor of up to 255 kW. A model's number
 // is its capacity in tenths of a kW (MVC-850WV2GN1 = 85 kW), so a combined
-// one reads e.g. MVC-2250WV2GN1 (225 kW) - not a product of its own, but
-// the modules it is made of.
+// one reads e.g. MVC-M2250WV2GN1 (225 kW, VC Max) - not a product of its
+// own, but the modules it is made of.
 
 export const MAX_MODULE_CODE = 850; // 85 kW
 export const MAX_MODULES = 3;
 export const MAX_COMBINED_CODE = MAX_MODULE_CODE * MAX_MODULES;
-export const VRF_SERIES = ["MVC", "MVC-M", "MVX", "MVX-i"] as const;
+export const VRF_SERIES = ["MVC-M", "MVC", "MVX", "MVX-i"] as const;
+// Combined outdoors are VC Max (MVC-M) unless the model says otherwise.
+export const DEFAULT_VRF_SERIES = "MVC-M";
 
-// "MVC-850WV2GN1", "MVX - i730WV2GN1", "MVC-M224WV2GN1", or just "2250W".
-const MODEL = /(?:\b(MV[CX])\s*-?\s*([MI])?\s*-?\s*)?(\d{3,4})\s*W/i;
+// "MVC-M2250", "MVC-850WV2GN1", "MVX - i730WV2GN1", "MVC-M224WV2GN1" - or
+// just a capacity with its W, "2250W".
+const WITH_SERIES = /\b(MV[CX])\s*-?\s*([MI])?\s*-?\s*(\d{3,4})(?!\d)/i;
+const NUMBER_ONLY = /\b(\d{3,4})\s*W/i;
 
 export type VrfModel = { series: string | null; code: number };
 
 export function parseVrfModel(text: string): VrfModel | null {
-  const m = MODEL.exec(text);
-  if (!m) return null;
-  const series = m[1] ? m[1].toUpperCase() + (m[2] ? (m[2].toUpperCase() === "I" ? "-i" : "-M") : "") : null;
-  return { series, code: Number(m[3]) };
+  const m = WITH_SERIES.exec(text);
+  if (m) return { series: m[1].toUpperCase() + (m[2] ? (m[2].toUpperCase() === "I" ? "-i" : "-M") : ""), code: Number(m[3]) };
+  const n = NUMBER_ONLY.exec(text);
+  return n ? { series: null, code: Number(n[1]) } : null;
 }
 
 // Typed into a product search: a combined outdoor (over one module, up to three).
