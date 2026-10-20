@@ -88,7 +88,7 @@ export type DocRow =
 
 export type SalesDocument = {
   type: DocumentType;
-  heading: (typeof DOCUMENT_TYPES)[DocumentType];
+  heading: string;
   ref: string;
   date: Date;
   company: CompanyProfile;
@@ -97,7 +97,7 @@ export type SalesDocument = {
   title: string;
   validUntil: Date | null;
   tin: string;
-  bank: { bankName: string; accountName: string; accountNumber: string };
+  bank: { bankName: string; accountName: string; accountNumber: string; branch?: string };
   signatory: { name: string; designation: string; phone: string };
   rows: DocRow[];
   vatInclusive: boolean;
@@ -110,6 +110,12 @@ export type SalesDocument = {
   total: number;
   totalInWords: string;
   terms: string[];
+  // Service & project invoices (service-invoice.ts) only: registration lines
+  // under the company name (VAT reg. no., TIN), a document without VAT, and
+  // the payment received so far with the balance due.
+  regLines?: string[];
+  noVat?: boolean;
+  payment?: { received: number; balance: number };
 };
 
 export async function buildDocument(input: DocumentInput): Promise<SalesDocument> {

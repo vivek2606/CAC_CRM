@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
@@ -64,6 +65,11 @@ export default async function ProjectBillingPage({
       <PageHeader
         title="Project & Service Billing"
         description="Amounts excl. VAT. Under a sales person it is project billing and counts toward their target and incentive; under the Service Manager it is service billing"
+        action={
+          <Link href="/project-billing/invoice" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+            Prepare invoice (Somotex)
+          </Link>
+        }
       />
       <div className="p-6 space-y-6">
         <Card className="p-5">

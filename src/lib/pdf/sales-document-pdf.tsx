@@ -103,7 +103,7 @@ function TableHeader({ doc }: { doc: SalesDocument }) {
           {c.header}
         </Text>
       ))}
-      <Text style={[...col.amt, s.thText]}>{doc.vatInclusive ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
+      <Text style={[...col.amt, s.thText]}>{doc.vatInclusive && !doc.noVat ? "Amount incl. VAT (NGN)" : "Amount (NGN)"}</Text>
     </View>
   );
 }
@@ -138,7 +138,7 @@ function RateCells({ doc }: { doc: SalesDocument }) {
 export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fill?: boolean }) {
   const c = doc.company;
   const contact = [c.phone, c.email, c.website].filter(Boolean).join("  |  ");
-  const reg = [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`]
+  const reg = doc.regLines ? doc.regLines.join("  |  ") : [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`]
     .filter(Boolean)
     .join("  |  ");
   const hasBank = Boolean(doc.bank.bankName || doc.bank.accountName || doc.bank.accountNumber);
@@ -280,7 +280,12 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 </View>
               </>
             )}
-            {doc.vatInclusive ? (
+            {doc.noVat ? (
+              <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
+                <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total (NGN)</Text>
+                <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
+              </View>
+            ) : doc.vatInclusive ? (
               <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
                 <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total inclusive of VAT (@{doc.vatRatePct}%) (NGN)</Text>
                 <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
@@ -305,6 +310,18 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
               <Text style={s.strong}>Amount in words: </Text>
               {doc.totalInWords}
             </Text>
+            {doc.payment && (
+              <>
+                <View style={s.totalRow}>
+                  <Text style={s.totalLabel}>Payment received (NGN)</Text>
+                  <Text style={s.totalValue}>{money(doc.payment.received)}</Text>
+                </View>
+                <View style={[s.totalRow, { backgroundColor: "#fef3c7", borderBottomWidth: 0.75 }]}>
+                  <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Balance payment (NGN)</Text>
+                  <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.payment.balance)}</Text>
+                </View>
+              </>
+            )}
 
             <View style={s.terms}>
               <View style={{ flex: 1, paddingRight: 14 }}>
@@ -322,6 +339,12 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                     <View style={s.bankRow}>
                       <Text style={s.bankLabel}>Bank</Text>
                       <Text style={{ flex: 1 }}>{doc.bank.bankName}</Text>
+                    </View>
+                  ) : null}
+                  {doc.bank.branch ? (
+                    <View style={s.bankRow}>
+                      <Text style={s.bankLabel}>Branch</Text>
+                      <Text style={{ flex: 1 }}>{doc.bank.branch}</Text>
                     </View>
                   ) : null}
                   {doc.bank.accountName ? (
@@ -356,7 +379,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 </View>
               </View>
               <View style={s.signBlock}>
-                <Text style={s.strong}>Customer acceptance</Text>
+                <Text style={s.strong}>{doc.payment ? "Received by (customer)" : "Customer acceptance"}</Text>
                 <View style={s.signLine}>
                   <Text style={{ color: muted }}>Name, signature and date</Text>
                 </View>
