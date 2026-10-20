@@ -9,8 +9,9 @@ const qty = (n: number) => (n ? n.toLocaleString("en-NG", { maximumFractionDigit
 
 // Pick any model: the units sold of that model and type (all its codes
 // together - e.g. Atom-B and Atom-C apart) month by month this year and
-// last, with the 3-month average.
-export function ModelSales({ products }: { products: { id: string; label: string }[] }) {
+// last, the 3-month average, and its stock position with the quantity to
+// order from Midea.
+export function ModelSales({ products, coverMonths }: { products: { id: string; label: string }[]; coverMonths: number }) {
   const [productId, setProductId] = useState("");
   const [h, setH] = useState<ModelSalesHistory | null>(null);
   const [pending, start] = useTransition();
@@ -18,13 +19,22 @@ export function ModelSales({ products }: { products: { id: string; label: string
   const pick = (id: string) => {
     setProductId(id);
     setH(null);
-    if (id) start(async () => setH(await modelSalesHistory(id)));
+    if (id) start(async () => setH(await modelSalesHistory(id, coverMonths)));
   };
 
   return (
     <div className="space-y-3">
-      <div className="max-w-xl">
-        <SearchableSelect options={products} value={productId} onSelect={(o) => pick(o?.id ?? "")} placeholder="Type a model or code, e.g. MDV-V48 or MVC-730…" />
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="w-full max-w-xl">
+          <SearchableSelect options={products} value={productId} onSelect={(o) => pick(o?.id ?? "")} placeholder="Type a model or code, e.g. MDV-V48 or MVC-730…" />
+        </div>
+        <a
+          href={`/reorder/planning-xlsx?cover=${coverMonths}`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+          title="Every model: month-wise sales of this year and last, 3-month average, stock, in transit, pending orders and the order quantity (formulas)"
+        >
+          Download Midea order plan (Excel, all models)
+        </a>
       </div>
       {pending && <p className="text-sm text-slate-500">Loading…</p>}
       {h && (
@@ -43,8 +53,7 @@ export function ModelSales({ products }: { products: { id: string; label: string
               </span>
             ))}
             <span className="text-slate-700">
-              3-month average ({h.avg3.from}-{h.avg3.to}):{" "}
-              <span className="font-semibold tabular-nums">{h.avg3.perMonth.toLocaleString("en-NG", { maximumFractionDigits: 1 })}</span> a month
+              3-month average ({h.avgLabel}): <span className="font-semibold tabular-nums">{h.avg3.toLocaleString("en-NG", { maximumFractionDigits: 1 })}</span> a month
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -74,6 +83,24 @@ export function ModelSales({ products }: { products: { id: string; label: string
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              ["In stock", qty(h.stock)],
+              ["In transit", `${qty(h.transit)}${h.eta ? ` (ETA ${h.eta.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })})` : ""}`],
+              ["Paid pending orders", qty(h.paid)],
+              ["Unpaid pending orders", qty(h.unpaid)],
+              ["Months of cover", h.monthsCover == null ? "-" : h.monthsCover.toLocaleString("en-NG", { maximumFractionDigits: 1 })],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="text-[11px] text-slate-500">{label}</p>
+                <p className="text-sm font-semibold text-slate-900 tabular-nums">{value}</p>
+              </div>
+            ))}
+            <div className={`rounded-lg px-3 py-2 ${h.suggested > 0 ? "bg-amber-100" : "bg-emerald-50"}`} title={`${h.coverMonths} months x ${h.avg3} a month + ${h.paid} paid pending - ${h.stock} stock - ${h.transit} in transit`}>
+              <p className="text-[11px] text-slate-600">Order from Midea ({h.coverMonths} months&apos; cover)</p>
+              <p className="text-sm font-bold text-slate-900 tabular-nums">{qty(h.suggested) === "-" ? "0" : qty(h.suggested)} units</p>
+            </div>
           </div>
         </>
       )}
