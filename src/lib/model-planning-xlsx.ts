@@ -17,7 +17,7 @@ const col = (n: number) => {
 export async function buildModelPlanningXlsx(plans: ModelPlan[], window: PlanningWindow, coverMonths: number): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Midea order plan", { views: [{ state: "frozen", xSplit: 1, ySplit: 5 }] });
-  const { thisYear, last3 } = window;
+  const { thisYear, last3, last6 } = window;
   const lastYear = thisYear - 1;
   // Columns: Model | Category | Codes | last year Jan-Dec | this year Jan-Dec | totals | avg | stock...
   const FIRST_MONTH = 4;
@@ -25,13 +25,15 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
   const TOT_LAST = FIRST_MONTH + 24;
   const TOT_THIS = TOT_LAST + 1;
   const AVG = TOT_THIS + 1;
-  const STOCK = AVG + 1;
+  const AVG6 = AVG + 1;
+  const STOCK = AVG6 + 1;
   const TRANSIT = STOCK + 1;
   const ETA = TRANSIT + 1;
   const PAID = ETA + 1;
   const UNPAID = PAID + 1;
   const COVER = UNPAID + 1;
   const ORDER = COVER + 1;
+  const ORDER6 = ORDER + 1;
 
   ws.getCell("A1").value = `Midea order plan - ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`;
   ws.getCell("A1").font = { bold: true, size: 14 };
@@ -40,7 +42,7 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
   ws.getCell("B2").value = coverMonths;
   ws.getCell("B2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
   ws.getCell("B2").font = { bold: true };
-  ws.getCell("C2").value = `Order = months x 3-month average (${window.avgLabel}) + paid pending orders - stock - in transit. Change B2 to re-plan. Units net of returns.`;
+  ws.getCell("C2").value = `Order = months x average + paid pending orders - stock - in transit, on the 3-month (${window.avgLabel}) and 6-month (${window.avg6Label}) averages. An order placed now ships ~January, lands ~March. Change B2 to re-plan. Units net of returns.`;
   ws.getCell("C2").font = { italic: true, color: { argb: "FF64748B" } };
 
   // Row 4: year bands; row 5: headings.
@@ -54,7 +56,7 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
   };
   band(monthCol(lastYear, 0), monthCol(lastYear, 11), `${lastYear} - units sold`, "FFF1F5F9");
   band(monthCol(thisYear, 0), monthCol(thisYear, 11), `${thisYear} - units sold`, "FFE0E7FF");
-  band(AVG, ORDER, "Ordering", "FFFEF3C7");
+  band(AVG, ORDER6, "Ordering", "FFFEF3C7");
   const heads: [number, string][] = [
     [1, "Model"],
     [2, "Category"],
@@ -64,13 +66,15 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
     [TOT_LAST, `Total ${lastYear}`],
     [TOT_THIS, `Total ${thisYear}`],
     [AVG, "3-month avg / month"],
+    [AVG6, "6-month avg / month"],
     [STOCK, "Stock"],
     [TRANSIT, "In transit"],
     [ETA, "Earliest ETA"],
     [PAID, "Paid pending"],
     [UNPAID, "Unpaid pending"],
     [COVER, "Months of cover"],
-    [ORDER, "Order qty"],
+    [ORDER, "Order qty (3-mo avg)"],
+    [ORDER6, "Order qty (6-mo avg)"],
   ];
   const h = ws.getRow(5);
   for (const [c, t] of heads) {
@@ -84,10 +88,10 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
   ws.getColumn(1).width = 30;
   ws.getColumn(2).width = 14;
   ws.getColumn(3).width = 22;
-  for (let c = FIRST_MONTH; c <= ORDER; c++) ws.getColumn(c).width = c >= AVG ? 11 : 6.5;
+  for (let c = FIRST_MONTH; c <= ORDER6; c++) ws.getColumn(c).width = c >= AVG ? 11 : 6.5;
   ws.getColumn(ETA).width = 12;
 
-  const avgCells = (r: number) => last3.map((d) => `${col(monthCol(d.getUTCFullYear(), d.getUTCMonth()))}${r}`);
+  const cellsOf = (months: Date[], r: number) => months.map((d) => `${col(monthCol(d.getUTCFullYear(), d.getUTCMonth()))}${r}`);
   let r = 6;
   for (const p of plans) {
     const row = ws.getRow(r);
@@ -97,8 +101,10 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
     for (const y of p.years) y.months.forEach((n, m) => n && (row.getCell(monthCol(y.year, m)).value = n));
     row.getCell(TOT_LAST).value = { formula: `SUM(${col(monthCol(lastYear, 0))}${r}:${col(monthCol(lastYear, 11))}${r})` };
     row.getCell(TOT_THIS).value = { formula: `SUM(${col(monthCol(thisYear, 0))}${r}:${col(monthCol(thisYear, 11))}${r})` };
-    row.getCell(AVG).value = { formula: `MAX(0,(${avgCells(r).join("+")})/3)` };
+    row.getCell(AVG).value = { formula: `MAX(0,(${cellsOf(last3, r).join("+")})/3)` };
     row.getCell(AVG).numFmt = "0.0";
+    row.getCell(AVG6).value = { formula: `MAX(0,(${cellsOf(last6, r).join("+")})/6)` };
+    row.getCell(AVG6).numFmt = "0.0";
     row.getCell(STOCK).value = p.stock;
     row.getCell(TRANSIT).value = p.transit;
     if (p.eta) {
@@ -110,15 +116,18 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
     const A = `${col(AVG)}${r}`;
     row.getCell(COVER).value = { formula: `IF(${A}>0,ROUND(MAX(0,${col(STOCK)}${r}-${col(PAID)}${r})/${A},1),"")` };
     row.getCell(ORDER).value = { formula: `MAX(0,ROUNDUP(${A}*$B$2+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
-    row.getCell(ORDER).font = { bold: true };
-    row.getCell(ORDER).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF9C3" } };
+    row.getCell(ORDER6).value = { formula: `MAX(0,ROUNDUP(${col(AVG6)}${r}*$B$2+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
+    for (const c of [ORDER, ORDER6]) {
+      row.getCell(c).font = { bold: true };
+      row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF9C3" } };
+    }
     r++;
   }
   // Totals.
   const t = ws.getRow(r + 1);
   t.getCell(1).value = "Total";
   t.font = { bold: true };
-  for (let c = FIRST_MONTH; c <= ORDER; c++) {
+  for (let c = FIRST_MONTH; c <= ORDER6; c++) {
     if (c === ETA || c === COVER) continue;
     t.getCell(c).value = { formula: `SUM(${col(c)}6:${col(c)}${r - 1})` };
   }

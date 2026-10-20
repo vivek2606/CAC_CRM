@@ -206,7 +206,7 @@ export default async function ReorderPage({
         <Card className="p-4">
           <h2 className="text-sm font-semibold text-slate-900">Sales history by model</h2>
           <p className="text-xs text-slate-500 mt-0.5 mb-3">
-            For the Midea order: units sold month by month, this year and last, the 3-month average, stock, goods in transit, pending orders and the quantity to order for {coverMonths} months&apos; cover (3-month average) - every code of the model counted together, its type kept apart (e.g. Atom-B and Atom-C).
+            For the Midea order: units sold month by month, this year and last, the 3- and 6-month averages, stock, goods in transit, pending orders and the quantity to order for {coverMonths} months&apos; cover on each average (an order placed now ships around January and lands around March) - every code of the model counted together, its type kept apart (e.g. Atom-B and Atom-C).
           </p>
           <ModelSales coverMonths={coverMonths} products={(await prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } })).map((p) => ({ id: p.id, label: `${p.model} (${p.code})` }))} />
         </Card>

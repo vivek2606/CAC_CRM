@@ -55,6 +55,9 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
             <span className="text-slate-700">
               3-month average ({h.avgLabel}): <span className="font-semibold tabular-nums">{h.avg3.toLocaleString("en-NG", { maximumFractionDigits: 1 })}</span> a month
             </span>
+            <span className="text-slate-700">
+              6-month average ({h.avg6Label}): <span className="font-semibold tabular-nums">{h.avg6.toLocaleString("en-NG", { maximumFractionDigits: 1 })}</span> a month
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm tabular-nums">
@@ -84,7 +87,7 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
               </tbody>
             </table>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {[
               ["In stock", qty(h.stock)],
               ["In transit", `${qty(h.transit)}${h.eta ? ` (ETA ${h.eta.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })})` : ""}`],
@@ -97,10 +100,23 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
                 <p className="text-sm font-semibold text-slate-900 tabular-nums">{value}</p>
               </div>
             ))}
-            <div className={`rounded-lg px-3 py-2 ${h.suggested > 0 ? "bg-amber-100" : "bg-emerald-50"}`} title={`${h.coverMonths} months x ${h.avg3} a month + ${h.paid} paid pending - ${h.stock} stock - ${h.transit} in transit`}>
-              <p className="text-[11px] text-slate-600">Order from Midea ({h.coverMonths} months&apos; cover)</p>
-              <p className="text-sm font-bold text-slate-900 tabular-nums">{qty(h.suggested) === "-" ? "0" : qty(h.suggested)} units</p>
-            </div>
+            {(
+              [
+                ["3-month avg", h.avg3, h.suggested],
+                ["6-month avg", h.avg6, h.suggested6],
+              ] as const
+            ).map(([label, avg, n]) => (
+              <div
+                key={label}
+                className={`rounded-lg px-3 py-2 ${n > 0 ? "bg-amber-100" : "bg-emerald-50"}`}
+                title={`${h.coverMonths} months x ${avg} a month + ${h.paid} paid pending - ${h.stock} stock - ${h.transit} in transit`}
+              >
+                <p className="text-[11px] text-slate-600">
+                  Order - {h.coverMonths} months on the {label}
+                </p>
+                <p className="text-sm font-bold text-slate-900 tabular-nums">{n} units</p>
+              </div>
+            ))}
           </div>
         </>
       )}
