@@ -31,5 +31,7 @@ export const serviceInvoiceInputSchema = z.object({
   signatoryName: z.string().trim().max(120).default(""),
   signatoryDesignation: z.string().trim().max(120).default(""),
   signatoryPhone: z.string().trim().max(60).default(""),
+  // The signatory fields above are "Prepared by"; this is "Checked by".
+  checkedBy: z.string().trim().max(120).default(""),
 });
 export type ServiceInvoiceInput = z.infer<typeof serviceInvoiceInputSchema>;

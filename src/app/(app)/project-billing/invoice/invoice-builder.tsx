@@ -59,6 +59,7 @@ export function InvoiceBuilder({
     designation: prefill?.signatoryDesignation || signatory.designation,
     phone: prefill?.signatoryPhone || signatory.phone,
   });
+  const [checkedBy, setCheckedBy] = useState(prefill?.checkedBy ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export function InvoiceBuilder({
       signatoryName: sign.name,
       signatoryDesignation: sign.designation,
       signatoryPhone: sign.phone,
+      checkedBy,
     };
     setBusy(true);
     try {
@@ -278,7 +280,7 @@ export function InvoiceBuilder({
         </label>
         <div className="grid grid-cols-1 gap-3">
           <label>
-            <span className={label}>Signed by</span>
+            <span className={label}>Prepared by</span>
             <input value={sign.name} onChange={(e) => setSign({ ...sign, name: e.target.value })} className={input} />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -291,6 +293,11 @@ export function InvoiceBuilder({
               <input value={sign.phone} onChange={(e) => setSign({ ...sign, phone: e.target.value })} className={input} />
             </label>
           </div>
+          <label>
+            <span className={label}>Checked by</span>
+            <input value={checkedBy} onChange={(e) => setCheckedBy(e.target.value)} placeholder="Name (optional - or leave for a signature)" className={input} />
+          </label>
+          <p className="text-xs text-slate-500">The foot of the invoice has Prepared by, Checked by and For Somotex Nigeria Limited (Authorised Signatory).</p>
         </div>
       </div>
 

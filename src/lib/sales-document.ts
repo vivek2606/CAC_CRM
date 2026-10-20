@@ -116,6 +116,8 @@ export type SalesDocument = {
   regLines?: string[];
   noVat?: boolean;
   payment?: { received: number; balance: number };
+  // In place of the usual "For <company>" / customer blocks at the foot.
+  signBlocks?: { title: string; lines: string[] }[];
 };
 
 export async function buildDocument(input: DocumentInput): Promise<SalesDocument> {

@@ -325,7 +325,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
 
             <View style={s.terms}>
               <View style={{ flex: 1, paddingRight: 14 }}>
-                <Text style={s.label}>Terms &amp; conditions</Text>
+                {doc.terms.length > 0 && <Text style={s.label}>Terms &amp; conditions</Text>}
                 {doc.terms.map((t, i) => (
                   <Text key={i} style={{ marginTop: 1.5 }}>
                     • {t}
@@ -369,6 +369,26 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
               ) : null}
             </View>
 
+            {doc.signBlocks ? (
+              <View style={s.signRow}>
+                {doc.signBlocks.map((b) => (
+                  <View key={b.title} style={{ width: 150 }}>
+                    <Text style={s.strong}>{b.title}</Text>
+                    <View style={s.signLine}>
+                      {b.lines.length ? (
+                        b.lines.map((l, i) => (
+                          <Text key={i} style={i === 0 ? s.strong : { color: muted }}>
+                            {l}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text style={{ color: muted }}>Name, signature and date</Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
             <View style={s.signRow}>
               <View style={s.signBlock}>
                 <Text style={s.strong}>For {c.name}</Text>
@@ -385,6 +405,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 </View>
               </View>
             </View>
+            )}
           </View>
         </View>
 

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCompanySettings, type CompanyProfile } from "@/lib/company-profile";
+import { getCompanySettings, pickCompany, type CompanyProfile } from "@/lib/company-profile";
 import { nairaInWords, serialNumbers } from "@/lib/document-format";
 import { SOMOTEX_LOGO } from "@/lib/brand/somotex-logo";
 import type { DocRow, SalesDocument } from "@/lib/sales-document";
@@ -32,7 +32,8 @@ export const SOMOTEX_BANK_BRANCH = "Oba Akran Avenue, Ikeja";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<SalesDocument> {
-  const { vatRatePct } = await getCompanySettings();
+  const settings = await getCompanySettings();
+  const { vatRatePct } = settings;
   const sns = serialNumbers(input.rows);
   const rows: DocRow[] = input.rows
     .map((r, i): DocRow | null => {
@@ -48,10 +49,11 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
   const received = round2(input.received);
   return {
     type: "proforma", // "Bill to" on the document
-    heading: input.billingType === "Service" ? "SERVICE INVOICE" : "INVOICE",
+    heading: "PROJECT & SERVICE INVOICE",
     ref: input.ref,
     date: new Date(`${input.date}T00:00:00Z`),
-    company: SOMOTEX,
+    // Same address as Sakuragi (from Company Details).
+    company: { ...SOMOTEX, addressLines: pickCompany(settings, "SAKURAGI").addressLines },
     to: input.to.split("\n").map((l) => l.trim()).filter(Boolean),
     attention: input.attention,
     title: input.title,
@@ -73,6 +75,11 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
     regLines: [`VAT Reg. No. ${SOMOTEX_VAT_REG_NO}`, `TIN ${SOMOTEX.tin}`],
     noVat: !input.withVat,
     payment: { received, balance: round2(total - received) },
+    signBlocks: [
+      { title: "Prepared by", lines: [input.signatoryName, input.signatoryDesignation, input.signatoryPhone].filter(Boolean) },
+      { title: "Checked by", lines: [input.checkedBy].filter(Boolean) },
+      { title: `For ${SOMOTEX.name}`, lines: ["Authorised Signatory"] },
+    ],
   };
 }
 
