@@ -21,7 +21,13 @@ export type ExcessLine = {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 type ItemRow = Extract<SalesDocument["rows"][number], { kind: "item" }>;
-const itemRows = (doc: SalesDocument) => doc.rows.filter((r) => r.kind === "item" && r.qty > 0) as ItemRow[];
+// A modular outdoor is checked as its modules (each at its rate less the line's discount).
+const itemRows = (doc: SalesDocument) =>
+  (doc.rows.filter((r) => r.kind === "item" && r.qty > 0) as ItemRow[]).flatMap((r) =>
+    r.modules?.length
+      ? r.modules.map((m) => ({ ...r, productId: m.productId, description: `${r.description} - module ${m.model}`, unitPrice: m.rate, netRate: round2(m.rate * (1 - r.discountPct / 100)) }))
+      : [r],
+  );
 
 // Items not in stock that have a tentative price: quoted at that rate, with
 // no discount at all - for anyone. Keyed by product id (a stocked product
@@ -57,7 +63,7 @@ export async function noStockDiscounts(doc: SalesDocument): Promise<string[]> {
 }
 
 export async function excessDiscounts(doc: SalesDocument): Promise<ExcessLine[]> {
-  const items = doc.rows.filter((r) => r.kind === "item" && r.productId && r.qty > 0) as Extract<SalesDocument["rows"][number], { kind: "item" }>[];
+  const items = itemRows(doc).filter((r) => r.productId);
   if (!items.length) return [];
   const ids = [...new Set(items.map((r) => r.productId!))];
   const [products, prices, settings] = await Promise.all([

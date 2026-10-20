@@ -1070,6 +1070,8 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p.id);
   const lines = doc.rows
     .filter((r) => r.kind === "item")
+    // A modular outdoor goes on the deal as its modules.
+    .flatMap((r) => (r.kind === "item" && r.modules?.length ? r.modules.map((m) => ({ ...r, productId: m.productId, description: m.model, unitPrice: m.rate })) : [r]))
     .map((r) => (r.kind === "item" ? { productId: r.productId && ids.has(r.productId) ? r.productId : byModel.get(norm(r.description)), qty: r.qty, rate: netOf(r.unitPrice, r.discountPct) } : null))
     .filter((l): l is { productId: string; qty: number; rate: number } => l != null && Boolean(l.productId) && l.qty > 0 && l.rate > 0)
     .map((l) => ({ dealId: deal.id, productId: l.productId, qty: l.qty, unitPrice: Math.round((l.rate / vatFactor) * 100) / 100 }));

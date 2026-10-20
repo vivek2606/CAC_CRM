@@ -36,6 +36,10 @@ const rowSchema = z.discriminatedUnion("kind", [
     costRate: z.number().finite().min(0).optional(),
     costInstall: z.number().finite().min(0).optional(),
     marginPct: z.number().finite().min(0).max(90).optional(),
+    // A modular VRF outdoor (see modular-outdoor.ts): the modules it's made
+    // of, each with its rate (the line's rate is their sum). Not printed -
+    // the document shows the combined model; a deal gets the modules.
+    modules: z.array(z.object({ productId: z.string().max(40), model: z.string().max(200), rate: z.number().finite().min(0) })).max(3).optional(),
   }),
 ]);
 
@@ -93,6 +97,7 @@ export type DocRow =
       netRate: number; // unitPrice less the discount
       installRate: number;
       amount: number;
+      modules?: { productId: string; model: string; rate: number }[]; // not printed
     };
 
 export type SalesDocument = {

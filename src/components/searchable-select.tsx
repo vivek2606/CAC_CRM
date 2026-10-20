@@ -24,6 +24,7 @@ export function SearchableSelect({
   onSelect,
   placeholder = "Type to search...",
   emptyLabel = "none",
+  action,
 }: {
   name?: string;
   options: SearchableOption[];
@@ -32,6 +33,9 @@ export function SearchableSelect({
   onSelect?: (option: SearchableOption | null) => void;
   placeholder?: string;
   emptyLabel?: string;
+  // Something to offer for what's typed, above the matches (e.g. "make a
+  // modular outdoor from modules") - null when it doesn't apply.
+  action?: (query: string) => { label: string; run: () => void } | null;
 }) {
   const resolveLabel = (id: string) => options.find((o) => o.id === id)?.label ?? "";
 
@@ -64,6 +68,8 @@ export function SearchableSelect({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const extra = action && query.trim() && !selectedId ? action(query.trim()) : null;
 
   function pick(option: SearchableOption | null) {
     setSelectedId(option?.id ?? "");
@@ -109,8 +115,23 @@ export function SearchableSelect({
         autoComplete="off"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
-      {open && matches.length > 0 && (
+      {open && (matches.length > 0 || extra) && (
         <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1">
+          {extra && (
+            <li>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setOpen(false);
+                  extra.run();
+                }}
+                className="w-full text-left px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100"
+              >
+                {extra.label}
+              </button>
+            </li>
+          )}
           {matches.map((o, i) => (
             <li key={o.id}>
               <button

@@ -7,6 +7,8 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
 import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
+import { combinedOutdoorIn, kW, vrfModelName } from "@/lib/modular-outdoor";
+import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
 
 export type ModelOption = {
   id: string;
@@ -83,6 +85,9 @@ type Row =
       costRate?: string;
       costInstall?: string;
       marginPct?: string;
+      // A modular VRF outdoor: the modules it's made of, each with its rate
+      // (same basis as unitPrice); unitPrice is their sum.
+      modules?: ModularModule[];
     };
 
 type Draft = {
@@ -241,6 +246,7 @@ export function QuotationBuilder({
           costRate: r.costRate != null ? String(r.costRate) : "",
           costInstall: r.costInstall != null ? String(r.costInstall) : "",
           marginPct: r.marginPct != null ? String(r.marginPct) : "",
+          ...(r.modules?.length ? { custom: true, productId: null, modules: r.modules.map((m) => ({ productId: m.productId, model: m.model, rate: String(m.rate) })) } : {}),
         };
       }),
       terms: [...x.terms],
@@ -302,6 +308,8 @@ export function QuotationBuilder({
   const [triedDownload, setTriedDownload] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState<{ summary: string; details: string[] } | null>(null);
+  // The modular-outdoor dialog: for which line, and the model typed.
+  const [modular, setModular] = useState<{ uid: string; series: string | null; code: number; modules?: ModularModule[] } | null>(null);
   const hasSavedDraft = useHasSavedDraft();
 
   // Keep the work in the browser so leaving the page doesn't lose it.
@@ -558,6 +566,29 @@ export function QuotationBuilder({
       </div>
     );
   };
+  // Typing a combined VRF outdoor (e.g. "2250W") in a product search offers
+  // to make it up from modules.
+  const modularAction = (uid: string) => (q: string) => {
+    const v = combinedOutdoorIn(q);
+    return v
+      ? { label: `Modular outdoor ${vrfModelName(v.series ?? "MVC", v.code)} - ${kW(v.code)} kW: choose its modules…`, run: () => setModular({ uid, series: v.series, code: v.code }) }
+      : null;
+  };
+  const modularNote = (r: Extract<Row, { kind: "item" }>) => (
+    <p className="text-[11px] text-indigo-700">
+      Modular outdoor: {r.modules!.map((m) => `${m.model} (${naira(num(m.rate))})`).join(" + ")}{" "}
+      <button
+        type="button"
+        onClick={() => {
+          const v = combinedOutdoorIn(r.description);
+          setModular({ uid: r.uid, series: v?.series ?? null, code: v?.code ?? 0, modules: r.modules });
+        }}
+        className="font-medium underline hover:text-indigo-900"
+      >
+        Edit modules
+      </button>
+    </p>
+  );
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
 
@@ -580,7 +611,8 @@ export function QuotationBuilder({
             discountPct: discOf(r),
             ...(has(r.costRate) ? { costRate: num(r.costRate ?? "") } : {}),
             ...(has(r.costInstall) ? { costInstall: num(r.costInstall ?? "") } : {}),
-            ...(has(r.marginPct) ? { marginPct: clampMargin(num(r.marginPct ?? "")) } : {}) },
+            ...(has(r.marginPct) ? { marginPct: clampMargin(num(r.marginPct ?? "")) } : {}),
+            ...(r.modules?.length ? { modules: r.modules.map((m) => ({ productId: m.productId, model: m.model, rate: num(m.rate) })) } : {}) },
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
@@ -696,6 +728,18 @@ export function QuotationBuilder({
 
   return (
     <div className="space-y-5">
+      {modular && (
+        <ModularOutdoorDialog
+          options={options}
+          rateFor={(o) => (o.rate != null ? quoteRate(o.rate) : null)}
+          initial={modular}
+          onConfirm={(res) => {
+            setRow(modular.uid, { custom: true, productId: null, description: res.description, detail: "", unitPrice: String(res.total), modules: res.modules, discountPct: "" });
+            setModular(null);
+          }}
+          onCancel={() => setModular(null)}
+        />
+      )}
       {fromQuote && (
         <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
           {fromQuote.draftId
@@ -838,6 +882,7 @@ export function QuotationBuilder({
                                 ...r,
                                 unitPrice: r.unitPrice.trim() !== "" ? String(round2(num(r.unitPrice) * f)) : r.unitPrice,
                                 installRate: (r.installRate ?? "").trim() !== "" ? String(round2(num(r.installRate ?? "") * f)) : r.installRate,
+                                ...(r.modules ? { modules: r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) })) } : {}),
                               },
                               defaultMargin,
                               mode === "inclusive",
@@ -865,9 +910,15 @@ export function QuotationBuilder({
                   const f = (1 - commission / 100) / (1 - next / 100);
                   update({
                     commissionPct: e.target.value,
-                    rows: d.rows.map((r) =>
-                      r.kind === "item" && !r.custom && !has(r.costRate) && r.unitPrice.trim() !== "" && f !== 1 ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r,
-                    ),
+                    rows: d.rows.map((r) => {
+                      if (r.kind !== "item" || f === 1) return r;
+                      // A modular outdoor's modules are product rates too.
+                      if (r.modules?.length) {
+                        const modules = r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) }));
+                        return { ...r, modules, unitPrice: String(round2(modules.reduce((t, m) => t + num(m.rate), 0))) };
+                      }
+                      return !r.custom && !has(r.costRate) && r.unitPrice.trim() !== "" ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r;
+                    }),
                   });
                 }}
                 className="w-16 rounded-md border border-slate-200 bg-white px-2 py-1 text-right text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -950,7 +1001,7 @@ export function QuotationBuilder({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500">
                     Item {sns[i]}
-                    {r.custom && " · custom"}
+                    {r.modules?.length ? " · modular outdoor" : r.custom && " · custom"}
                   </span>
                   {tools}
                 </div>
@@ -959,6 +1010,7 @@ export function QuotationBuilder({
                     options={productOptions}
                     value={r.productId ?? ""}
                     placeholder="Search model or code…"
+                    action={modularAction(r.uid)}
                     onSelect={(o) => {
                       const m = o ? optionById.get(o.id) : undefined;
                       setRow(
@@ -1001,7 +1053,7 @@ export function QuotationBuilder({
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
-                    <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} readOnly={has(r.costRate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${big} read-only:bg-amber-50`} />
+                    <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} readOnly={has(r.costRate) || !!r.modules?.length} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${big} read-only:bg-amber-50`} />
                   </label>
                 </div>
                 <label className="block">
@@ -1100,6 +1152,7 @@ export function QuotationBuilder({
                           options={productOptions}
                           value={r.productId ?? ""}
                           placeholder="Search model or code…"
+                          action={modularAction(r.uid)}
                           onSelect={(o) => {
                             const m = o ? optionById.get(o.id) : undefined;
                             setRow(r.uid, m
@@ -1131,7 +1184,11 @@ export function QuotationBuilder({
                             : " · No dealer price on file"}
                         </p>
                       )}
-                      {r.custom && <p className="text-[11px] text-slate-400">Custom item - not from the product list</p>}
+                      {r.modules?.length ? (
+                        modularNote(r)
+                      ) : (
+                        r.custom && <p className="text-[11px] text-slate-400">Custom item - not from the product list</p>
+                      )}
                       {d.costing && costBlock(r)}
                     </td>
                     <td className="px-3 py-2 align-top">
@@ -1144,8 +1201,8 @@ export function QuotationBuilder({
                       <input
                         inputMode="decimal"
                         value={r.unitPrice}
-                        readOnly={has(r.costRate)}
-                        title={has(r.costRate) ? "From our cost + margin - change the cost or margin" : undefined}
+                        readOnly={has(r.costRate) || !!r.modules?.length}
+                        title={r.modules?.length ? "The sum of the modules' rates - Edit modules to change" : has(r.costRate) ? "From our cost + margin - change the cost or margin" : undefined}
                         onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })}
                         className={`${input} text-right read-only:bg-amber-50`}
                       />
