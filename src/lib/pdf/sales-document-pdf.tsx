@@ -24,12 +24,17 @@ const accent = "#1e4f9c"; // Sakuragi logo blue
 // Supply & installation quotes add an Installation rate column.
 const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72 };
 
+const CONT_TOP = 22;
+const CONT_TITLE = 13;
+const TH_HEIGHT = 28;
+
 const s = StyleSheet.create({
-  // paddingTop leaves room for the continuation header on pages 2+.
-  page: { paddingTop: 66, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
-  contHeader: { position: "absolute", top: 22, left: 38, right: 38 },
-  contTitle: { flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: muted, marginBottom: 4 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 12, marginTop: -34 },
+  // paddingTop leaves room for the continuation header on pages 2+: its
+  // top, the title line and the column headings.
+  page: { paddingTop: CONT_TOP + CONT_TITLE + TH_HEIGHT, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
+  contHeader: { position: "absolute", top: CONT_TOP, left: 38, right: 38 },
+  contTitle: { flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: muted, height: CONT_TITLE },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 12, marginTop: 22 - (CONT_TOP + CONT_TITLE + TH_HEIGHT) },
   logo: { height: 42, width: 156, objectFit: "contain", objectPosition: "left" },
   company: { fontSize: 12, fontFamily: "Helvetica-Bold", textAlign: "right" },
   small: { fontSize: 8, color: muted, marginTop: 1.5, textAlign: "right" },
@@ -44,7 +49,12 @@ const s = StyleSheet.create({
   // block lands at the foot of the last page.
   body: { flexGrow: 1, flexDirection: "column" },
   row: { flexDirection: "row", borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: ink },
-  th: { backgroundColor: "#e8eff9", borderTopWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink },
+  // A rule under every line, so the table is closed at the foot of each
+  // page whichever line a page ends on.
+  line: { borderBottomWidth: 0.5, borderBottomColor: "#94a3b8" },
+  // A fixed height (room for a two-line heading), so the repeated headings
+  // on pages 2+ end exactly where the page's first row starts.
+  th: { backgroundColor: "#e8eff9", borderTopWidth: 0.75, borderBottomWidth: 0.75, borderColor: ink, height: TH_HEIGHT },
   thText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#1e3a6e" },
   cell: { paddingVertical: 4.5, paddingHorizontal: 4, borderRightWidth: 0.5, borderRightColor: rule },
   last: { borderRightWidth: 0 },
@@ -145,7 +155,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
   // One table row (a section heading or an item).
   const renderRow = (r: SalesDocument["rows"][number], i: number) =>
             r.kind === "section" ? (
-              <View key={i} style={[s.row, { backgroundColor: "#f8fafc" }]} wrap={false}>
+              <View key={i} style={[s.row, s.line, { backgroundColor: "#f8fafc" }]} wrap={false}>
                 <Text style={[...col.no, s.sectionText]}>{r.sn}</Text>
                 <Text style={[...col.desc, s.sectionText]}>{r.label}</Text>
                 <View style={col.unit} />
@@ -154,7 +164,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 <View style={col.amt} />
               </View>
             ) : (
-              <View key={i} style={s.row} wrap={false}>
+              <View key={i} style={[s.row, s.line]} wrap={false}>
                 <Text style={[...col.no, { color: muted }]}>{r.sn}</Text>
                 <View style={col.desc}>
                   <Text>{r.description}</Text>
