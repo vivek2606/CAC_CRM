@@ -294,7 +294,7 @@ export function QuotationBuilder({
 
   const [d, setD] = useState<Draft>(fresh);
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState<"pdf" | "xlsx" | null>(null);
+  const [busy, setBusy] = useState<"pdf" | "xlsx" | "costing" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The download was held: a discount is over the limit and went to the Head.
   const [held, setHeld] = useState<string | null>(null);
@@ -650,6 +650,29 @@ export function QuotationBuilder({
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the file.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // The internal costing sheet (costs, margins, our rates) - built from the
+  // form as it is; no reference issued, nothing saved.
+  const downloadCosting = async () => {
+    setError(null);
+    setBusy("costing");
+    try {
+      const res = await fetch("/quotations/costing-xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload(d.ref)) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't create the costing sheet.");
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "Costing.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't create the costing sheet.");
     } finally {
       setBusy(null);
     }
@@ -1507,6 +1530,18 @@ export function QuotationBuilder({
             <FileSpreadsheet className="h-4 w-4" />
             {busy === "xlsx" ? "Preparing Excel…" : "Download Excel"}
           </button>
+          )}
+          {canExcel && d.costing && costItems.length > 0 && (
+            <button
+              type="button"
+              disabled={busy != null}
+              onClick={downloadCosting}
+              title="Internal: our costs, margins and rates line by line - not for the client"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {busy === "costing" ? "Preparing…" : "Costing sheet (Excel)"}
+            </button>
           )}
         </div>
       </div>
