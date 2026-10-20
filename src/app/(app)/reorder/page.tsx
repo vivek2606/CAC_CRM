@@ -5,6 +5,7 @@ import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing
 import { formatDate } from "@/lib/format";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { ModelSales } from "./model-sales";
 
 // Midea lead time: ~30 days manufacturing + ~60 days shipping to the
 // warehouse, so stock on hand has to carry ~3 months of sales before a new
@@ -201,6 +202,14 @@ export default async function ReorderPage({
             <p className="text-xs text-slate-400 mt-1">Would run out before a new order lands</p>
           </Card>
         </div>
+
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold text-slate-900">Sales history by model</h2>
+          <p className="text-xs text-slate-500 mt-0.5 mb-3">
+            Units sold month by month, this year and last, with the 3-month average - every code of the model counted together, its type kept apart (e.g. Atom-B and Atom-C).
+          </p>
+          <ModelSales products={(await prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } })).map((p) => ({ id: p.id, label: `${p.model} (${p.code})` }))} />
+        </Card>
 
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-0">

@@ -9,7 +9,6 @@ import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, 
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 import { combinedOutdoorIn, kW, vrfModelName, DEFAULT_VRF_SERIES } from "@/lib/modular-outdoor";
 import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
-import { SalesHistory } from "./sales-history";
 
 export type ModelOption = {
   id: string;
@@ -1043,7 +1042,6 @@ export function QuotationBuilder({
                     {opt.rate != null ? ` · Suggested ${naira(quoteRate(opt.rate))}${commission ? ` (price list ${naira(suggested(opt.rate))} + ${commission}% commission)` : ""}` : " · No dealer price on file"}
                   </p>
                 )}
-                {opt && !opt.id.startsWith("tentative:") && <SalesHistory productId={opt.id} />}
                 <div className="grid grid-cols-[1fr_1fr_1.6fr] gap-2">
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Unit</span>
@@ -1186,7 +1184,6 @@ export function QuotationBuilder({
                             : " · No dealer price on file"}
                         </p>
                       )}
-                      {opt && !opt.id.startsWith("tentative:") && <SalesHistory productId={opt.id} />}
                       {r.modules?.length ? (
                         modularNote(r)
                       ) : (
