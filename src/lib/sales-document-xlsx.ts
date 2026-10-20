@@ -138,10 +138,6 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
     return put(r, L, value, { numFmt: MONEY, font: { bold } });
   };
   r++;
-  if (inst) {
-    total("Supply", { formula: `SUMPRODUCT(D${first}:D${last},${N}${first}:${N}${last})`, result: doc.supplyTotal });
-    total("Installation", { formula: `SUMPRODUCT(D${first}:D${last},${letter(INST)}${first}:${letter(INST)}${last})`, result: doc.installTotal });
-  }
   let grand: ExcelJS.Cell;
   if (doc.vatInclusive) {
     // Rates already include VAT - just the total, no separate VAT line.

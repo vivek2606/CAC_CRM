@@ -400,11 +400,18 @@ export function QuotationBuilder({
 
   // A quotation made in Excel: its items come in as rows here (products
   // matched to the list print in the standard format), plus the customer.
-  // asCost: a contractor's bill - its supply / installation rates are our
-  // costs, and the quote's rates are worked out from them with the margin.
+  // asCost: a contractor's installation bill - every line's supply and
+  // installation rates are our costs, and the quote's rates are worked out
+  // from them with the margin.
   const importExcel = async (file: File, asCost = false) => {
     setError(null);
     setImportNote(null);
+    let margin = defaultMargin;
+    if (asCost && !has(d.marginPct)) {
+      const answer = window.prompt("Margin % to add to the bill's rates (margin on our price, not markup):", "20");
+      if (answer == null) return;
+      margin = clampMargin(num(answer));
+    }
     setImporting(true);
     try {
       const fd = new FormData();
@@ -420,18 +427,32 @@ export function QuotationBuilder({
           : { uid: uid(), kind: "item", custom: true, productId: null, description: r.description, detail: "", unit: r.unit, qty: String(r.qty), unitPrice: String(r.unitPrice), installRate: r.installRate ? String(r.installRate) : "" };
       });
       if (asCost) {
-        rows.forEach((r, i) => {
-          const src = res.rows[i];
-          if (r.kind !== "item" || src.kind !== "item") return;
-          const opt = r.productId ? optionById.get(r.productId) : undefined;
-          // A listed product with no supply cost on the bill is our own
-          // equipment - priced from the price list, as usual.
-          if (src.unitPrice > 0) r.costRate = String(src.unitPrice);
-          else r.unitPrice = opt?.rate != null ? String(quoteRate(opt.rate)) : "";
-          if (src.installRate > 0) r.costInstall = String(src.installRate);
-          else r.installRate = "";
-        });
-        rows.splice(0, rows.length, ...rows.map((r) => reprice(r, defaultMargin, inclusive)));
+        // As written on the bill (no product matching), every rate a cost.
+        rows.splice(
+          0,
+          rows.length,
+          ...res.rows.map((src, i): Row => {
+            if (src.kind === "section") return rows[i];
+            return reprice(
+              {
+                uid: uid(),
+                kind: "item",
+                custom: true,
+                productId: null,
+                description: src.sourceText || src.description,
+                detail: "",
+                unit: src.unit,
+                qty: String(src.qty),
+                unitPrice: "",
+                installRate: "",
+                costRate: src.unitPrice > 0 ? String(src.unitPrice) : "",
+                costInstall: src.installRate > 0 ? String(src.installRate) : "",
+              },
+              margin,
+              inclusive,
+            );
+          }),
+        );
       }
       const hasItems = d.rows.some((r) => r.kind === "item" && r.description.trim());
       const replace = !hasItems || window.confirm("Replace the items already in this quotation?\n\nOK = replace them, Cancel = add the imported items below.");
@@ -444,16 +465,18 @@ export function QuotationBuilder({
         ...(res.vatInclusive != null ? { vatMode: res.vatInclusive ? "inclusive" : "separate" } : {}),
         // Installation column: as in the sheet, kept on when adding to a quote that has it.
         withInstallation: res.withInstallation || (!replace && d.withInstallation === true),
-        ...(asCost ? { costing: true } : {}),
+        ...(asCost ? { costing: true, marginPct: String(margin) } : {}),
       });
       const matched = rows.filter((r) => r.kind === "item" && !r.custom).length;
       const unmatched = res.rows.filter((r, i) => r.kind === "item" && rows[i].kind === "item" && (rows[i] as { custom: boolean }).custom);
       setImportNote({
-        summary: `Imported ${items.length} item${items.length === 1 ? "" : "s"} from ${file.name}: ${matched} matched to the product list${
-          unmatched.length ? `, ${unmatched.length} added as custom items` : ""
-        }. ${asCost ? `The bill's rates are our costs - ${has(d.marginPct) ? `priced at ${defaultMargin}% margin` : "enter the Margin % above to price them"}. ` : ""}Check the rates, quantities and VAT setting before downloading.`,
+        summary: asCost
+          ? `Imported ${items.length} item${items.length === 1 ? "" : "s"} from ${file.name}. Every rate on the bill (supply and installation) is our cost, priced at ${margin}% margin - change the Margin % above to re-price. Check the quantities and VAT setting before downloading.`
+          : `Imported ${items.length} item${items.length === 1 ? "" : "s"} from ${file.name}: ${matched} matched to the product list${
+              unmatched.length ? `, ${unmatched.length} added as custom items` : ""
+            }. Check the rates, quantities and VAT setting before downloading.`,
         details: [
-          ...unmatched.map((r) => `Not in the product list (custom item): ${r.kind === "item" ? r.sourceText || r.description : ""}`),
+          ...(asCost ? [] : unmatched.map((r) => `Not in the product list (custom item): ${r.kind === "item" ? r.sourceText || r.description : ""}`)),
           ...res.problems,
         ],
       });
@@ -498,7 +521,6 @@ export function QuotationBuilder({
   // Line amount: qty x net rate, plus installation on supply & installation quotes.
   const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
-  const installTotal = withInstallation ? d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.installRate ?? "") * 100) / 100 : 0), 0) : 0;
   // Costed lines: our cost, and our price for the costed parts (excl. VAT).
   const costOf = (r: Extract<Row, { kind: "item" }>) =>
     num(r.qty) * ((has(r.costRate) ? num(r.costRate ?? "") : 0) + (withInstallation && has(r.costInstall) ? num(r.costInstall ?? "") : 0));
@@ -1199,7 +1221,7 @@ export function QuotationBuilder({
           </label>
           <label
             className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 ${importing ? "opacity-60" : ""}`}
-            title="A contractor's installation bill (Supply / Installation columns): its rates come in as our costs and the quote is priced with your margin %"
+            title="A contractor's installation bill: its supply and installation rates come in as our costs and are priced with your margin %"
           >
             <FileUp className="h-4 w-4" />
             {importing ? "Importing…" : "Import contractor's bill (add margin)"}
@@ -1236,18 +1258,6 @@ export function QuotationBuilder({
         )}
         <div className="border-t border-slate-100 p-4">
           <div className="ml-auto w-full max-w-sm space-y-1 text-sm">
-            {withInstallation && (
-              <>
-                <div className="flex justify-between text-slate-500">
-                  <span>Supply</span>
-                  <span className="tabular-nums">{naira(subtotal - installTotal)}</span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Installation</span>
-                  <span className="tabular-nums">{naira(installTotal)}</span>
-                </div>
-              </>
-            )}
             {!inclusive && (
               <>
                 <div className="flex justify-between text-slate-600">

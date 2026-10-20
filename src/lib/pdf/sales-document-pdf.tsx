@@ -26,10 +26,10 @@ const W = { no: 26, unit: 34, qty: 36, rate: 82, amt: 90, inst: 72 };
 
 const s = StyleSheet.create({
   // paddingTop leaves room for the continuation header on pages 2+.
-  page: { paddingTop: 52, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
+  page: { paddingTop: 66, paddingBottom: 46, paddingHorizontal: 38, fontSize: 9, fontFamily: "Helvetica", color: ink, flexDirection: "column" },
   contHeader: { position: "absolute", top: 22, left: 38, right: 38 },
   contTitle: { flexDirection: "row", justifyContent: "space-between", fontSize: 7.5, color: muted, marginBottom: 4 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 12, marginTop: -20 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomWidth: 2, borderBottomColor: accent, paddingBottom: 8, marginBottom: 12, marginTop: -34 },
   logo: { height: 42, width: 156, objectFit: "contain", objectPosition: "left" },
   company: { fontSize: 12, fontFamily: "Helvetica-Bold", textAlign: "right" },
   small: { fontSize: 8, color: muted, marginTop: 1.5, textAlign: "right" },
@@ -268,18 +268,6 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
           <View style={fill ? s.bottom : { flexDirection: "column" }} wrap={false}>
             {fill && <EmptyRows doc={doc} />}
             {lastRow && renderRow(lastRow, doc.rows.length - 1)}
-            {doc.withInstallation && (
-              <>
-                <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
-                  <Text style={s.totalLabel}>Supply</Text>
-                  <Text style={s.totalValue}>{money(doc.supplyTotal)}</Text>
-                </View>
-                <View style={s.totalRow}>
-                  <Text style={s.totalLabel}>Installation</Text>
-                  <Text style={s.totalValue}>{money(doc.installTotal)}</Text>
-                </View>
-              </>
-            )}
             {doc.noVat ? (
               <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
                 <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total (NGN)</Text>
