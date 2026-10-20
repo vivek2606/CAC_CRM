@@ -22,6 +22,9 @@ export type ModelOption = {
   // only (shown as a hint); the check itself runs on the server.
   maxDiscountPct: number | null;
 };
+// Not in stock and quoted at the tentative price: no discount allowed.
+const noDiscount = (o: ModelOption | undefined) => !!o && o.stock <= 0 && o.tentative;
+
 export type CompanyOption = {
   key: string;
   name: string;
@@ -437,7 +440,9 @@ export function QuotationBuilder({
   const quoteRate = (rate: number) => round2((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
   const withInstallation = d.withInstallation === true;
   // Discount %, kept to 0-100; the net rate is the rate less it.
-  const discOf = (r: Extract<Row, { kind: "item" }>) => Math.min(100, Math.max(0, num(r.discountPct ?? "")));
+  // Not in stock at the tentative rate: no discount at all.
+  const discOf = (r: Extract<Row, { kind: "item" }>) =>
+    noDiscount(r.productId ? optionById.get(r.productId) : undefined) ? 0 : Math.min(100, Math.max(0, num(r.discountPct ?? "")));
   const netRate = (r: Extract<Row, { kind: "item" }>) => round2(num(r.unitPrice) * (1 - discOf(r) / 100));
   // Line amount: qty x net rate, plus installation on supply & installation quotes.
   const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
@@ -535,7 +540,21 @@ export function QuotationBuilder({
     }
   };
 
-  const productOptions = useMemo(() => options.map((o) => ({ id: o.id, label: o.label })), [options]);
+  // In stock first, then in transit, then the rest - so when a model is
+  // under several codes, the code with stock is the first suggestion.
+  const productOptions = useMemo(() => {
+    const rank = (o: ModelOption) => (o.stock > 0 ? 0 : o.inTransit > 0 ? 1 : 2);
+    const qty = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+    return options
+      .map((o, i) => ({ o, i }))
+      .sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i)
+      .map(({ o }) => ({
+        id: o.id,
+        label: o.label,
+        hint: o.stock > 0 ? `${qty(o.stock)} in stock` : o.inTransit > 0 ? `${qty(o.inTransit)} in transit` : o.tentative ? "tentative price" : "no stock",
+        hintTone: o.stock > 0 ? ("good" as const) : ("muted" as const),
+      }));
+  }, [options]);
 
   return (
     <div className="space-y-5">
@@ -779,7 +798,12 @@ export function QuotationBuilder({
                     placeholder="Search model or code…"
                     onSelect={(o) => {
                       const m = o ? optionById.get(o.id) : undefined;
-                      setRow(r.uid, m ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice } : { productId: null });
+                      setRow(
+                        r.uid,
+                        m
+                          ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice, ...(noDiscount(m) ? { discountPct: "" } : {}) }
+                          : { productId: null },
+                      );
                     }}
                   />
                 )}
@@ -821,7 +845,16 @@ export function QuotationBuilder({
                   <span className="mb-1 block text-xs font-medium text-slate-500">
                     Discount % (not printed){isHead && opt?.maxDiscountPct != null ? ` (max ${opt.maxDiscountPct}%)` : ""}
                   </span>
-                  <input inputMode="decimal" value={r.discountPct ?? ""} placeholder="0" onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { discountPct: e.target.value })} className={big} />
+                  <input
+                    inputMode="decimal"
+                    value={noDiscount(opt) ? "" : (r.discountPct ?? "")}
+                    placeholder="0"
+                    disabled={noDiscount(opt)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => setRow(r.uid, { discountPct: e.target.value })}
+                    className={`${big} disabled:bg-slate-100`}
+                  />
+                  {noDiscount(opt) && <span className="mt-1 block text-xs text-amber-700">Not in stock - tentative rate, no discount.</span>}
                   {discOf(r) > 0 && <span className="mt-1 block text-xs text-slate-500">Net rate {naira(inclusive ? round2(netRate(r) / vatFactor) : netRate(r))} excl. VAT</span>}
                 </label>
                 {withInstallation && (
@@ -906,7 +939,7 @@ export function QuotationBuilder({
                           onSelect={(o) => {
                             const m = o ? optionById.get(o.id) : undefined;
                             setRow(r.uid, m
-                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice }
+                              ? { productId: m.id, description: m.model, detail: m.availability, unitPrice: m.rate != null ? String(quoteRate(m.rate)) : r.unitPrice, ...(noDiscount(m) ? { discountPct: "" } : {}) }
                               : { productId: null });
                           }}
                         />
@@ -954,11 +987,14 @@ export function QuotationBuilder({
                     <td className="px-3 py-2 align-top">
                       <input
                         inputMode="decimal"
-                        value={r.discountPct ?? ""}
+                        value={noDiscount(opt) ? "" : (r.discountPct ?? "")}
                         placeholder="0"
+                        disabled={noDiscount(opt)}
+                        title={noDiscount(opt) ? "Not in stock - quoted at the tentative rate, no discount" : undefined}
                         onChange={(e) => setRow(r.uid, { discountPct: e.target.value })}
-                        className={`${input} text-right`}
+                        className={`${input} text-right disabled:bg-slate-100`}
                       />
+                      {noDiscount(opt) && <p className="mt-1 text-right text-[11px] text-amber-700">No discount - not in stock</p>}
                       {discOf(r) > 0 && (
                         <p className="mt-1 text-right text-[11px] text-slate-500">
                           Net {naira(inclusive ? round2(netRate(r) / vatFactor) : netRate(r))} excl. VAT

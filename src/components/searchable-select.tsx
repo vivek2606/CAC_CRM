@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type SearchableOption = { id: string; label: string };
+// hint: a short note shown beside the option in the list only (e.g. stock);
+// "good" shows it in green.
+export type SearchableOption = { id: string; label: string; hint?: string; hintTone?: "good" | "muted" };
 
 // Type-to-search replacement for a plain <select> over a list backed by
 // historic/growing data (accounts, contacts, products) - filters
@@ -119,7 +121,14 @@ export function SearchableSelect({
                   i === highlight ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"
                 }`}
               >
-                {o.label}
+                {o.hint ? (
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span>{o.label}</span>
+                    <span className={`shrink-0 text-xs ${o.hintTone === "good" ? "font-medium text-emerald-600" : "text-slate-400"}`}>{o.hint}</span>
+                  </span>
+                ) : (
+                  o.label
+                )}
               </button>
             </li>
           ))}

@@ -50,20 +50,26 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   const tentativeByModel = new Map(tentative.map((t) => [t.model.trim().toLowerCase(), t.dealerPrice]));
   const productModels = new Set(products.map((p) => p.model.trim().toLowerCase()));
   const options: ModelOption[] = [
-    ...products.map((p) => ({
+    ...products.map((p) => {
+      // Not in stock: quoted at the tentative price list's rate (no discount
+      // allowed - see quote-discount.ts), when it has one; the dealer price
+      // otherwise. In stock: the dealer price, or the tentative one if none.
+      const tent = tentativeByModel.get(p.model.trim().toLowerCase());
+      const useTentative = tent != null && ((stock.get(p.id) ?? 0) <= 0 || !prices.has(p.id));
+      return {
       id: p.id,
       label: `${p.model} (${p.code})`,
       model: p.model,
       code: p.code,
-      // No dealer price yet: the tentative price for the same model, if any.
-      rate: prices.get(p.id) ?? tentativeByModel.get(p.model.trim().toLowerCase()) ?? null,
-      tentative: !prices.has(p.id) && tentativeByModel.has(p.model.trim().toLowerCase()),
+      rate: useTentative ? tent : (prices.get(p.id) ?? null),
+      tentative: useTentative,
       stock: stock.get(p.id) ?? 0,
       inTransit: inTransit.get(p.id)?.qty ?? 0,
       availability: availability(p.id),
       // The limits are the Head's only - the check runs on the server.
       maxDiscountPct: user.role === "HEAD" ? p.maxDiscountPct : null,
-    })),
+      };
+    }),
     // Models only on the tentative price list (not stocked).
     ...tentative
       .filter((t) => !productModels.has(t.model.trim().toLowerCase()))

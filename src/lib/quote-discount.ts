@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getLatestPriceByProduct } from "@/lib/pricing";
+import { getLatestPriceByProduct, getAvailableStockByProduct, getAllTentativePrices } from "@/lib/pricing";
 import { getCompanySettings } from "@/lib/company-profile";
 import type { SalesDocument } from "@/lib/sales-document";
 
@@ -20,6 +20,42 @@ export type ExcessLine = {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+type ItemRow = Extract<SalesDocument["rows"][number], { kind: "item" }>;
+const itemRows = (doc: SalesDocument) => doc.rows.filter((r) => r.kind === "item" && r.qty > 0) as ItemRow[];
+
+// Items not in stock that have a tentative price: quoted at that rate, with
+// no discount at all - for anyone. Keyed by product id (a stocked product
+// whose stock is 0) or, for a model only on the tentative list, by its
+// model as the line's description.
+async function tentativeRates(doc: SalesDocument): Promise<{ byProduct: Map<string, number>; byModel: Map<string, number> }> {
+  const rows = itemRows(doc);
+  const [stock, tentative] = await Promise.all([getAvailableStockByProduct(), getAllTentativePrices()]);
+  const byModel = new Map(tentative.map((t) => [t.model.trim().toLowerCase(), t.dealerPrice]));
+  const ids = [...new Set(rows.map((r) => r.productId).filter((x): x is string => !!x))].filter((id) => (stock.get(id) ?? 0) <= 0);
+  const products = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, model: true } }) : [];
+  const byProduct = new Map<string, number>();
+  for (const p of products) {
+    const t = byModel.get(p.model.trim().toLowerCase());
+    if (t != null) byProduct.set(p.id, t);
+  }
+  return { byProduct, byModel };
+}
+
+// The lines that break "no discount when not in stock": a Disc. %, or a rate
+// below the tentative price.
+export async function noStockDiscounts(doc: SalesDocument): Promise<string[]> {
+  const { byProduct, byModel } = await tentativeRates(doc);
+  if (!byProduct.size && !byModel.size) return [];
+  const vatFactor = doc.vatInclusive ? 1 + (await getCompanySettings()).vatRatePct / 100 : 1;
+  const out: string[] = [];
+  for (const r of itemRows(doc)) {
+    const t = r.productId ? byProduct.get(r.productId) : byModel.get(r.description.trim().toLowerCase());
+    if (t == null) continue;
+    if (r.discountPct > 0 || r.netRate < round2(t * vatFactor) - 0.005) out.push(r.description);
+  }
+  return out;
+}
+
 export async function excessDiscounts(doc: SalesDocument): Promise<ExcessLine[]> {
   const items = doc.rows.filter((r) => r.kind === "item" && r.productId && r.qty > 0) as Extract<SalesDocument["rows"][number], { kind: "item" }>[];
   if (!items.length) return [];
@@ -32,7 +68,10 @@ export async function excessDiscounts(doc: SalesDocument): Promise<ExcessLine[]>
   const maxById = new Map(products.map((p) => [p.id, p.maxDiscountPct!]));
   const vatFactor = doc.vatInclusive ? 1 + settings.vatRatePct / 100 : 1;
   const out: ExcessLine[] = [];
+  // Not-in-stock lines answer to the tentative rate instead (noStockDiscounts).
+  const { byProduct: tentative } = await tentativeRates(doc);
   for (const r of items) {
+    if (tentative.has(r.productId!)) continue;
     const maxPct = maxById.get(r.productId!);
     const price = prices.get(r.productId!);
     if (maxPct == null || !price) continue;

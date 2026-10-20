@@ -4,7 +4,7 @@ import { requireUser, isBackOffice } from "@/lib/rbac";
 import { buildDocument, documentInputSchema, type SalesDocument } from "@/lib/sales-document";
 import { saveQuotation, DRAFT_TYPE } from "@/lib/saved-quotes";
 import { isIssuedQuoteRef } from "@/lib/document-format";
-import { coveredByApproval, excessDiscounts } from "@/lib/quote-discount";
+import { coveredByApproval, excessDiscounts, noStockDiscounts } from "@/lib/quote-discount";
 import { notifyQuoteDiscountDecided, notifyQuoteDiscountRequested } from "@/lib/push-events";
 
 // Shared by the PDF and Excel routes: read the builder's JSON body and turn
@@ -31,6 +31,16 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
   const extra = body as { dealId?: unknown; ownerId?: unknown; draftId?: unknown };
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
+  // Items not in stock go at the tentative rate with no discount - for everyone.
+  const noStock = await noStockDiscounts(doc);
+  if (noStock.length) {
+    return {
+      error: Response.json(
+        { error: `No discount on items not in stock - they're quoted at the tentative price list rate: ${noStock.join("; ")}. Remove the discount / raise the rate to the tentative price.` },
+        { status: 403 },
+      ),
+    };
+  }
   const excess = user.role === "HEAD" ? [] : await excessDiscounts(doc);
   const existing = isIssuedQuoteRef(parsed.data.ref)
     ? await prisma.quotation.findUnique({ where: { ref: parsed.data.ref }, select: { id: true, discountStatus: true, discountApproved: true } })
