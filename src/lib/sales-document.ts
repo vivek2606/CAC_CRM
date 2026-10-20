@@ -31,6 +31,11 @@ const rowSchema = z.discriminatedUnion("kind", [
     // rate is the rate less it. Beyond the item's permissible maximum only
     // the Head can generate the document.
     discountPct: z.number().finite().min(0).max(100).default(0),
+    // Priced from our cost (not printed): the cost of the supply /
+    // installation rate (excl. VAT) and this line's margin %, if its own.
+    costRate: z.number().finite().min(0).optional(),
+    costInstall: z.number().finite().min(0).optional(),
+    marginPct: z.number().finite().min(0).max(90).optional(),
   }),
 ]);
 
@@ -57,6 +62,10 @@ export const documentInputSchema = z.object({
   // Sales commission %, built into the product rates (price-list rate excl.
   // VAT / (1 - commission)). Kept so the quote reopens with it; not printed.
   commissionPct: z.number().finite().min(0).max(50).default(0),
+  // Rates from our costs + margin (not printed) - margin on our price, not
+  // markup: rate = cost / (1 - margin). marginPct is the quote's default.
+  costing: z.boolean().default(false),
+  marginPct: z.number().finite().min(0).max(90).default(0),
   // Pre-filled from Company Details, editable per document.
   tin: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(120).default(""),

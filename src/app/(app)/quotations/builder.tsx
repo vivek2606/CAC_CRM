@@ -24,6 +24,9 @@ export type ModelOption = {
 };
 // Not in stock and quoted at the tentative price: no discount allowed.
 const noDiscount = (o: ModelOption | undefined) => !!o && o.stock <= 0 && o.tentative;
+const has = (v: string | undefined) => (v ?? "").trim() !== "";
+// A margin of 100% or more has no price; kept to 0-90.
+const clampMargin = (m: number) => Math.min(90, Math.max(0, m));
 
 export type CompanyOption = {
   key: string;
@@ -73,6 +76,13 @@ type Row =
       installRate?: string;
       // Discount off the (supply) rate, in %. Optional: older drafts lack it.
       discountPct?: string;
+      // Pricing from costs (installation quotes from a contractor's bill):
+      // our cost for the supply / installation rate (excl. VAT) and the
+      // margin % for this line (blank = the quote's margin). With a cost,
+      // the rate is cost / (1 - margin) - never printed.
+      costRate?: string;
+      costInstall?: string;
+      marginPct?: string;
     };
 
 type Draft = {
@@ -95,6 +105,9 @@ type Draft = {
   withInstallation?: boolean;
   // Sales commission %: product rates are the price-list rate / (1 - it).
   commissionPct?: string;
+  // Rates from costs + margin (see Row.costRate); marginPct is the default.
+  costing?: boolean;
+  marginPct?: string;
   tin: string;
   bankName: string;
   accountName: string;
@@ -225,6 +238,9 @@ export function QuotationBuilder({
           unitPrice: String(r.unitPrice),
           installRate: r.installRate ? String(r.installRate) : "",
           discountPct: r.discountPct ? String(r.discountPct) : "",
+          costRate: r.costRate != null ? String(r.costRate) : "",
+          costInstall: r.costInstall != null ? String(r.costInstall) : "",
+          marginPct: r.marginPct != null ? String(r.marginPct) : "",
         };
       }),
       terms: [...x.terms],
@@ -233,6 +249,8 @@ export function QuotationBuilder({
       showAvailability: x.showAvailability,
       withInstallation: x.withInstallation,
       commissionPct: x.commissionPct ? String(x.commissionPct) : "",
+      costing: x.costing,
+      marginPct: x.marginPct ? String(x.marginPct) : "",
       tin: x.tin,
       bankName: x.bankName,
       accountName: x.accountName,
@@ -310,7 +328,9 @@ export function QuotationBuilder({
     const initials = isIssuedQuoteRef(d.ref) ? d.ref.split("/")[3] : null;
     update({ ownerId, ...(initials && name && nameInitials(name) !== initials ? { ref: "" } : {}) });
   };
-  const setRow = (id: string, patch: Partial<Row>) => update({ rows: d.rows.map((r) => (r.uid === id ? ({ ...r, ...patch } as Row) : r)) });
+  // A line priced from its cost is re-priced whenever it changes.
+  const setRow = (id: string, patch: Partial<Row>) =>
+    update({ rows: d.rows.map((r) => (r.uid === id ? reprice({ ...r, ...patch } as Row, defaultMargin, inclusive) : r)) });
   const move = (i: number, by: number) => {
     const rows = [...d.rows];
     const j = i + by;
@@ -380,7 +400,9 @@ export function QuotationBuilder({
 
   // A quotation made in Excel: its items come in as rows here (products
   // matched to the list print in the standard format), plus the customer.
-  const importExcel = async (file: File) => {
+  // asCost: a contractor's bill - its supply / installation rates are our
+  // costs, and the quote's rates are worked out from them with the margin.
+  const importExcel = async (file: File, asCost = false) => {
     setError(null);
     setImportNote(null);
     setImporting(true);
@@ -397,6 +419,20 @@ export function QuotationBuilder({
           ? { uid: uid(), kind: "item", custom: false, productId: opt.id, description: opt.model, detail: opt.availability, unit: r.unit, qty: String(r.qty), unitPrice: String(r.unitPrice), installRate: r.installRate ? String(r.installRate) : "" }
           : { uid: uid(), kind: "item", custom: true, productId: null, description: r.description, detail: "", unit: r.unit, qty: String(r.qty), unitPrice: String(r.unitPrice), installRate: r.installRate ? String(r.installRate) : "" };
       });
+      if (asCost) {
+        rows.forEach((r, i) => {
+          const src = res.rows[i];
+          if (r.kind !== "item" || src.kind !== "item") return;
+          const opt = r.productId ? optionById.get(r.productId) : undefined;
+          // A listed product with no supply cost on the bill is our own
+          // equipment - priced from the price list, as usual.
+          if (src.unitPrice > 0) r.costRate = String(src.unitPrice);
+          else r.unitPrice = opt?.rate != null ? String(quoteRate(opt.rate)) : "";
+          if (src.installRate > 0) r.costInstall = String(src.installRate);
+          else r.installRate = "";
+        });
+        rows.splice(0, rows.length, ...rows.map((r) => reprice(r, defaultMargin, inclusive)));
+      }
       const hasItems = d.rows.some((r) => r.kind === "item" && r.description.trim());
       const replace = !hasItems || window.confirm("Replace the items already in this quotation?\n\nOK = replace them, Cancel = add the imported items below.");
       const defaultTitle = "SUPPLY OF AIR-CONDITIONING EQUIPMENT";
@@ -408,13 +444,14 @@ export function QuotationBuilder({
         ...(res.vatInclusive != null ? { vatMode: res.vatInclusive ? "inclusive" : "separate" } : {}),
         // Installation column: as in the sheet, kept on when adding to a quote that has it.
         withInstallation: res.withInstallation || (!replace && d.withInstallation === true),
+        ...(asCost ? { costing: true } : {}),
       });
       const matched = rows.filter((r) => r.kind === "item" && !r.custom).length;
       const unmatched = res.rows.filter((r, i) => r.kind === "item" && rows[i].kind === "item" && (rows[i] as { custom: boolean }).custom);
       setImportNote({
         summary: `Imported ${items.length} item${items.length === 1 ? "" : "s"} from ${file.name}: ${matched} matched to the product list${
           unmatched.length ? `, ${unmatched.length} added as custom items` : ""
-        }. Check the rates, quantities and VAT setting before downloading.`,
+        }. ${asCost ? `The bill's rates are our costs - ${has(d.marginPct) ? `priced at ${defaultMargin}% margin` : "enter the Margin % above to price them"}. ` : ""}Check the rates, quantities and VAT setting before downloading.`,
         details: [
           ...unmatched.map((r) => `Not in the product list (custom item): ${r.kind === "item" ? r.sourceText || r.description : ""}`),
           ...res.problems,
@@ -438,6 +475,20 @@ export function QuotationBuilder({
   // Sales commission built into the rate: price-list rate (excl. VAT) / (1 - commission).
   const commission = Math.min(50, Math.max(0, num(d.commissionPct ?? "")));
   const quoteRate = (rate: number) => round2((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
+  // Margin (not markup): the rate is cost / (1 - margin), so the margin is
+  // that share of our price. Rounded up to the naira, so it's never short.
+  const defaultMargin = clampMargin(num(d.marginPct ?? ""));
+  const marginOf = (r: Extract<Row, { kind: "item" }>) => (has(r.marginPct) ? clampMargin(num(r.marginPct ?? "")) : defaultMargin);
+  const priceFromCost = (cost: number, margin: number, incl: boolean) => Math.ceil((cost / (1 - margin / 100)) * (incl ? vatFactor : 1));
+  const reprice = (r: Row, margin: number, incl: boolean): Row => {
+    if (r.kind !== "item" || (!has(r.costRate) && !has(r.costInstall))) return r;
+    const m = has(r.marginPct) ? clampMargin(num(r.marginPct ?? "")) : margin;
+    return {
+      ...r,
+      ...(has(r.costRate) ? { unitPrice: String(priceFromCost(num(r.costRate ?? ""), m, incl)) } : {}),
+      ...(has(r.costInstall) ? { installRate: String(priceFromCost(num(r.costInstall ?? ""), m, incl)) } : {}),
+    };
+  };
   const withInstallation = d.withInstallation === true;
   // Discount %, kept to 0-100; the net rate is the rate less it.
   // Not in stock at the tentative rate: no discount at all.
@@ -448,6 +499,43 @@ export function QuotationBuilder({
   const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
   const installTotal = withInstallation ? d.rows.reduce((s, r) => s + (r.kind === "item" ? Math.round(num(r.qty) * num(r.installRate ?? "") * 100) / 100 : 0), 0) : 0;
+  // Costed lines: our cost, and our price for the costed parts (excl. VAT).
+  const costOf = (r: Extract<Row, { kind: "item" }>) =>
+    num(r.qty) * ((has(r.costRate) ? num(r.costRate ?? "") : 0) + (withInstallation && has(r.costInstall) ? num(r.costInstall ?? "") : 0));
+  const pricedOf = (r: Extract<Row, { kind: "item" }>) =>
+    (num(r.qty) * ((has(r.costRate) ? netRate(r) : 0) + (withInstallation && has(r.costInstall) ? num(r.installRate ?? "") : 0))) / (inclusive ? vatFactor : 1);
+  const marginPctOf = (cost: number, price: number) => (price > 0 ? ((price - cost) / price) * 100 : null);
+  const costItems = d.rows.filter((r): r is Extract<Row, { kind: "item" }> => r.kind === "item" && (has(r.costRate) || has(r.costInstall)));
+  const costTotal = round2(costItems.reduce((t, r) => t + costOf(r), 0));
+  const pricedTotal = round2(costItems.reduce((t, r) => t + pricedOf(r), 0));
+  const costBlock = (r: Extract<Row, { kind: "item" }>) => {
+    const actual = marginPctOf(costOf(r), pricedOf(r));
+    const small = "w-24 rounded border border-amber-300 bg-white px-1.5 py-0.5 text-right text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500";
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-slate-600">
+        <span className="font-semibold text-amber-800">Our cost (not printed)</span>
+        <label className="inline-flex items-center gap-1">
+          {withInstallation ? "Supply" : "Rate"} ₦
+          <input inputMode="decimal" value={r.costRate ?? ""} placeholder="-" onChange={(e) => setRow(r.uid, { costRate: e.target.value })} className={small} />
+        </label>
+        {withInstallation && (
+          <label className="inline-flex items-center gap-1">
+            Installation ₦
+            <input inputMode="decimal" value={r.costInstall ?? ""} placeholder="-" onChange={(e) => setRow(r.uid, { costInstall: e.target.value })} className={small} />
+          </label>
+        )}
+        <label className="inline-flex items-center gap-1" title="Blank = the quote's margin">
+          Margin %
+          <input inputMode="decimal" value={r.marginPct ?? ""} placeholder={String(defaultMargin)} onChange={(e) => setRow(r.uid, { marginPct: e.target.value })} className="w-14 rounded border border-amber-300 bg-white px-1.5 py-0.5 text-right text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+        </label>
+        {actual != null && costOf(r) > 0 && (
+          <span className={actual + 0.05 < marginOf(r) ? "font-semibold text-rose-700" : "text-emerald-700"}>
+            Margin {actual.toFixed(1)}%{actual + 0.05 < marginOf(r) ? " - below target (discount?)" : ""}
+          </span>
+        )}
+      </div>
+    );
+  };
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
 
@@ -467,7 +555,10 @@ export function QuotationBuilder({
             productId: !r.custom && r.productId && !r.productId.startsWith("tentative:") ? r.productId : undefined,
             description: r.description,
             detail: r.detail, unit: r.unit || "No.", qty: num(r.qty), unitPrice: num(r.unitPrice), installRate: withInstallation ? num(r.installRate ?? "") : 0,
-            discountPct: discOf(r) },
+            discountPct: discOf(r),
+            ...(has(r.costRate) ? { costRate: num(r.costRate ?? "") } : {}),
+            ...(has(r.costInstall) ? { costInstall: num(r.costInstall ?? "") } : {}),
+            ...(has(r.marginPct) ? { marginPct: clampMargin(num(r.marginPct ?? "")) } : {}) },
     ),
     terms: d.terms,
     validityDays: Math.max(0, Math.round(num(d.validityDays))),
@@ -475,6 +566,8 @@ export function QuotationBuilder({
     showAvailability: showAvailability,
     withInstallation,
     commissionPct: commission,
+    costing: d.costing === true,
+    marginPct: defaultMargin,
     tin: d.tin,
     bankName: d.bankName,
     accountName: d.accountName,
@@ -695,11 +788,15 @@ export function QuotationBuilder({
                       vatMode: mode,
                       rows: d.rows.map((r) =>
                         r.kind === "item"
-                          ? {
-                              ...r,
-                              unitPrice: r.unitPrice.trim() !== "" ? String(round2(num(r.unitPrice) * f)) : r.unitPrice,
-                              installRate: (r.installRate ?? "").trim() !== "" ? String(round2(num(r.installRate ?? "") * f)) : r.installRate,
-                            }
+                          ? reprice(
+                              {
+                                ...r,
+                                unitPrice: r.unitPrice.trim() !== "" ? String(round2(num(r.unitPrice) * f)) : r.unitPrice,
+                                installRate: (r.installRate ?? "").trim() !== "" ? String(round2(num(r.installRate ?? "") * f)) : r.installRate,
+                              },
+                              defaultMargin,
+                              mode === "inclusive",
+                            )
                           : r,
                       ),
                     });
@@ -724,7 +821,7 @@ export function QuotationBuilder({
                   update({
                     commissionPct: e.target.value,
                     rows: d.rows.map((r) =>
-                      r.kind === "item" && !r.custom && r.unitPrice.trim() !== "" && f !== 1 ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r,
+                      r.kind === "item" && !r.custom && !has(r.costRate) && r.unitPrice.trim() !== "" && f !== 1 ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r,
                     ),
                   });
                 }}
@@ -749,6 +846,27 @@ export function QuotationBuilder({
               />
               Supply &amp; installation (adds an installation rate column)
             </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600" title="Each line takes our cost; the rate is cost / (1 - margin). Costs and margin are not printed.">
+              <input
+                type="checkbox"
+                checked={d.costing === true}
+                onChange={(e) => update({ costing: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Price from our costs + margin
+            </label>
+            {d.costing && (
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-amber-800" title="Margin on our price (not markup): rate = cost / (1 - margin). Lines can have their own.">
+                Margin %
+                <input
+                  inputMode="decimal"
+                  value={d.marginPct ?? ""}
+                  placeholder="0"
+                  onChange={(e) => update({ marginPct: e.target.value, rows: d.rows.map((r) => reprice(r, clampMargin(num(e.target.value)), inclusive)) })}
+                  className={`w-16 rounded-md border bg-white px-2 py-1 text-right text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${has(d.marginPct) ? "border-amber-300" : "border-rose-400"}`}
+                />
+              </label>
+            )}
           </div>
         </div>
         {/* Phones: one card per line, with big quantity / rate boxes. */}
@@ -838,7 +956,7 @@ export function QuotationBuilder({
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
-                    <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={big} />
+                    <input inputMode="decimal" enterKeyHint={withInstallation ? "next" : "done"} value={r.unitPrice} readOnly={has(r.costRate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${big} read-only:bg-amber-50`} />
                   </label>
                 </div>
                 <label className="block">
@@ -860,9 +978,10 @@ export function QuotationBuilder({
                 {withInstallation && (
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-slate-500">Installation rate {inclusive ? "incl." : "excl."} VAT (₦)</span>
-                    <input inputMode="decimal" enterKeyHint="done" value={r.installRate ?? ""} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { installRate: e.target.value })} className={big} />
+                    <input inputMode="decimal" enterKeyHint="done" value={r.installRate ?? ""} readOnly={has(r.costInstall)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setRow(r.uid, { installRate: e.target.value })} className={`${big} read-only:bg-amber-50`} />
                   </label>
                 )}
+                {d.costing && costBlock(r)}
                 <p className="text-right text-sm text-slate-600">
                   Amount <span className="font-semibold text-slate-900 tabular-nums">{naira(amount)}</span>
                 </p>
@@ -968,6 +1087,7 @@ export function QuotationBuilder({
                         </p>
                       )}
                       {r.custom && <p className="text-[11px] text-slate-400">Custom item - not from the product list</p>}
+                      {d.costing && costBlock(r)}
                     </td>
                     <td className="px-3 py-2 align-top">
                       <input list="quote-units" value={r.unit} onChange={(e) => setRow(r.uid, { unit: e.target.value })} className={input} />
@@ -976,7 +1096,14 @@ export function QuotationBuilder({
                       <input inputMode="decimal" value={r.qty} onChange={(e) => setRow(r.uid, { qty: e.target.value })} className={`${input} text-right`} />
                     </td>
                     <td className="px-3 py-2 align-top">
-                      <input inputMode="decimal" value={r.unitPrice} onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })} className={`${input} text-right`} />
+                      <input
+                        inputMode="decimal"
+                        value={r.unitPrice}
+                        readOnly={has(r.costRate)}
+                        title={has(r.costRate) ? "From our cost + margin - change the cost or margin" : undefined}
+                        onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })}
+                        className={`${input} text-right read-only:bg-amber-50`}
+                      />
                       {opt?.rate != null && Math.abs(num(r.unitPrice) - quoteRate(opt.rate)) >= 0.01 && (
                         <p className="mt-1 text-right text-[11px] text-amber-700">
                           {num(r.unitPrice) < quoteRate(opt.rate) ? "Below" : "Above"} suggested by{" "}
@@ -1004,7 +1131,14 @@ export function QuotationBuilder({
                     </td>
                     {withInstallation && (
                       <td className="px-3 py-2 align-top">
-                        <input inputMode="decimal" value={r.installRate ?? ""} onChange={(e) => setRow(r.uid, { installRate: e.target.value })} className={`${input} text-right`} />
+                        <input
+                          inputMode="decimal"
+                          value={r.installRate ?? ""}
+                          readOnly={has(r.costInstall)}
+                          title={has(r.costInstall) ? "From our cost + margin - change the cost or margin" : undefined}
+                          onChange={(e) => setRow(r.uid, { installRate: e.target.value })}
+                          className={`${input} text-right read-only:bg-amber-50`}
+                        />
                       </td>
                     )}
                     <td className="px-3 py-2 align-top pt-4 text-right tabular-nums font-medium text-slate-800">{naira(amount)}</td>
@@ -1063,6 +1197,24 @@ export function QuotationBuilder({
               }}
             />
           </label>
+          <label
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 ${importing ? "opacity-60" : ""}`}
+            title="A contractor's installation bill (Supply / Installation columns): its rates come in as our costs and the quote is priced with your margin %"
+          >
+            <FileUp className="h-4 w-4" />
+            {importing ? "Importing…" : "Import contractor's bill (add margin)"}
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              disabled={importing}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) importExcel(f, true);
+              }}
+            />
+          </label>
         </div>
         {importNote && (
           <div className="mx-4 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -1113,6 +1265,25 @@ export function QuotationBuilder({
               <span className="tabular-nums">{naira(total)}</span>
             </div>
             <p className="pt-1 text-xs text-slate-500">{nairaInWords(total)}</p>
+            {d.costing && costTotal > 0 && (
+              <div className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-slate-700">
+                <p className="font-semibold text-amber-800">Margin on the costed lines (not printed)</p>
+                <div className="flex justify-between">
+                  <span>Our cost</span>
+                  <span className="tabular-nums">{naira(costTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Our price (excl. VAT)</span>
+                  <span className="tabular-nums">{naira(pricedTotal)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Margin</span>
+                  <span className="tabular-nums">
+                    {naira(round2(pricedTotal - costTotal))} ({(marginPctOf(costTotal, pricedTotal) ?? 0).toFixed(1)}%)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

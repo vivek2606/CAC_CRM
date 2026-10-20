@@ -37,7 +37,8 @@ const HEAD = {
   model: /^(model|model no\.?|model number|item code|product code|code|part no\.?|sku)$/i,
   qty: /^(qty|qty\.|quantity|qnty|nos?\.?|no\. of units|units? qty)\b/i,
   unit: /^(unit|uom|unit of measure)$/i,
-  rate: /(unit (price|rate|cost)|rate|price)/i,
+  // "Supply" alone is the supply rate on a supply & installation sheet.
+  rate: /(unit (price|rate|cost)|rate|price|^supply$)/i,
   amount: /(amount|total|line total|ext(ended)? price)/i,
   install: /install/i,
   sn: /^(s\/?n|s\.n\.?|#|no\.?|sl\.? ?no\.?|item no\.?)$/i,
