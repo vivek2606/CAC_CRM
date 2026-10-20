@@ -35,17 +35,24 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
   const settings = await getCompanySettings();
   const { vatRatePct } = settings;
   const sns = serialNumbers(input.rows);
+  // With VAT, the rates are typed in VAT-inclusive: each line prints at its
+  // basic rate (excl. VAT), and VAT is the entered total less the basic
+  // amount - so the total is exactly what was entered.
+  const f = input.withVat ? 1 + vatRatePct / 100 : 1;
+  let entered = 0;
   const rows: DocRow[] = input.rows
     .map((r, i): DocRow | null => {
       if (r.kind === "section") return r.label ? { kind: "section", label: r.label, sn: sns[i] } : null;
       if (!r.description && r.qty === 0) return null;
-      const rate = round2(r.rate);
-      return { kind: "item", sn: sns[i], description: r.description, detail: "", unit: r.unit || "Lot", qty: r.qty, unitPrice: rate, discountPct: 0, netRate: rate, installRate: 0, amount: round2(r.qty * rate) };
+      const lineTotal = round2(r.qty * r.rate);
+      entered += lineTotal;
+      const rate = round2(r.rate / f);
+      return { kind: "item", sn: sns[i], description: r.description, detail: "", unit: r.unit || "Lot", qty: r.qty, unitPrice: rate, discountPct: 0, netRate: rate, installRate: 0, amount: round2(lineTotal / f) };
     })
     .filter((r): r is DocRow => r != null);
   const subtotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.amount : 0), 0));
-  const vat = input.withVat ? round2((subtotal * vatRatePct) / 100) : 0;
-  const total = round2(subtotal + vat);
+  const total = round2(entered);
+  const vat = round2(total - subtotal);
   const received = round2(input.received);
   return {
     type: "proforma", // "Bill to" on the document
@@ -72,6 +79,7 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
     total,
     totalInWords: nairaInWords(total),
     terms: input.terms.map((t) => t.trim()).filter(Boolean),
+    subtotalLabel: "Basic amount (excl. VAT)",
     regLines: [`VAT Reg. No. ${SOMOTEX_VAT_REG_NO}`, `TIN ${SOMOTEX.tin}`],
     noVat: !input.withVat,
     payment: { received, balance: round2(total - received) },

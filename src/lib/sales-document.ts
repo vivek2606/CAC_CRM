@@ -114,6 +114,7 @@ export type SalesDocument = {
   // under the company name (VAT reg. no., TIN), a document without VAT, and
   // the payment received so far with the balance due.
   regLines?: string[];
+  subtotalLabel?: string;
   noVat?: boolean;
   payment?: { received: number; balance: number };
   // In place of the usual "For <company>" / customer blocks at the foot.

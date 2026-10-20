@@ -293,7 +293,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
             ) : (
               <>
                 <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
-                  <Text style={s.totalLabel}>Subtotal (excl. VAT)</Text>
+                  <Text style={s.totalLabel}>{doc.subtotalLabel ?? "Subtotal (excl. VAT)"}</Text>
                   <Text style={s.totalValue}>{money(doc.subtotal)}</Text>
                 </View>
                 <View style={s.totalRow}>

@@ -66,9 +66,12 @@ export function InvoiceBuilder({
 
   const setRow = (id: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.uid === id ? ({ ...r, ...patch } as Row) : r)));
   const amountOf = (r: Row) => (r.kind === "item" ? round2(num(r.qty) * num(r.rate)) : 0);
-  const subtotal = round2(rows.reduce((s, r) => s + amountOf(r), 0));
-  const vat = withVat ? round2((subtotal * vatRatePct) / 100) : 0;
-  const total = round2(subtotal + vat);
+  // With VAT the amounts entered include it: total = what's entered; the
+  // basic amount is each line less VAT (as service-invoice.ts prints it).
+  const total = round2(rows.reduce((s, r) => s + amountOf(r), 0));
+  const f = withVat ? 1 + vatRatePct / 100 : 1;
+  const subtotal = round2(rows.reduce((s, r) => s + round2(amountOf(r) / f), 0));
+  const vat = round2(total - subtotal);
   const paid = round2(num(received));
   const balance = round2(total - paid);
 
@@ -159,7 +162,7 @@ export function InvoiceBuilder({
                 onClick={() => setWithVat(v)}
                 className={`flex-1 rounded-md px-2 py-1 text-sm font-medium ${withVat === v ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
               >
-                {v ? `With VAT (${vatRatePct}%)` : "Without VAT"}
+                {v ? `With VAT (${vatRatePct}%, rates incl.)` : "Without VAT"}
               </button>
             ))}
           </div>
@@ -190,8 +193,8 @@ export function InvoiceBuilder({
               <th className="px-3 py-2 font-medium">Description *</th>
               <th className="px-3 py-2 font-medium w-24">Unit</th>
               <th className="px-3 py-2 font-medium w-24 text-right">Qty</th>
-              <th className="px-3 py-2 font-medium w-40 text-right">Rate (₦)</th>
-              <th className="px-3 py-2 font-medium w-40 text-right">Amount (₦)</th>
+              <th className="px-3 py-2 font-medium w-40 text-right">{withVat ? "Rate incl. VAT (₦)" : "Rate (₦)"}</th>
+              <th className="px-3 py-2 font-medium w-40 text-right">{withVat ? "Amount incl. VAT (₦)" : "Amount (₦)"}</th>
               <th className="w-10" />
             </tr>
           </thead>
@@ -247,7 +250,7 @@ export function InvoiceBuilder({
       <div className="flex justify-end">
         <dl className="w-full max-w-sm space-y-1.5 text-sm">
           <div className="flex justify-between">
-            <dt className="text-slate-500">{withVat ? "Subtotal (excl. VAT)" : "Total"}</dt>
+            <dt className="text-slate-500">{withVat ? "Basic amount (excl. VAT)" : "Total"}</dt>
             <dd className="tabular-nums">{naira(subtotal)}</dd>
           </div>
           {withVat && (
