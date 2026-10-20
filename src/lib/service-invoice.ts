@@ -91,10 +91,12 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
   };
 }
 
-// Next invoice number: SOM/INV/<year>/<running no.>, a per-year counter in
-// AppSetting bumped in one statement (two downloads at once can't clash).
-export async function nextServiceInvoiceRef(now = new Date()): Promise<string> {
-  const year = now.getUTCFullYear();
+// Next invoice number: SNL/CAC/LAG/LK/<invoice date yyyymmdd>/<running
+// no.>. The running number is a per-year counter in AppSetting bumped in one
+// statement (two downloads at once can't clash), so it is unique on its own.
+export const SERVICE_INVOICE_REF_PREFIX = "SNL/CAC/LAG/LK";
+export async function nextServiceInvoiceRef(invoiceDate: Date): Promise<string> {
+  const year = invoiceDate.getUTCFullYear();
   const key = `service-invoice-seq:${year}`;
   const rows = await prisma.$queryRaw<{ n: number }[]>`
     INSERT INTO "AppSetting" ("key", "value", "updatedAt")
@@ -103,7 +105,8 @@ export async function nextServiceInvoiceRef(now = new Date()): Promise<string> {
       SET "value" = to_jsonb((("AppSetting"."value") #>> '{}')::int + 1), "updatedAt" = NOW()
     RETURNING (("value") #>> '{}')::int AS n
   `;
-  return `SOM/INV/${year}/${String(Number(rows[0]?.n ?? 1)).padStart(4, "0")}`;
+  const ymd = invoiceDate.toISOString().slice(0, 10).replace(/-/g, "");
+  return `${SERVICE_INVOICE_REF_PREFIX}/${ymd}/${String(Number(rows[0]?.n ?? 1)).padStart(4, "0")}`;
 }
 
 export function serviceInvoiceFilename(doc: SalesDocument): string {

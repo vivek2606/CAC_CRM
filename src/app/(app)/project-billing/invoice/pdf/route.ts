@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       return Response.json({ error: `Invoice ${input.ref} isn't saved - clear the number to issue a new one.` }, { status: 400 });
     }
   } else {
-    input.ref = await nextServiceInvoiceRef();
+    input.ref = await nextServiceInvoiceRef(doc.date);
     doc.ref = input.ref;
   }
 
