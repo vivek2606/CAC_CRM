@@ -6,8 +6,8 @@ import { monthName } from "@/lib/model-forecast";
 // in transit, paid pending orders, projected sales month by month until the
 // order lands, the stock left then, projected sales for the months the
 // order covers and the quantity to order - next year's months, the balances
-// and the order are formulas off the growth cells (B2 drivers / B3 others)
-// and each model's "Growth driver" Yes/No, so they can be changed in place.
+// and the order are formulas off the growth cells (B2 drivers / B3 Rooftop
+// / B4 others) and each model's growth group, so they can be changed in place.
 // Sheet 2: units sold month by month, this year and the last few.
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -31,15 +31,17 @@ export async function buildModelForecastXlsx(rows: ModelForecast[], s: ForecastS
   ws.getCell("A1").font = { bold: true, size: 13 };
   ws.getCell("A2").value = "Growth next year - growth drivers:";
   ws.getCell("B2").value = s.driverGrowthPct / 100;
-  ws.getCell("A3").value = "Growth next year - other models:";
-  ws.getCell("B3").value = s.otherGrowthPct / 100;
-  for (const a of ["B2", "B3"]) {
+  ws.getCell("A3").value = "Growth next year - Rooftop:";
+  ws.getCell("B3").value = s.rooftopGrowthPct / 100;
+  ws.getCell("A4").value = "Growth next year - other models:";
+  ws.getCell("B4").value = s.otherGrowthPct / 100;
+  for (const a of ["B2", "B3", "B4"]) {
     ws.getCell(a).numFmt = "0%";
     ws.getCell(a).fill = fill("FFFEF3C7");
     ws.getCell(a).font = { bold: true };
   }
-  for (const a of ["A2", "A3"]) ws.getCell(a).font = { bold: true };
-  ws.getCell("C2").value = `Projected sales = the same month's average over the last ${s.yearsBack} years the model sold in; next year's months + the growth %. Growth drivers: Atom-C duct & cassette, Floor Standing, VRF (change Yes/No per model).`;
+  for (const a of ["A2", "A3", "A4"]) ws.getCell(a).font = { bold: true };
+  ws.getCell("C2").value = `Projected sales = the same month's average over the last ${s.yearsBack} years the model sold in; next year's months + the growth % of the model's group (column D: Driver = Atom-C duct & cassette, Floor Standing, VRF; Rooftop; Other - change it per model).`;
   ws.getCell("C3").value = `Stock at landing = stock + in transit - paid pending - sales until then. Order = sales ${afterSpan} - stock at landing (if any). Units net of returns.`;
   for (const a of ["C2", "C3"]) ws.getCell(a).font = { italic: true, color: { argb: "FF64748B" } };
 
@@ -67,7 +69,7 @@ export async function buildModelForecastXlsx(rows: ModelForecast[], s: ForecastS
     [C.model, "Model"],
     [C.category, "Category"],
     [C.codes, "Codes"],
-    [C.driver, "Growth driver"],
+    [C.driver, "Growth group"],
     [C.stock, "Stock now"],
     [C.transit, "In transit"],
     [C.eta, "Earliest ETA"],
@@ -93,7 +95,7 @@ export async function buildModelForecastXlsx(rows: ModelForecast[], s: ForecastS
   ws.getColumn(C.model).width = 28;
   ws.getColumn(C.category).width = 13;
   ws.getColumn(C.codes).width = 20;
-  ws.getColumn(C.driver).width = 8;
+  ws.getColumn(C.driver).width = 9;
   for (let c = C.stock; c <= SHORT; c++) ws.getColumn(c).width = c === C.eta ? 11 : 9;
 
   let r = 7;
@@ -102,8 +104,9 @@ export async function buildModelForecastXlsx(rows: ModelForecast[], s: ForecastS
     row.getCell(C.model).value = f.model;
     row.getCell(C.category).value = f.category;
     row.getCell(C.codes).value = f.codes.join(", ");
-    row.getCell(C.driver).value = f.driver ? "Yes" : "No";
+    row.getCell(C.driver).value = f.growthGroup;
     row.getCell(C.driver).fill = fill("FFFEF3C7");
+    row.getCell(C.driver).dataValidation = { type: "list", allowBlank: false, formulae: ['"Driver,Rooftop,Other"'] };
     row.getCell(C.stock).value = f.stock;
     row.getCell(C.transit).value = f.transit;
     if (f.eta) {
@@ -114,7 +117,8 @@ export async function buildModelForecastXlsx(rows: ModelForecast[], s: ForecastS
     row.getCell(C.unpaid).value = f.unpaid;
     const monthCell = (c: number, m: ModelForecast["before"][number]) => {
       const cell = row.getCell(c);
-      cell.value = m.growth ? { formula: `ROUND(${m.base}*(1+IF($${col(C.driver)}${r}="Yes",$B$2,$B$3)),1)` } : m.base;
+      const grp = `$${col(C.driver)}${r}`;
+      cell.value = m.growth ? { formula: `ROUND(${m.base}*(1+IF(${grp}="Driver",$B$2,IF(${grp}="Rooftop",$B$3,$B$4))),1)` } : m.base;
       cell.numFmt = "0.0";
     };
     f.before.forEach((m, i) => monthCell(B0 + i, m));

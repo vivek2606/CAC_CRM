@@ -12,7 +12,7 @@ const qty = (n: number) => (n ? n.toLocaleString("en-NG", { maximumFractionDigit
 // pending orders, projected sales until the order lands and the stock left
 // then, projected sales for the months the order covers, the quantity to
 // order - and its sales month by month over the last few years.
-export function ModelSales({ products, settings }: { products: { id: string; label: string }[]; settings: { arrive: string; g: string; go: string } }) {
+export function ModelSales({ products, settings }: { products: { id: string; label: string }[]; settings: { arrive: string; g: string; gr: string; go: string } }) {
   const [productId, setProductId] = useState("");
   const [f, setF] = useState<ModelForecast | null>(null);
   const [pending, start] = useTransition();
@@ -47,7 +47,9 @@ export function ModelSales({ products, settings }: { products: { id: string; lab
               {" "}
               - {f.category} - {f.codes.length} code{f.codes.length === 1 ? "" : "s"}: {f.codes.join(", ")}
             </span>
-            {f.driver && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Growth driver +{settings.g}%</span>}
+            <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${f.growthGroup === "Other" ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-800"}`}>
+              {f.growthGroup === "Driver" ? "Growth driver" : f.growthGroup} +{f.growthPct}% next year
+            </span>
           </p>
 
           {/* 1. Stock position now */}
@@ -99,7 +101,7 @@ export function ModelSales({ products, settings }: { products: { id: string; lab
               </tbody>
             </table>
             <p className="mt-1 text-[11px] text-slate-500">
-              Each month: the same month&apos;s average over the last 3 years the model sold in; * next year&apos;s months +{f.driver ? settings.g : settings.go}% growth.
+              Each month: the same month&apos;s average over the last 3 years the model sold in; * next year&apos;s months +{f.growthPct}% growth.
             </p>
           </div>
 

@@ -7,7 +7,7 @@ import { buildModelForecastXlsx } from "@/lib/model-forecast-xlsx";
 export async function GET(request: Request) {
   await requireBackOffice();
   const q = new URL(request.url).searchParams;
-  const settings = forecastSettings({ arrive: q.get("arrive"), g: q.get("g"), go: q.get("go") });
+  const settings = forecastSettings({ arrive: q.get("arrive"), g: q.get("g"), gr: q.get("gr"), go: q.get("go") });
   const rows = (await getModelForecasts(settings))
     .filter((f) => f.history.some((y) => y.total !== 0) || f.stock > 0 || f.transit > 0 || f.paid > 0 || f.unpaid > 0)
     .sort((a, b) => b.order - a.order || b.shortBefore - a.shortBefore || b.needAfter - a.needAfter || a.model.localeCompare(b.model));

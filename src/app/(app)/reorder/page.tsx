@@ -27,7 +27,7 @@ function monthLabel(d: Date) {
 export default async function ReorderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string; cover?: string; category?: string; arrive?: string; g?: string; go?: string }>;
+  searchParams: Promise<{ window?: string; cover?: string; category?: string; arrive?: string; g?: string; gr?: string; go?: string }>;
 }) {
   await requireBackOffice();
   const params = await searchParams;
@@ -36,7 +36,7 @@ export default async function ReorderPage({
   const category = params.category ?? "";
   // The Midea order plan: when an order placed now lands (default: ships
   // ~January, lands ~March) and next year's growth (drivers / others).
-  const plan = forecastSettings({ arrive: params.arrive, g: params.g, go: params.go });
+  const plan = forecastSettings({ arrive: params.arrive, g: params.g, gr: params.gr, go: params.go });
   const arrival = plan.arrival;
   const arriveKey = arrival.toISOString().slice(0, 7);
   const arrivalOptions = Array.from({ length: 6 }, (_, i) => {
@@ -134,6 +134,7 @@ export default async function ReorderPage({
       cover: String(coverMonths),
       arrive: arriveKey,
       g: String(plan.driverGrowthPct),
+      gr: String(plan.rooftopGrowthPct),
       go: String(plan.otherGrowthPct),
       ...(category ? { category } : {}),
     });
@@ -187,6 +188,14 @@ export default async function ReorderPage({
             <span className="text-xs font-medium text-slate-500" title="Order plan: next year's growth for Atom-C duct & cassette, Floor Standing and VRF">Growth (drivers)</span>
             {[0, 10, 15, 20, 25].map((g) => (
               <Link key={g} href={href({ g })} className={chip(g === plan.driverGrowthPct)}>
+                {g}%
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-500" title="Order plan: next year's growth for Rooftop units">Growth (Rooftop)</span>
+            {[0, 5, 8, 10, 15].map((g) => (
+              <Link key={g} href={href({ gr: g })} className={chip(g === plan.rooftopGrowthPct)}>
                 {g}%
               </Link>
             ))}
@@ -247,11 +256,11 @@ export default async function ReorderPage({
         <Card className="p-4">
           <h2 className="text-sm font-semibold text-slate-900">Midea order plan by model</h2>
           <p className="text-xs text-slate-500 mt-0.5 mb-3">
-            Stock now + goods in transit - paid pending orders - projected sales until the order lands ({monthName(arrival)}) = stock left then; the order plus that has to cover {plan.coverMonths} months ({monthName(arrival)} on). Projected sales: each month&apos;s average over the last {plan.yearsBack} years, next year +{plan.driverGrowthPct}% for growth drivers (Atom-C duct &amp; cassette, Floor Standing, VRF), +{plan.otherGrowthPct}% for the rest. Every code of a model counted together, its type kept apart.
+            Stock now + goods in transit - paid pending orders - projected sales until the order lands ({monthName(arrival)}) = stock left then; the order plus that has to cover {plan.coverMonths} months ({monthName(arrival)} on). Projected sales: each month&apos;s average over the last {plan.yearsBack} years, next year +{plan.driverGrowthPct}% for growth drivers (Atom-C duct &amp; cassette, Floor Standing, VRF), +{plan.rooftopGrowthPct}% for Rooftop, +{plan.otherGrowthPct}% for the rest. Every code of a model counted together, its type kept apart.
           </p>
           <ModelSales
-            key={`${arriveKey}-${plan.driverGrowthPct}-${plan.otherGrowthPct}`}
-            settings={{ arrive: arriveKey, g: String(plan.driverGrowthPct), go: String(plan.otherGrowthPct) }}
+            key={`${arriveKey}-${plan.driverGrowthPct}-${plan.rooftopGrowthPct}-${plan.otherGrowthPct}`}
+            settings={{ arrive: arriveKey, g: String(plan.driverGrowthPct), gr: String(plan.rooftopGrowthPct), go: String(plan.otherGrowthPct) }}
             products={(await prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } })).map((p) => ({ id: p.id, label: `${p.model} (${p.code})` }))} />
         </Card>
 

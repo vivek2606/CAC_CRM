@@ -13,12 +13,13 @@ import { modelKey, modelCodeOf } from "@/lib/model-family";
 //  3. Projected sales for a month = the average of the same month over
 //     the last few years (since the model's first sale), plus the expected growth for
 //     next year's months - 15% for the growth drivers (Atom-C duct and
-//     cassette, Floor Standing, VRF).
+//     cassette, Floor Standing, VRF), 8% for Rooftop, the rest as set.
 
 export type ForecastSettings = {
   arrival: Date; // first of the month the order lands
   coverMonths: number; // months it has to last, from the landing month
   driverGrowthPct: number;
+  rooftopGrowthPct: number;
   otherGrowthPct: number;
   yearsBack: number;
 };
@@ -30,7 +31,8 @@ export type ModelForecast = {
   model: string;
   category: string;
   codes: string[];
-  driver: boolean;
+  growthGroup: GrowthGroup;
+  growthPct: number;
   stock: number;
   transit: number;
   eta: Date | null;
@@ -46,7 +48,9 @@ export type ModelForecast = {
   history: { year: number; months: number[]; total: number }[]; // this year and the last few
 };
 
+export type GrowthGroup = "Driver" | "Rooftop" | "Other";
 export const DEFAULT_GROWTH_PCT = 15;
+export const DEFAULT_ROOFTOP_GROWTH_PCT = 8;
 export const DEFAULT_OTHER_GROWTH_PCT = 0;
 export const DEFAULT_YEARS_BACK = 3;
 export const DEFAULT_COVER_MONTHS = 3; // March, April, May
@@ -55,6 +59,11 @@ export const DEFAULT_COVER_MONTHS = 3; // March, April, May
 export function isGrowthDriver(model: string, category: string): boolean {
   if (category === "VRF" || category === "Floorstanding") return true;
   return /atom-?\s*c\b|\(atc\)/i.test(model) && /cassette|concealed|duct/i.test(model);
+}
+
+export function growthGroupOf(model: string, category: string): GrowthGroup {
+  if (isGrowthDriver(model, category)) return "Driver";
+  return category === "Rooftop" ? "Rooftop" : "Other";
 }
 
 // An order placed now ships in about three months and lands about two
@@ -77,12 +86,13 @@ const pct = (raw: string | null | undefined, fallback: number) => {
   return raw != null && raw !== "" && Number.isFinite(n) && n >= 0 && n <= 100 ? n : fallback;
 };
 
-// The settings from the page's / download's query (arrive=2027-03, g=15, go=0).
-export function forecastSettings(q: { arrive?: string | null; g?: string | null; go?: string | null }): ForecastSettings {
+// The settings from the page's / download's query (arrive=2027-03, g=15, gr=8, go=0).
+export function forecastSettings(q: { arrive?: string | null; g?: string | null; gr?: string | null; go?: string | null }): ForecastSettings {
   return {
     arrival: parseArrival(q.arrive),
     coverMonths: DEFAULT_COVER_MONTHS,
     driverGrowthPct: pct(q.g, DEFAULT_GROWTH_PCT),
+    rooftopGrowthPct: pct(q.gr, DEFAULT_ROOFTOP_GROWTH_PCT),
     otherGrowthPct: pct(q.go, DEFAULT_OTHER_GROWTH_PCT),
     yearsBack: DEFAULT_YEARS_BACK,
   };
@@ -154,8 +164,9 @@ export async function getModelForecasts(s: ForecastSettings, onlyKey?: string, n
       const years = Array.from({ length: s.yearsBack }, (_, i) => d.getUTCFullYear() - 1 - i).filter((y) => y * 12 + d.getUTCMonth() >= firstSale);
       return years.length ? Math.max(0, years.reduce((t, y) => t + q(y, d.getUTCMonth()), 0) / years.length) : 0;
     };
-    const driver = isGrowthDriver(ps[0].model, ps[0].category);
-    const g = (driver ? s.driverGrowthPct : s.otherGrowthPct) / 100;
+    const growthGroup = growthGroupOf(ps[0].model, ps[0].category);
+    const growthPct = growthGroup === "Driver" ? s.driverGrowthPct : growthGroup === "Rooftop" ? s.rooftopGrowthPct : s.otherGrowthPct;
+    const g = growthPct / 100;
     const month = (d: Date, fraction = 1): ForecastMonth => {
       const b = base(d);
       const growth = d.getUTCFullYear() > y0;
@@ -182,7 +193,8 @@ export async function getModelForecasts(s: ForecastSettings, onlyKey?: string, n
       model: modelCodeOf(ps[0].model),
       category: ps[0].category,
       codes: ps.map((p) => p.code),
-      driver,
+      growthGroup,
+      growthPct,
       stock: st,
       transit: tr,
       eta: etas.length ? new Date(Math.min(...etas.map((d) => d.getTime()))) : null,
