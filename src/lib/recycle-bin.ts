@@ -3,7 +3,8 @@ import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
 // Recycle bin: before a deal or lead is deleted (or the imported leads are
-// cleared in one go, or a Project & Service Billing line is deleted), a snapshot of it - and of
+// cleared in one go, or a Project & Service Billing line or a saved
+// quotation is deleted), a snapshot of it - and of
 // what is deleted with it (a deal's products, Sales Register lines and
 // contact roles) - is kept for 30 days, so it can be restored. Activities,
 // notes and quotations aren't deleted with the record (they're only
@@ -25,6 +26,7 @@ type DealSnapshot = {
 type LeadSnapshot = { lead: Row; activityIds: string[]; noteIds: string[] };
 type LeadBatchSnapshot = { leads: Row[]; contacts: Row[]; activities: { id: string; leadId: string }[]; notes: { id: string; leadId: string }[] };
 type BillingSnapshot = { billing: Row };
+type QuotationSnapshot = { quotation: Row };
 
 // JSON turns dates into strings - turn the date fields back into dates.
 const DATE_KEYS = /(At|Date|docDate|month)$/;
@@ -144,6 +146,24 @@ export async function binProjectBilling(id: string, deletedById: string): Promis
   });
 }
 
+export async function binQuotation(id: string, deletedById: string): Promise<void> {
+  const row = await prisma.quotation.findUnique({ where: { id }, include: { owner: { select: { name: true } } } });
+  if (!row) return;
+  const { owner, ...quotation } = row;
+  const data: QuotationSnapshot = { quotation };
+  await prisma.deletedRecord.create({
+    data: {
+      kind: "quotation",
+      recordId: row.id,
+      label: `${row.ref} - ${row.customerName || "no customer"}`,
+      ownerName: owner.name,
+      value: row.total,
+      data: JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue,
+      deletedById,
+    },
+  });
+}
+
 // Puts a deleted deal or lead back. Returns where to find it, or an error
 // (e.g. its sales person or account was deleted since).
 export async function restoreRecord(id: string, restoredById: string): Promise<{ href?: string; error?: string }> {
@@ -183,6 +203,15 @@ export async function restoreRecord(id: string, restoredById: string): Promise<{
         await tx.deletedRecord.delete({ where: { id: rec.id } });
       }, { timeout: 60000 });
       return { href: "/leads" };
+    }
+    if (rec.kind === "quotation") {
+      const s = rec.data as unknown as QuotationSnapshot;
+      const row = revive(s.quotation) as Prisma.QuotationUncheckedCreateInput;
+      if (await prisma.quotation.findUnique({ where: { ref: row.ref }, select: { id: true } })) return { error: `A quotation ${row.ref} already exists.` };
+      // Its deal may have been deleted since - then it comes back unlinked.
+      if (row.dealId && !(await prisma.deal.findUnique({ where: { id: row.dealId }, select: { id: true } }))) row.dealId = null;
+      await prisma.$transaction([prisma.quotation.create({ data: row }), prisma.deletedRecord.delete({ where: { id: rec.id } })]);
+      return { href: "/quotations/saved" };
     }
     if (rec.kind === "billing") {
       const s = rec.data as unknown as BillingSnapshot;

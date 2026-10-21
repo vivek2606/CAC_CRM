@@ -262,6 +262,7 @@ export default async function DealDetailPage({
                 quotes={quotations}
                 showDeal={false}
                 canExcel={canDownloadQuoteExcel(user)}
+                canDelete={user.role === "HEAD"}
                 dealProducts={deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null ? { hasProducts: deal.items.length > 0 } : undefined}
               />
             </Card>

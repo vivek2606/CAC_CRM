@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteQuoteButton } from "./delete-quote-button";
 import { FileDown, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LinkDealButton } from "./link-deal-button";
@@ -29,12 +30,15 @@ export function SavedQuotesTable({
   showDeal = true,
   dealProducts,
   canExcel = true,
+  canDelete = false,
 }: {
   quotes: SavedQuoteRow[];
   showDeal?: boolean;
   dealProducts?: { hasProducts: boolean };
   // Not for the Sales Coordinator (PDF only).
   canExcel?: boolean;
+  // The Head only.
+  canDelete?: boolean;
 }) {
   const link = "text-indigo-600 hover:text-indigo-500 font-medium";
   return (
@@ -109,6 +113,7 @@ export function SavedQuotesTable({
                     Revise
                   </Link>
                   {dealProducts && <UseQuoteProductsButton quoteId={q.id} hasProducts={dealProducts.hasProducts} />}
+                  {canDelete && <DeleteQuoteButton quoteId={q.id} quoteRef={q.ref} />}
                 </span>
               </td>
             </tr>

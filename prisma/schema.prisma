@@ -772,7 +772,7 @@ model Quotation {
 // lines, contact roles; activities, notes and quotations are re-linked).
 model DeletedRecord {
   id          String   @id @default(cuid())
-  kind        String   // "deal" | "lead" | "leadBatch" | "billing"
+  kind        String   // "deal" | "lead" | "leadBatch" | "billing" | "quotation"
   recordId    String
   label       String
   ownerName   String?

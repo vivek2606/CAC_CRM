@@ -3,7 +3,8 @@
 import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { requireUser, requireHead, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { binQuotation } from "@/lib/recycle-bin";
 import { dealOwnerProblem, dealOwnerOptions } from "@/lib/deal-owner";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import crypto from "crypto";
@@ -251,5 +252,18 @@ export async function discardQuoteDraft(draftId: string): Promise<{ error?: stri
   if (!q || q.type !== DRAFT_TYPE || !canSeeQuotation(user, q)) return { error: "Draft not found." };
   await prisma.quotation.delete({ where: { id: draftId } });
   revalidatePath("/quotations/saved");
+  return {};
+}
+
+// The Head deletes a saved quotation (or draft) - it goes to the recycle
+// bin for 30 days, from where it can be restored.
+export async function deleteQuotation(id: string): Promise<{ error?: string }> {
+  const user = await requireHead();
+  const q = await prisma.quotation.findUnique({ where: { id }, select: { id: true, dealId: true } });
+  if (!q) return { error: "This quotation no longer exists." };
+  await binQuotation(id, user.id);
+  await prisma.quotation.delete({ where: { id } });
+  revalidatePath("/quotations/saved");
+  if (q.dealId) revalidatePath(`/deals/${q.dealId}`);
   return {};
 }

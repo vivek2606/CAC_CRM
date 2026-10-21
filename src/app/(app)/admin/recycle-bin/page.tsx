@@ -5,7 +5,7 @@ import { formatCurrency, formatDateTime } from "@/lib/format";
 import { purgeRecycleBin, KEEP_DAYS } from "@/lib/recycle-bin";
 import { BinRowActions } from "./bin-row-actions";
 
-const KIND_LABEL: Record<string, string> = { deal: "Deal", lead: "Lead", leadBatch: "Leads (bulk clear)", billing: "Project billing" };
+const KIND_LABEL: Record<string, string> = { deal: "Deal", lead: "Lead", leadBatch: "Leads (bulk clear)", billing: "Project billing", quotation: "Quotation" };
 
 // Deleted deals and leads, kept for KEEP_DAYS days - restore one with its
 // products, Sales Register lines, activities, notes and quotations.

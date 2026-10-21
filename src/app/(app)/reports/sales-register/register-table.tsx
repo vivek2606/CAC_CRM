@@ -7,6 +7,7 @@ import { ExportCsvButton } from "@/components/export-csv-button";
 import { RegisterCharts } from "./register-charts";
 import { BillingCompanyCell } from "../../project-billing/forms";
 import { AccountCell } from "./account-cell";
+import { DateCell } from "./date-cell";
 
 export type RegisterRow = {
   id: string;
@@ -58,12 +59,15 @@ export function SalesRegisterTable({
   filename,
   showSalesPerson,
   canEditCompany = false,
+  canEditDate = false,
   accounts = [],
 }: {
   rows: RegisterRow[];
   filename: string;
   showSalesPerson: boolean;
   canEditCompany?: boolean;
+  // The Head: change the date of a won order.
+  canEditDate?: boolean;
   // For linking lines without an account (Head / Coordinator).
   accounts?: { id: string; label: string }[];
 }) {
@@ -209,6 +213,14 @@ export function SalesRegisterTable({
                         >
                           {r.accountName}
                         </Link>
+                      ) : c.key === "invoiceDate" && canEditDate && (r.billingId || r.dealId) ? (
+                        <DateCell
+                          key={`${r.billingId ?? r.dealId}:${r.invoiceDate}`}
+                          date={r.invoiceDate}
+                          label={display(r, c.key)}
+                          dealId={r.billingId ? undefined : (r.dealId ?? undefined)}
+                          billingId={r.billingId}
+                        />
                       ) : c.key === "company" && (r.billingId || r.dealId) && canEditCompany ? (
                         <BillingCompanyCell
                           key={`${r.billingId ?? r.dealId}:${r.company}`}

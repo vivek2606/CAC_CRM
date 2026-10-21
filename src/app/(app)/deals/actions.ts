@@ -1178,3 +1178,38 @@ export async function setDealCompany(dealId: string, company: string): Promise<A
     revalidatePath("/reports/sales-register");
   });
 }
+
+// The Head moves a won order to another date from the Sales Register: a
+// won deal (its won date and every Sales Register line of it - a deal
+// from the Sales Register import too, until the register is uploaded
+// again) or a Project & Service Billing line.
+export async function setWonOrderDate(target: { dealId?: string; billingId?: string }, date: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const user = await requireHead();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Pick the date.");
+    const d = parseDateInput(date);
+    if (d.getTime() > Date.now()) throw new Error("The date can't be in the future.");
+    const month = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    if (target.billingId) {
+      const { count } = await prisma.projectBilling.updateMany({ where: { id: target.billingId }, data: { docDate: d, month } });
+      if (!count) throw new Error("This billing line no longer exists.");
+    } else if (target.dealId) {
+      const deal = await prisma.deal.findUnique({ where: { id: target.dealId }, select: { stage: true, closedAt: true, sourceTxnNo: true } });
+      if (!deal || deal.stage !== "WON") throw new Error("This isn't a won deal.");
+      await prisma.deal.update({ where: { id: target.dealId }, data: { closedAt: d } });
+      if (deal.sourceTxnNo == null) {
+        await keepConversionBeforeClose(target.dealId);
+        await syncSaleLineItemsForDeal(target.dealId);
+      } else {
+        await prisma.saleLineItem.updateMany({ where: { dealId: target.dealId }, data: { docDate: d, month } });
+      }
+      await logDealChange(target.dealId, user.id, `Won date: ${deal.closedAt ? fmtDate(deal.closedAt) : "-"} → ${fmtDate(d)} (from the Sales Register).`);
+      revalidatePath(`/deals/${target.dealId}`);
+    } else throw new Error("Nothing to change.");
+    revalidatePath("/reports/sales-register");
+    revalidatePath("/reports");
+    revalidatePath("/targets");
+    revalidatePath("/incentives");
+    revalidatePath("/");
+  });
+}

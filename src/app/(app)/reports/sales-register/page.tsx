@@ -356,7 +356,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} accounts={linkAccounts} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} />
       </div>
     </div>
   );
