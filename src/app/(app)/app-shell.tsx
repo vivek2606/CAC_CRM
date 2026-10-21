@@ -15,8 +15,44 @@ import { NotificationBell } from "@/components/notification-bell";
 // the others are the same app in a frame (which hides its own menu - see
 // the embed-detect script in the root layout), so each keeps its place and
 // anything half-typed while you switch between them.
-type Tab = { id: string; href: string; label: string };
+// href: what the tab opened; url: the page it's on now (kept for a reload).
+type Tab = { id: string; href: string; label: string; url?: string };
 const MAX_TABS = 8;
+
+// The open tabs (and the page in the main area) are kept in the browser for
+// a while, so a reload - pressing refresh, the phone reloading the app in
+// the background, a new version of the app - brings them back instead of
+// leaving just the dashboard.
+const KEEP_MS = 12 * 3600_000;
+type Saved = { tabs: Tab[]; active: string; main: string; at: number };
+const storeKey = (userId: string) => `cac-tabs-v1:${userId}`;
+function readSaved(userId: string): Saved | null {
+  try {
+    const s = JSON.parse(window.localStorage.getItem(storeKey(userId)) ?? "null") as Saved | null;
+    return s && Date.now() - s.at < KEEP_MS ? s : null;
+  } catch {
+    return null;
+  }
+}
+const here = (w: Window) => w.location.pathname + w.location.search;
+
+// Typing in a form that hasn't been saved yet - in the page itself or in
+// an in-app tab. Cleared when the form is submitted or the page changes.
+function watchTyping(doc: Document, onChange: (dirty: boolean) => void) {
+  const typed = (e: Event) => {
+    // Only fields of a form - not the search box or a table's filters.
+    const t = e.target as HTMLInputElement | null;
+    if (!t?.form || t.closest("[role=search], [data-no-unsaved]") || t.type === "search") return;
+    onChange(true);
+  };
+  const submitted = () => onChange(false);
+  doc.addEventListener("input", typed, true);
+  doc.addEventListener("submit", submitted, true);
+  return () => {
+    doc.removeEventListener("input", typed, true);
+    doc.removeEventListener("submit", submitted, true);
+  };
+}
 
 const noopSubscribe = () => () => {};
 function useEmbedded() {
@@ -37,6 +73,68 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   const [refreshing, startRefresh] = useTransition();
   const [tabReloading, setTabReloading] = useState(false);
   const lastRefresh = useRef(0);
+  // Where there's unsaved typing: "main" and/or tab ids.
+  const dirty = useRef(new Set<string>());
+  const restored = useRef(false);
+  // Saving what's open starts only once it has been restored (else the
+  // first save would write over it with nothing).
+  const [ready, setReady] = useState(false);
+  // Per tab: the timer following the page it's on.
+  const followers = useRef(new Map<string, ReturnType<typeof setInterval>>());
+  useEffect(() => {
+    const timers = followers.current;
+    return () => timers.forEach(clearInterval);
+  }, []);
+
+  // Bring back the tabs (and, on a fresh launch at the dashboard, the page
+  // that was open) after a reload.
+  useEffect(() => {
+    if (embedded || restored.current) return;
+    restored.current = true;
+    const saved = readSaved(user.id);
+    /* eslint-disable react-hooks/set-state-in-effect -- restoring browser-stored state once on load */
+    setReady(true);
+    if (!saved) return;
+    setTabs(saved.tabs.map((t) => ({ ...t, href: t.url ?? t.href })));
+    setActive(saved.tabs.some((t) => t.id === saved.active) ? saved.active : "main");
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const fresh = !window.sessionStorage.getItem("cac-session");
+    if (fresh && window.location.pathname === "/" && saved.main && saved.main !== "/") router.replace(saved.main);
+  }, [embedded, user.id, router]);
+  useEffect(() => {
+    if (embedded) return;
+    try {
+      window.sessionStorage.setItem("cac-session", "1");
+    } catch {}
+  }, [embedded]);
+
+  // Keep what's open, as it changes.
+  useEffect(() => {
+    if (embedded || !ready) return;
+    try {
+      window.localStorage.setItem(storeKey(user.id), JSON.stringify({ tabs, active, main: pathname + window.location.search, at: Date.now() } satisfies Saved));
+    } catch {}
+  }, [tabs, active, pathname, embedded, user.id, ready]);
+
+  // Unsaved typing in the page: warn before a reload / closing; the page
+  // changing clears it.
+  useEffect(() => {
+    if (embedded) return;
+    const stop = watchTyping(document, (d) => (d ? dirty.current.add("main") : dirty.current.delete("main")));
+    const warn = (e: BeforeUnloadEvent) => {
+      if (dirty.current.size === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      stop();
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, [embedded]);
+  useEffect(() => {
+    dirty.current.delete("main");
+  }, [pathname]);
 
   // Coming back to the app after a minute or more away: fetch the page's
   // data again, so the figures are current without pressing Refresh.
@@ -46,6 +144,8 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
     lastRefresh.current = Date.now();
     const onVisible = () => {
       if (document.visibilityState !== "visible" || Date.now() - lastRefresh.current < 60_000) return;
+      // Not while something typed in a form is waiting to be saved.
+      if (dirty.current.size > 0) return;
       lastRefresh.current = Date.now();
       router.refresh();
     };
@@ -91,6 +191,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   const busy = refreshing || tabReloading;
 
   const closeTab = (id: string) => {
+    if (dirty.current.has(id) && !window.confirm("This tab has something typed that isn't saved. Close it anyway?")) return;
+    dirty.current.delete(id);
+    clearInterval(followers.current.get(id));
+    followers.current.delete(id);
     const i = tabs.findIndex((t) => t.id === id);
     setTabs((ts) => ts.filter((t) => t.id !== id));
     if (active === id) setActive(tabs[i - 1]?.id ?? "main");
@@ -169,6 +273,34 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
             key={t.id}
             data-tab={t.id}
             src={t.href}
+            // Each page the tab opens: remember it (for a reload) and watch
+            // it for unsaved typing.
+            onLoad={(e) => {
+              const w = e.currentTarget.contentWindow;
+              if (!w) return;
+              dirty.current.delete(t.id);
+              try {
+                const url = here(w);
+                setTabs((ts) => ts.map((x) => (x.id === t.id && x.url !== url ? { ...x, url } : x)));
+                watchTyping(w.document, (d) => (d ? dirty.current.add(t.id) : dirty.current.delete(t.id)));
+                // Pages inside the tab move on without a full load (links,
+                // a form saved and moving on): keep up.
+                clearInterval(followers.current.get(t.id));
+                let last = url;
+                followers.current.set(
+                  t.id,
+                  setInterval(() => {
+                    try {
+                      const now = here(w);
+                      if (now === last) return;
+                      last = now;
+                      dirty.current.delete(t.id);
+                      setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, url: now } : x)));
+                    } catch {}
+                  }, 1500),
+                );
+              } catch {}
+            }}
             title={t.label}
             hidden={active !== t.id}
             className="w-full flex-1 border-0 bg-slate-50"
