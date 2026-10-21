@@ -11,7 +11,7 @@ const qty = (n: number) => (n ? n.toLocaleString("en-NG", { maximumFractionDigit
 // together - e.g. Atom-B and Atom-C apart) month by month this year and
 // last, the 3-month average, and its stock position with the quantity to
 // order from Midea.
-export function ModelSales({ products, coverMonths }: { products: { id: string; label: string }[]; coverMonths: number }) {
+export function ModelSales({ products, coverMonths, arrive }: { products: { id: string; label: string }[]; coverMonths: number; arrive: string }) {
   const [productId, setProductId] = useState("");
   const [h, setH] = useState<ModelSalesHistory | null>(null);
   const [pending, start] = useTransition();
@@ -19,7 +19,7 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
   const pick = (id: string) => {
     setProductId(id);
     setH(null);
-    if (id) start(async () => setH(await modelSalesHistory(id, coverMonths)));
+    if (id) start(async () => setH(await modelSalesHistory(id, coverMonths, arrive)));
   };
 
   return (
@@ -29,7 +29,7 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
           <SearchableSelect options={products} value={productId} onSelect={(o) => pick(o?.id ?? "")} placeholder="Type a model or code, e.g. MDV-V48 or MVC-730…" />
         </div>
         <a
-          href={`/reorder/planning-xlsx?cover=${coverMonths}`}
+          href={`/reorder/planning-xlsx?cover=${coverMonths}&arrive=${arrive}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
           title="Every model: month-wise sales of this year and last, 3-month average, stock, in transit, pending orders and the order quantity (formulas)"
         >
@@ -109,10 +109,10 @@ export function ModelSales({ products, coverMonths }: { products: { id: string; 
               <div
                 key={label}
                 className={`rounded-lg px-3 py-2 ${n > 0 ? "bg-amber-100" : "bg-emerald-50"}`}
-                title={`${h.coverMonths} months x ${avg} a month + ${h.paid} paid pending - ${h.stock} stock - ${h.transit} in transit`}
+                title={`${avg} a month x (${h.monthsToArrival} months until it lands + ${h.coverMonths} months in stock) + ${h.paid} paid pending - ${h.stock} stock - ${h.transit} in transit`}
               >
                 <p className="text-[11px] text-slate-600">
-                  Order - {h.coverMonths} months on the {label}
+                  Order on the {label} (lands {h.arrivalLabel} + {h.coverMonths} months)
                 </p>
                 <p className="text-sm font-bold text-slate-900 tabular-nums">{n} units</p>
               </div>

@@ -5,10 +5,10 @@ import { modelKey, modelCodeOf } from "@/lib/model-family";
 // Ordering from Midea, model by model (every code of a model together, its
 // type kept apart - see model-family.ts): units sold month by month this
 // year and last, the 3- and 6-month averages, stock, goods in transit and
-// pending orders, and the quantity to order to keep `coverMonths` of sales
-// in stock - the reorder rule: cover x average + paid pending - stock - in
-// transit - on each average (an order placed now ships around January and
-// lands around March, so the longer trend matters too).
+// pending orders, and the quantity to order: what sells until the order
+// lands plus `coverMonths` of sales after it, plus paid pending orders,
+// less stock and goods in transit - on each average (an order placed now
+// ships around January and lands around March).
 
 export type ModelPlan = {
   key: string;
@@ -28,18 +28,53 @@ export type ModelPlan = {
   suggested6: number; // on the 6-month average
 };
 
-export type PlanningWindow = { thisYear: number; last3: Date[]; last6: Date[]; avgLabel: string; avg6Label: string };
+export type PlanningWindow = {
+  thisYear: number;
+  last3: Date[];
+  last6: Date[];
+  avgLabel: string;
+  avg6Label: string;
+  arrival: Date; // when an order placed now lands
+  monthsToArrival: number; // months of selling before it does
+  arrivalLabel: string;
+};
 
-export function planningWindow(now = new Date()): PlanningWindow {
+const MONTH_MS = 30.44 * 86400000;
+
+// An order placed now ships about three months on and lands about two
+// months after that: the first of the month five months from now (October -> March).
+export function defaultArrival(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 5, 1));
+}
+
+// "2027-03" -> the first of that month, if 1 to 12 months ahead; else the default.
+export function parseArrival(raw: string | null | undefined, now = new Date()): Date {
+  const m = raw?.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return defaultArrival(now);
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+  const ahead = (d.getUTCFullYear() - now.getUTCFullYear()) * 12 + d.getUTCMonth() - now.getUTCMonth();
+  return ahead >= 1 && ahead <= 12 ? d : defaultArrival(now);
+}
+
+export function planningWindow(now = new Date(), arrival = defaultArrival(now)): PlanningWindow {
   const thisYear = now.getUTCFullYear();
   const last6 = [6, 5, 4, 3, 2, 1].map((back) => new Date(Date.UTC(thisYear, now.getUTCMonth() - back, 1)));
   const last3 = last6.slice(3);
   const f = (d: Date, year: boolean) => d.toLocaleDateString("en-GB", { month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
-  return { thisYear, last3, last6, avgLabel: `${f(last3[0], false)}-${f(last3[2], true)}`, avg6Label: `${f(last6[0], last6[0].getUTCFullYear() !== last6[5].getUTCFullYear())}-${f(last6[5], true)}` };
+  return {
+    thisYear,
+    last3,
+    last6,
+    avgLabel: `${f(last3[0], false)}-${f(last3[2], true)}`,
+    avg6Label: `${f(last6[0], last6[0].getUTCFullYear() !== last6[5].getUTCFullYear())}-${f(last6[5], true)}`,
+    arrival,
+    monthsToArrival: Math.max(0, Math.round(((arrival.getTime() - now.getTime()) / MONTH_MS) * 10) / 10),
+    arrivalLabel: f(arrival, true),
+  };
 }
 
-export async function getModelPlans(coverMonths: number, onlyKey?: string): Promise<{ window: PlanningWindow; plans: ModelPlan[] }> {
-  const window = planningWindow();
+export async function getModelPlans(coverMonths: number, onlyKey?: string, arrival?: Date): Promise<{ window: PlanningWindow; plans: ModelPlan[] }> {
+  const window = planningWindow(new Date(), arrival);
   const { thisYear, last3, last6 } = window;
   const from = new Date(Math.min(Date.UTC(thisYear - 1, 0, 1), last6[0].getTime()));
   const [products, sums, stock, transit, pending] = await Promise.all([
@@ -103,8 +138,8 @@ export async function getModelPlans(coverMonths: number, onlyKey?: string): Prom
       paid: a.paid,
       unpaid: a.unpaid,
       monthsCover: avg3 > 0 ? Math.max(0, st - a.paid) / avg3 : null,
-      suggested: Math.max(0, Math.ceil(avg3 * coverMonths + a.paid - st - tr)),
-      suggested6: Math.max(0, Math.ceil(avg6 * coverMonths + a.paid - st - tr)),
+      suggested: Math.max(0, Math.ceil(avg3 * (window.monthsToArrival + coverMonths) + a.paid - st - tr)),
+      suggested6: Math.max(0, Math.ceil(avg6 * (window.monthsToArrival + coverMonths) + a.paid - st - tr)),
     });
   }
   return { window, plans };

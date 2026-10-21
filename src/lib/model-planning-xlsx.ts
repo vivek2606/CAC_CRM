@@ -42,7 +42,12 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
   ws.getCell("B2").value = coverMonths;
   ws.getCell("B2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
   ws.getCell("B2").font = { bold: true };
-  ws.getCell("C2").value = `Order = months x average + paid pending orders - stock - in transit, on the 3-month (${window.avgLabel}) and 6-month (${window.avg6Label}) averages. An order placed now ships ~January, lands ~March. Change B2 to re-plan. Units net of returns.`;
+  ws.getCell("A3").value = `Months until it lands (${window.arrivalLabel}):`;
+  ws.getCell("A3").font = { bold: true };
+  ws.getCell("B3").value = window.monthsToArrival;
+  ws.getCell("B3").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+  ws.getCell("B3").font = { bold: true };
+  ws.getCell("C2").value = `Order = average x (months until it lands + months to keep in stock) + paid pending orders - stock - in transit, on the 3-month (${window.avgLabel}) and 6-month (${window.avg6Label}) averages. Change B2 / B3 to re-plan. Units net of returns.`;
   ws.getCell("C2").font = { italic: true, color: { argb: "FF64748B" } };
 
   // Row 4: year bands; row 5: headings.
@@ -115,8 +120,8 @@ export async function buildModelPlanningXlsx(plans: ModelPlan[], window: Plannin
     row.getCell(UNPAID).value = p.unpaid;
     const A = `${col(AVG)}${r}`;
     row.getCell(COVER).value = { formula: `IF(${A}>0,ROUND(MAX(0,${col(STOCK)}${r}-${col(PAID)}${r})/${A},1),"")` };
-    row.getCell(ORDER).value = { formula: `MAX(0,ROUNDUP(${A}*$B$2+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
-    row.getCell(ORDER6).value = { formula: `MAX(0,ROUNDUP(${col(AVG6)}${r}*$B$2+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
+    row.getCell(ORDER).value = { formula: `MAX(0,ROUNDUP(${A}*($B$2+$B$3)+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
+    row.getCell(ORDER6).value = { formula: `MAX(0,ROUNDUP(${col(AVG6)}${r}*($B$2+$B$3)+${col(PAID)}${r}-${col(STOCK)}${r}-${col(TRANSIT)}${r},0))` };
     for (const c of [ORDER, ORDER6]) {
       row.getCell(c).font = { bold: true };
       row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF9C3" } };

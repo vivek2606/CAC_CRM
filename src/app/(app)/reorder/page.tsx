@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { ModelSales } from "./model-sales";
+import { parseArrival } from "@/lib/model-planning";
 
 // Midea lead time: ~30 days manufacturing + ~60 days shipping to the
 // warehouse, so stock on hand has to carry ~3 months of sales before a new
@@ -26,13 +27,20 @@ function monthLabel(d: Date) {
 export default async function ReorderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string; cover?: string; category?: string }>;
+  searchParams: Promise<{ window?: string; cover?: string; category?: string; arrive?: string }>;
 }) {
   await requireBackOffice();
   const params = await searchParams;
   const windowMonths = pick(params.window, WINDOW_OPTIONS, 6);
   const coverMonths = pick(params.cover, COVER_OPTIONS, 4);
   const category = params.category ?? "";
+  // When an order placed now lands (default: ships ~January, lands ~March).
+  const arrival = parseArrival(params.arrive);
+  const arriveKey = arrival.toISOString().slice(0, 7);
+  const arrivalOptions = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 2 + i, 1));
+    return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) };
+  });
 
   // Average over the last N complete calendar months, so a half-finished
   // current month doesn't drag the average down.
@@ -119,7 +127,7 @@ export default async function ReorderPage({
   const lowCover = rows.filter((r) => r.monthsCover != null && r.monthsCover < LEAD_TIME_DAYS / 30).length;
   const fmt = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 1 });
   const href = (over: Record<string, string | number>) => {
-    const q = new URLSearchParams({ window: String(windowMonths), cover: String(coverMonths), ...(category ? { category } : {}) });
+    const q = new URLSearchParams({ window: String(windowMonths), cover: String(coverMonths), arrive: arriveKey, ...(category ? { category } : {}) });
     for (const [k, v] of Object.entries(over)) {
       if (v === "") q.delete(k);
       else q.set(k, String(v));
@@ -155,6 +163,14 @@ export default async function ReorderPage({
             {COVER_OPTIONS.map((c) => (
               <Link key={c} href={href({ cover: c })} className={chip(c === coverMonths)}>
                 {c} months
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-500" title="For the Sales history by model card and the Midea order plan">Order placed now lands</span>
+            {arrivalOptions.map((o) => (
+              <Link key={o.key} href={href({ arrive: o.key })} className={chip(o.key === arriveKey)}>
+                {o.label}
               </Link>
             ))}
           </div>
@@ -206,9 +222,9 @@ export default async function ReorderPage({
         <Card className="p-4">
           <h2 className="text-sm font-semibold text-slate-900">Sales history by model</h2>
           <p className="text-xs text-slate-500 mt-0.5 mb-3">
-            For the Midea order: units sold month by month, this year and last, the 3- and 6-month averages, stock, goods in transit, pending orders and the quantity to order for {coverMonths} months&apos; cover on each average (an order placed now ships around January and lands around March) - every code of the model counted together, its type kept apart (e.g. Atom-B and Atom-C).
+            For the Midea order: units sold month by month, this year and last, the 3- and 6-month averages, stock, goods in transit, pending orders and the quantity to order on each average - what sells until the order lands ({arrival.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}) plus {coverMonths} months&apos; stock after it - every code of the model counted together, its type kept apart (e.g. Atom-B and Atom-C).
           </p>
-          <ModelSales coverMonths={coverMonths} products={(await prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } })).map((p) => ({ id: p.id, label: `${p.model} (${p.code})` }))} />
+          <ModelSales key={`${coverMonths}-${arriveKey}`} coverMonths={coverMonths} arrive={arriveKey} products={(await prisma.product.findMany({ orderBy: { model: "asc" }, select: { id: true, code: true, model: true } })).map((p) => ({ id: p.id, label: `${p.model} (${p.code})` }))} />
         </Card>
 
         <Card>
