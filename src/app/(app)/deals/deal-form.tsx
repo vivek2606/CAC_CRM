@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
+import { FormDraft, draftNumber, draftOrNull, type DraftValues } from "@/components/form-draft";
 import { CompletenessBar } from "@/components/completeness-bar";
 import { parseWonItemsSheet } from "./actions";
 import { groupSheetInvoices, type SheetInvoice } from "@/lib/sheet-invoices";
@@ -31,7 +32,7 @@ type ProductOption = {
 };
 type LineItemRow = { productId: string; qty: string; unitPrice: string };
 
-export function DealForm({
+function DealFormFields({
   action,
   isHead,
   owners,
@@ -45,6 +46,7 @@ export function DealForm({
   requireItems = false,
   canEditCompany = false,
   dealId,
+  draft,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
@@ -81,6 +83,7 @@ export function DealForm({
     billingCompany?: string | null;
     tags?: string[];
   };
+  draft: { key: string; restored: boolean; onRestore: (values: DraftValues) => void };
   submitLabel: string;
   // Total of the deal's saved products (edit form) - when set, the value is
   // taken from them and can't be typed over.
@@ -248,6 +251,7 @@ export function DealForm({
       }}
       className="space-y-5 max-w-2xl"
     >
+      <FormDraft draftKey={draft.key} restored={draft.restored} onRestore={draft.onRestore} />
       <input type="hidden" name="lineItems" value={JSON.stringify(validItems)} />
       {sheetInvoices.length > 0 && (
         <input
@@ -663,5 +667,53 @@ export function DealForm({
         </button>
       </div>
     </form>
+  );
+}
+
+type DealFormProps = Omit<Parameters<typeof DealFormFields>[0], "draft"> & { draftKey: string };
+
+// The deal form with draft saving: a draft restored re-opens the form
+// filled with it, products included.
+export function DealForm({ draftKey, defaultValues, initialItems, ...props }: DealFormProps) {
+  const [restored, setRestored] = useState<{ n: number; values: DraftValues } | null>(null);
+  const v = restored?.values;
+  let items = initialItems;
+  let values = defaultValues;
+  if (v) {
+    try {
+      const rows = JSON.parse(v.lineItems || "[]") as LineItemRow[];
+      if (Array.isArray(rows)) items = rows;
+    } catch {}
+    values = {
+      ...defaultValues,
+      title: v.title,
+      billingCompany: v.billingCompany ?? defaultValues?.billingCompany,
+      customerName: v.customerName,
+      customerPhone: v.customerPhone,
+      createdAt: v.createdAt || defaultValues?.createdAt,
+      value: draftNumber(v.value) ?? undefined,
+      stage: draftOrNull<DealStage>(v.stage) ?? defaultValues?.stage,
+      expectedCloseDate: v.expectedCloseDate || null,
+      invoiceNo: v.invoiceNo ?? defaultValues?.invoiceNo,
+      expectedDeliveryDate: v.expectedDeliveryDate || null,
+      paymentTerms: draftOrNull<PaymentTerms>(v.paymentTerms),
+      probability: draftNumber(v.probability) ?? defaultValues?.probability,
+      equipmentType: draftOrNull<EquipmentType>(v.equipmentType),
+      endUseSegment: draftOrNull<EndUseSegment>(v.endUseSegment),
+      competitorBrand: v.competitorBrand,
+      accountId: v.accountId || null,
+      contactId: v.contactId || null,
+      ownerId: v.ownerId || defaultValues?.ownerId,
+      tags: v.tags ? v.tags.split(",").filter(Boolean) : [],
+    };
+  }
+  return (
+    <DealFormFields
+      key={restored?.n ?? 0}
+      {...props}
+      defaultValues={values}
+      initialItems={items}
+      draft={{ key: draftKey, restored: !!restored, onRestore: (vals) => setRestored({ n: Date.now(), values: vals }) }}
+    />
   );
 }

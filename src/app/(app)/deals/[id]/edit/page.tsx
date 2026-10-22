@@ -72,6 +72,7 @@ export default async function EditDealPage({
         {saveError && <p className="mb-4 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Not saved: {saveError}</p>}
         <Card className="p-6">
           <DealForm
+            draftKey={`deal:${deal.id}`}
             action={action}
             isHead={isBackOffice(user)}
             canEditCompany={isBackOffice(user)}

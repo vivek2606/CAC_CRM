@@ -34,6 +34,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
       <div className="p-6">
         <Card className="p-6">
           <LeadForm
+            draftKey={`lead:${lead.id}`}
             action={action}
             isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}

@@ -63,6 +63,7 @@ export default async function NewDealPage() {
       <div className="p-6">
         <Card className="p-6">
           <DealForm
+            draftKey="deal:new"
             action={createDeal}
             isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}

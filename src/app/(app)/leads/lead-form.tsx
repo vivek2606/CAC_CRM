@@ -16,11 +16,12 @@ import {
 } from "@/lib/constants";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
+import { FormDraft, draftNumber, draftOrNull, type DraftValues } from "@/components/form-draft";
 import type { LeadStatus, LeadSource, EquipmentType, EndUseSegment, PurchaseTimeframe } from "@prisma/client";
 
 type Option = { id: string; label: string };
 
-export function LeadForm({
+function LeadFormFields({
   action,
   isHead,
   owners,
@@ -28,6 +29,7 @@ export function LeadForm({
   contacts,
   defaultValues,
   submitLabel,
+  draft,
 }: {
   action: (formData: FormData) => void;
   isHead: boolean;
@@ -56,6 +58,7 @@ export function LeadForm({
     ownerId?: string;
     createdAt?: string;
   };
+  draft: { key: string; restored: boolean; onRestore: (values: DraftValues) => void };
   submitLabel: string;
 }) {
   const [accountId, setAccountId] = useState(defaultValues?.accountId ?? "");
@@ -99,6 +102,7 @@ export function LeadForm({
 
   return (
     <form action={action} className="space-y-5 max-w-2xl">
+      <FormDraft draftKey={draft.key} restored={draft.restored} onRestore={draft.onRestore} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Lead title *</label>
@@ -361,5 +365,47 @@ export function LeadForm({
         </button>
       </div>
     </form>
+  );
+}
+
+type LeadFormProps = Omit<Parameters<typeof LeadFormFields>[0], "draft"> & { draftKey: string };
+
+// The lead form with draft saving: a draft restored re-opens the form
+// filled with it.
+export function LeadForm({ draftKey, defaultValues, ...props }: LeadFormProps) {
+  const [restored, setRestored] = useState<{ n: number; values: DraftValues } | null>(null);
+  const v = restored?.values;
+  const values = v
+    ? {
+        ...defaultValues,
+        title: v.title,
+        customerName: v.customerName,
+        company: v.company,
+        status: draftOrNull<LeadStatus>(v.status) ?? defaultValues?.status,
+        winProbability: draftNumber(v.winProbability),
+        source: draftOrNull<LeadSource>(v.source) ?? defaultValues?.source,
+        equipmentType: draftOrNull<EquipmentType>(v.equipmentType),
+        endUseSegment: draftOrNull<EndUseSegment>(v.endUseSegment),
+        competitorBrand: v.competitorBrand,
+        budgetConfirmed: v.budgetConfirmed === "yes" ? true : v.budgetConfirmed === "no" ? false : null,
+        expectedPurchaseTimeframe: draftOrNull<PurchaseTimeframe>(v.expectedPurchaseTimeframe),
+        value: draftNumber(v.value),
+        email: v.email,
+        phone: v.phone,
+        notes: v.notes,
+        tags: v.tags ? v.tags.split(",").filter(Boolean) : [],
+        accountId: v.accountId || null,
+        contactId: v.contactId || null,
+        ownerId: v.ownerId || defaultValues?.ownerId,
+        createdAt: v.createdAt || defaultValues?.createdAt,
+      }
+    : defaultValues;
+  return (
+    <LeadFormFields
+      key={restored?.n ?? 0}
+      {...props}
+      defaultValues={values}
+      draft={{ key: draftKey, restored: !!restored, onRestore: (vals) => setRestored({ n: Date.now(), values: vals }) }}
+    />
   );
 }

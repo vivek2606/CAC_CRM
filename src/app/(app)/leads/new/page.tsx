@@ -26,6 +26,7 @@ export default async function NewLeadPage() {
       <div className="p-6">
         <Card className="p-6">
           <LeadForm
+            draftKey="lead:new"
             action={createLead}
             isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
