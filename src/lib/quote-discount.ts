@@ -30,7 +30,7 @@ const itemRows = (doc: SalesDocument) =>
   );
 
 // Items not in stock that have a tentative price: quoted at that rate, with
-// no discount at all - for anyone. Keyed by product id (a stocked product
+// no discount at all - for anyone but the Head. Keyed by product id (a stocked product
 // whose stock is 0) or, for a model only on the tentative list, by its
 // model as the line's description.
 async function tentativeRates(doc: SalesDocument): Promise<{ byProduct: Map<string, number>; byModel: Map<string, number> }> {

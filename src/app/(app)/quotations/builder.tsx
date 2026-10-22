@@ -24,8 +24,9 @@ export type ModelOption = {
   // only (shown as a hint); the check itself runs on the server.
   maxDiscountPct: number | null;
 };
-// Not in stock and quoted at the tentative price: no discount allowed.
-const noDiscount = (o: ModelOption | undefined) => !!o && o.stock <= 0 && o.tentative;
+// Not in stock and quoted at the tentative price: no discount allowed
+// (except for the Head - see noDiscount in the builder).
+const tentativeNoStock = (o: ModelOption | undefined) => !!o && o.stock <= 0 && o.tentative;
 const has = (v: string | undefined) => (v ?? "").trim() !== "";
 // A margin of 100% or more has no price; kept to 0-90.
 const clampMargin = (m: number) => Math.min(90, Math.max(0, m));
@@ -194,6 +195,9 @@ export function QuotationBuilder({
   canExcel: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
+  // The Head may discount anything; for everyone else a no-stock item at
+  // the tentative rate takes no discount.
+  const noDiscount = (o: ModelOption | undefined) => !isHead && tentativeNoStock(o);
   const companyFor = (key: string) => companies.find((c) => c.key === key) ?? companies[0];
 
   // The deal a downloaded quote is saved against.

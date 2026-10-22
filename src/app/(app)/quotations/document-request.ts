@@ -31,8 +31,9 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
   const extra = body as { dealId?: unknown; ownerId?: unknown; draftId?: unknown };
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
-  // Items not in stock go at the tentative rate with no discount - for everyone.
-  const noStock = await noStockDiscounts(doc);
+  // Items not in stock go at the tentative rate with no discount - except
+  // for the Head, who may quote any price.
+  const noStock = user.role === "HEAD" ? [] : await noStockDiscounts(doc);
   if (noStock.length) {
     return {
       error: Response.json(
