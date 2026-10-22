@@ -1068,6 +1068,22 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   const ids = new Set(products.map((p) => p.id));
   const byModel = new Map<string, string>();
   for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p.id);
+  // A model quoted from the Tentative Price List only (not stocked, so not
+  // a product yet) becomes a product here, so the deal carries it too.
+  const tentative = await prisma.tentativePrice.findMany({ select: { model: true, category: true } });
+  for (const r of doc.rows) {
+    if (r.kind !== "item" || (r.productId && ids.has(r.productId)) || byModel.has(norm(r.description))) continue;
+    const t = tentative.find((x) => norm(x.model) === norm(r.description));
+    if (!t) continue;
+    const p = await prisma.product.upsert({
+      where: { code: `TENT-${norm(t.model).slice(0, 34)}` },
+      create: { code: `TENT-${norm(t.model).slice(0, 34)}`, brand: "Midea", category: t.category || "VRF", subCategory: "Tentative price list", model: t.model },
+      update: {},
+      select: { id: true, model: true },
+    });
+    ids.add(p.id);
+    byModel.set(norm(p.model), p.id);
+  }
   const lines = doc.rows
     .filter((r) => r.kind === "item")
     // A modular outdoor goes on the deal as its modules.

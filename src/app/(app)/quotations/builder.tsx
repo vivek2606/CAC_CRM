@@ -639,6 +639,22 @@ export function QuotationBuilder({
       return setError("Enter the customer's name (first line of \"To\").");
     }
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim())) return setError("Add at least one item.");
+    // Every line has to say what it is and carry a rate - else it prints
+    // blank / at 0.00 and can't go onto the deal.
+    for (const [i, r] of d.rows.entries()) {
+      if (r.kind !== "item") continue;
+      const label = `Item ${sns[i]}`;
+      if (!r.description.trim()) {
+        return setError(
+          r.custom
+            ? `${label} is empty - describe it or remove the line.`
+            : `${label}: pick the product from the list (a model not in the product or tentative price list can be added as a custom item), or remove the line.`,
+        );
+      }
+      if (!(num(r.unitPrice) > 0) && !(withInstallation && num(r.installRate ?? "") > 0)) {
+        return setError(`${label} (${r.description.trim().slice(0, 60)}) has no rate - enter it before downloading.`);
+      }
+    }
     setBusy(format);
     try {
       // The first download issues this quote's unique reference; later
