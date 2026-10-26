@@ -39,7 +39,7 @@ const rowSchema = z.discriminatedUnion("kind", [
     // A modular VRF outdoor (see modular-outdoor.ts): the modules it's made
     // of, each with its rate (the line's rate is their sum). Not printed -
     // the document shows the combined model; a deal gets the modules.
-    modules: z.array(z.object({ productId: z.string().max(40), model: z.string().max(200), rate: z.number().finite().min(0) })).max(3).optional(),
+    modules: z.array(z.object({ productId: z.string().max(300), model: z.string().max(200), rate: z.number().finite().min(0) })).max(3).optional(),
   }),
 ]);
 

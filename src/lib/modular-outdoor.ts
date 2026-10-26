@@ -36,6 +36,31 @@ export const vrfModelName = (series: string, code: number) => `${series}${series
 
 // A break-up of `target` into up to three of the available module
 // capacities, adding up exactly: fewest modules first, then the biggest.
+// With no exact one: the closest (at or over the capacity before under it,
+// then fewest modules) - exact says which it is.
+export function closestBreakup(target: number, capacities: number[]): { caps: number[]; exact: boolean } | null {
+  const exact = suggestBreakup(target, capacities);
+  if (exact) return { caps: exact, exact: true };
+  const caps = [...new Set(capacities)].filter((c) => c > 0 && c <= MAX_MODULE_CODE).sort((a, b) => b - a);
+  let best: number[] | null = null;
+  const score = (combo: number[]) => {
+    const diff = combo.reduce((t, c) => t + c, 0) - target;
+    return [diff >= 0 ? 0 : 1, Math.abs(diff), combo.length];
+  };
+  const better = (a: number[], b: number[]) => {
+    const [x, y] = [score(a), score(b)];
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i];
+    return false;
+  };
+  const walk = (combo: number[], from: number) => {
+    if (combo.length && (!best || better(combo, best))) best = [...combo];
+    if (combo.length === MAX_MODULES) return;
+    for (let i = from; i < caps.length; i++) walk([...combo, caps[i]], i);
+  };
+  walk([], 0);
+  return best ? { caps: best, exact: false } : null;
+}
+
 export function suggestBreakup(target: number, capacities: number[]): number[] | null {
   const caps = [...new Set(capacities)].filter((c) => c > 0 && c <= MAX_MODULE_CODE).sort((a, b) => b - a);
   for (let n = 1; n <= MAX_MODULES; n++) {

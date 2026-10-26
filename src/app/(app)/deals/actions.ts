@@ -1068,10 +1068,21 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
   const ids = new Set(products.map((p) => p.id));
   const byModel = new Map<string, string>();
   for (const p of products) if (!byModel.has(norm(p.model))) byModel.set(norm(p.model), p.id);
+  // A modular outdoor goes on the deal as its modules; a module from the
+  // tentative price list only is matched by its tentative model.
+  const rows = doc.rows.flatMap((r) =>
+    r.kind === "item" && r.modules?.length
+      ? r.modules.map((m) =>
+          m.productId.startsWith("tentative:")
+            ? { ...r, modules: undefined, productId: undefined, description: m.productId.slice("tentative:".length), unitPrice: m.rate }
+            : { ...r, modules: undefined, productId: m.productId, description: m.model, unitPrice: m.rate },
+        )
+      : [r],
+  );
   // A model quoted from the Tentative Price List only (not stocked, so not
   // a product yet) becomes a product here, so the deal carries it too.
   const tentative = await prisma.tentativePrice.findMany({ select: { model: true, category: true } });
-  for (const r of doc.rows) {
+  for (const r of rows) {
     if (r.kind !== "item" || (r.productId && ids.has(r.productId)) || byModel.has(norm(r.description))) continue;
     const t = tentative.find((x) => norm(x.model) === norm(r.description));
     if (!t) continue;
@@ -1084,10 +1095,8 @@ export async function applyQuoteToDeal(quoteId: string, onlyIfEmpty = false): Pr
     ids.add(p.id);
     byModel.set(norm(p.model), p.id);
   }
-  const lines = doc.rows
+  const lines = rows
     .filter((r) => r.kind === "item")
-    // A modular outdoor goes on the deal as its modules.
-    .flatMap((r) => (r.kind === "item" && r.modules?.length ? r.modules.map((m) => ({ ...r, productId: m.productId, description: m.model, unitPrice: m.rate })) : [r]))
     .map((r) => (r.kind === "item" ? { productId: r.productId && ids.has(r.productId) ? r.productId : byModel.get(norm(r.description)), qty: r.qty, rate: netOf(r.unitPrice, r.discountPct) } : null))
     .filter((l): l is { productId: string; qty: number; rate: number } => l != null && Boolean(l.productId) && l.qty > 0 && l.rate > 0)
     .map((l) => ({ dealId: deal.id, productId: l.productId, qty: l.qty, unitPrice: Math.round((l.rate / vatFactor) * 100) / 100 }));

@@ -25,7 +25,11 @@ type ItemRow = Extract<SalesDocument["rows"][number], { kind: "item" }>;
 const itemRows = (doc: SalesDocument) =>
   (doc.rows.filter((r) => r.kind === "item" && r.qty > 0) as ItemRow[]).flatMap((r) =>
     r.modules?.length
-      ? r.modules.map((m) => ({ ...r, productId: m.productId, description: `${r.description} - module ${m.model}`, unitPrice: m.rate, netRate: round2(m.rate * (1 - r.discountPct / 100)) }))
+      ? r.modules.map((m) =>
+          m.productId.startsWith("tentative:")
+            ? { ...r, productId: undefined, description: m.productId.slice("tentative:".length), unitPrice: m.rate, netRate: round2(m.rate * (1 - r.discountPct / 100)) }
+            : { ...r, productId: m.productId, description: `${r.description} - module ${m.model}`, unitPrice: m.rate, netRate: round2(m.rate * (1 - r.discountPct / 100)) },
+        )
       : [r],
   );
 

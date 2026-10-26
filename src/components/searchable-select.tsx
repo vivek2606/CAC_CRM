@@ -25,6 +25,7 @@ export function SearchableSelect({
   placeholder = "Type to search...",
   emptyLabel = "none",
   action,
+  limit = 8,
 }: {
   name?: string;
   options: SearchableOption[];
@@ -36,6 +37,8 @@ export function SearchableSelect({
   // Something to offer for what's typed, above the matches (e.g. "make a
   // modular outdoor from modules") - null when it doesn't apply.
   action?: (query: string) => { label: string; run: () => void } | null;
+  // How many matches to list.
+  limit?: number;
 }) {
   const resolveLabel = (id: string) => options.find((o) => o.id === id)?.label ?? "";
 
@@ -58,8 +61,8 @@ export function SearchableSelect({
 
   const matches =
     query.trim() === ""
-      ? options.slice(0, 8)
-      : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8);
+      ? options.slice(0, limit)
+      : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, limit);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

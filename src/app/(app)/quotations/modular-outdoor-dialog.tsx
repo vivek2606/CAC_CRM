@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
-import { DEFAULT_VRF_SERIES, MAX_COMBINED_CODE, MAX_MODULE_CODE, MAX_MODULES, VRF_SERIES, kW, parseVrfModel, suggestBreakup, vrfModelName } from "@/lib/modular-outdoor";
+import { DEFAULT_VRF_SERIES, MAX_COMBINED_CODE, MAX_MODULE_CODE, MAX_MODULES, VRF_SERIES, closestBreakup, kW, parseVrfModel, vrfModelName } from "@/lib/modular-outdoor";
 import type { ModelOption } from "./builder";
 
 export type ModularModule = { productId: string; model: string; rate: string };
@@ -39,27 +39,51 @@ export function ModularOutdoorDialog({
   const [capacity, setCapacity] = useState(String(kW(initial.code)));
   const code = Math.round(num(capacity) * 10);
 
-  // The series' single modules (up to 85 kW) - per capacity, the code with
-  // the most stock first.
+  // The series' single modules (up to 85 kW) - stocked or not, and models
+  // only on the tentative price list too; per capacity the code with the
+  // most stock first, then ones with a rate, then product-list codes before
+  // tentative-only ones.
   const modulesOf = (s: string) =>
     options
-      .filter((o) => !o.id.startsWith("tentative:"))
       .map((o) => ({ o, v: parseVrfModel(o.model) }))
       .filter(({ v }) => v && v.series === s && v.code <= MAX_MODULE_CODE)
-      .sort((a, b) => b.v!.code - a.v!.code || b.o.stock - a.o.stock)
+      .sort(
+        (a, b) =>
+          b.v!.code - a.v!.code ||
+          b.o.stock - a.o.stock ||
+          b.o.inTransit - a.o.inTransit ||
+          Number(rateFor(b.o) != null) - Number(rateFor(a.o) != null) ||
+          Number(a.o.id.startsWith("tentative:")) - Number(b.o.id.startsWith("tentative:")),
+      )
       .map(({ o, v }) => ({ o, code: v!.code }));
-  const candidates = useMemo(() => modulesOf(series), [series, options]); // eslint-disable-line react-hooks/exhaustive-deps
-  const suggest = (s: string, c: number): Module[] => {
+  const candidates = useMemo(() => modulesOf(series), [series, options, rateFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A break-up for series s and capacity c, with a note when it isn't exact.
+  const breakup = (s: string, c: number): { mods: Module[]; note: string | null } => {
     const list = modulesOf(s);
-    const caps = suggestBreakup(c, list.map((m) => m.code)) ?? [];
-    return caps.map((cap) => {
+    const found = closestBreakup(c, list.map((m) => m.code));
+    let note: string | null = null;
+    if (!list.length) note = `No ${s} modules in the product list or the tentative price list - pick another series.`;
+    else if (!found) note = "No break-up found - pick the modules.";
+    else if (!found.exact) {
+      const sum = found.caps.reduce((t, x) => t + x, 0);
+      note = `No modules add up to exactly ${kW(c)} kW - the closest is ${kW(sum)} kW (${sum > c ? "+" : ""}${kW(sum - c)} kW). Change a module or the capacity if needed.`;
+    }
+    const mods = (found?.caps ?? []).map((cap) => {
       const o = list.find((m) => m.code === cap)!.o;
       const r = rateFor(o);
       return { productId: o.id, rate: r != null ? String(r) : "" };
     });
+    return { mods, note };
+  };
+  const opening = initial.modules?.length ? null : breakup(initial.series ?? DEFAULT_VRF_SERIES, initial.code);
+  const [note, setNote] = useState<string | null>(opening?.note ?? null);
+  const suggest = (s: string, c: number): Module[] => {
+    const b = breakup(s, c);
+    setNote(b.note);
+    return b.mods;
   };
   const [mods, setMods] = useState<Module[]>(() =>
-    initial.modules?.length ? initial.modules.map((m) => ({ productId: m.productId, rate: m.rate })) : suggest(initial.series ?? DEFAULT_VRF_SERIES, initial.code),
+    initial.modules?.length ? initial.modules.map((m) => ({ productId: m.productId, rate: m.rate })) : (opening?.mods ?? []),
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -67,8 +91,8 @@ export function ModularOutdoorDialog({
   const capOf = (id: string) => parseVrfModel(byId.get(id)?.model ?? "")?.code ?? 0;
   const selectOptions = candidates.map(({ o, code: c }) => ({
     id: o.id,
-    label: `${vrfModelName(series, c)} - ${kW(c)} kW (${o.code})`,
-    hint: o.stock > 0 ? `${o.stock} in stock` : o.inTransit > 0 ? `${o.inTransit} in transit` : "no stock",
+    label: `${vrfModelName(series, c)} - ${kW(c)} kW${o.code ? ` (${o.code})` : ""}`,
+    hint: o.stock > 0 ? `${o.stock} in stock` : o.inTransit > 0 ? `${o.inTransit} in transit` : o.tentative ? "not in stock - tentative price" : "no stock",
     hintTone: o.stock > 0 ? ("good" as const) : ("muted" as const),
   }));
   const totalCap = mods.reduce((s, m) => s + capOf(m.productId), 0);
@@ -139,6 +163,7 @@ export function ModularOutdoorDialog({
             {mods.map((m, i) => (
               <div key={i} className="grid grid-cols-[1fr_150px_24px] items-start gap-2">
                 <SearchableSelect
+                  limit={40}
                   options={selectOptions}
                   value={m.productId}
                   placeholder={`Module ${i + 1} - search…`}
@@ -163,6 +188,7 @@ export function ModularOutdoorDialog({
           </div>
         )}
 
+        {note && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{note}</p>}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
           <span className={totalCap === code ? "text-emerald-700" : "text-amber-700"}>
             Modules: {kW(totalCap)} kW {totalCap === code ? "✓" : `- ${totalCap < code ? "short of" : "over"} ${kW(code)} kW`}
