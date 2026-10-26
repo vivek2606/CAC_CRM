@@ -13,6 +13,7 @@ import { canSeeQuotation, resolveQuoteOwner, DRAFT_TYPE } from "@/lib/saved-quot
 import { documentInputSchema } from "@/lib/sales-document";
 import { applyQuoteToDeal } from "../deals/actions";
 import { parseQuoteGrid, type Cell, type ImportedQuote } from "@/lib/import/parse-quote-sheet";
+import { isIssuedQuoteRef } from "@/lib/document-format";
 
 // Issues the next unique quotation reference, with the initials of the
 // sales person it's for (the Head / Coordinator pick one; everyone else
@@ -221,7 +222,9 @@ export async function saveQuoteDraft(
     const d = await prisma.deal.findUnique({ where: { id: opts.dealId }, select: { id: true, ownerId: true } });
     if (d && canAccessOwner(user, d.ownerId)) dealId = d.id;
   }
-  const data = { ...parsed.data, ref: "" };
+  // A draft of a quotation already issued keeps its number - downloaded, it
+  // updates that quotation; a new one gets its number when downloaded.
+  const data = { ...parsed.data, ref: isIssuedQuoteRef(parsed.data.ref) ? parsed.data.ref : "" };
   const fields = {
     customerName: parsed.data.to.split("\n")[0]?.trim() ?? "",
     total: 0,

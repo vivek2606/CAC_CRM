@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, FileDown, GripVertical, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
 import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft } from "./actions";
@@ -357,7 +357,105 @@ export function QuotationBuilder({
     [terms[i], terms[j]] = [terms[j], terms[i]];
     update({ terms });
   };
-  const addRow = (row: Row) => update({ rows: [...d.rows, row] });
+  // A new line goes at the end, or just below the line `after`.
+  const addRow = (row: Row, after?: string) => {
+    const i = after ? d.rows.findIndex((r) => r.uid === after) : -1;
+    update({ rows: i < 0 ? [...d.rows, row] : [...d.rows.slice(0, i + 1), row, ...d.rows.slice(i + 1)] });
+  };
+  const newProduct = (): Row => ({ uid: uid(), kind: "item", custom: false, productId: null, description: "", detail: "", unit: "No.", qty: "1", unitPrice: "" });
+  const newCustom = (): Row => ({ uid: uid(), kind: "item", custom: true, productId: null, description: "", detail: "", unit: "Lot", qty: "1", unitPrice: "" });
+  const newSection = (): Row => ({ uid: uid(), kind: "section", label: "" });
+  // Drag a line by its handle and drop it on another line to move it there.
+  const [dragUid, setDragUid] = useState<string | null>(null);
+  const [overUid, setOverUid] = useState<string | null>(null);
+  const [insertAfter, setInsertAfter] = useState<string | null>(null);
+  const moveTo = (from: string, to: string) => {
+    const i = d.rows.findIndex((r) => r.uid === from);
+    const j = d.rows.findIndex((r) => r.uid === to);
+    if (i < 0 || j < 0 || i === j) return;
+    const rows = [...d.rows];
+    const [row] = rows.splice(i, 1);
+    rows.splice(j, 0, row);
+    update({ rows });
+  };
+  const dropTarget = (id: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragUid) return;
+      e.preventDefault();
+      if (overUid !== id) setOverUid(id);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragUid) moveTo(dragUid, id);
+      setDragUid(null);
+      setOverUid(null);
+    },
+  });
+  const dropClass = (id: string, i: number) => {
+    if (!dragUid || overUid !== id || dragUid === id) return "";
+    const from = d.rows.findIndex((r) => r.uid === dragUid);
+    return from < i ? "shadow-[inset_0_-2px_0_0_#6366f1]" : "shadow-[inset_0_2px_0_0_#6366f1]";
+  };
+  const dragHandle = (id: string) => (
+    <span
+      draggable
+      title="Drag to move"
+      onDragStart={(e) => {
+        setDragUid(id);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", id);
+        const row = (e.currentTarget as HTMLElement).closest("tr, [data-row]");
+        if (row) e.dataTransfer.setDragImage(row, 20, 20);
+      }}
+      onDragEnd={() => {
+        setDragUid(null);
+        setOverUid(null);
+      }}
+      className="inline-flex cursor-grab p-1 text-slate-400 hover:text-slate-700 active:cursor-grabbing"
+    >
+      <GripVertical className="h-4 w-4" />
+    </span>
+  );
+  const insertMenu = (id: string, big = false) => (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        title="Insert a line below"
+        aria-label="Insert a line below"
+        onClick={() => setInsertAfter(insertAfter === id ? null : id)}
+        className={big ? "rounded-md p-2 text-slate-400 active:bg-slate-100" : "p-1 text-slate-400 hover:text-indigo-600"}
+      >
+        <Plus className={big ? "h-5 w-5" : "h-4 w-4"} />
+      </button>
+      {insertAfter === id && (
+        <>
+          <span className="fixed inset-0 z-30" onClick={() => setInsertAfter(null)} />
+          <span className="absolute right-0 top-full z-40 mt-1 flex w-52 flex-col rounded-lg border border-slate-200 bg-white py-1 text-left text-sm shadow-lg">
+            {(
+              [
+                ["Product", PackagePlus, newProduct],
+                ["Custom item", PenLine, newCustom],
+                ["Section heading", Heading, newSection],
+              ] as const
+            ).map(([label, Icon, make]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  addRow(make(), id);
+                  setInsertAfter(null);
+                }}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+              >
+                <Icon className="h-4 w-4 text-slate-400" />
+                Insert {label.toLowerCase()} below
+              </button>
+            ))}
+          </span>
+        </>
+      )}
+    </span>
+  );
 
   const restoreDraft = () => {
     try {
@@ -378,7 +476,7 @@ export function QuotationBuilder({
     setDraftNote(null);
     if (!d.rows.some((r) => r.kind === "item" && r.description.trim()) && !d.to.trim()) return setError("Add the customer or an item before saving.");
     setSavingDraft(true);
-    const res = await saveQuoteDraft(payload(""), { draftId, dealId: linkedDealId, ownerId: d.ownerId || null });
+    const res = await saveQuoteDraft(payload(isIssuedQuoteRef(d.ref) ? d.ref : ""), { draftId, dealId: linkedDealId, ownerId: d.ownerId || null });
     setSavingDraft(false);
     if (res.error) return setError(res.error);
     setDraftId(res.draftId ?? null);
@@ -991,6 +1089,7 @@ export function QuotationBuilder({
           {d.rows.map((r, i) => {
             const tools = (
               <div className="flex items-center gap-1">
+                {insertMenu(r.uid, true)}
                 <button type="button" aria-label="Move up" onClick={() => move(i, -1)} className="rounded-md p-2 text-slate-400 active:bg-slate-100">
                   <ArrowUp className="h-5 w-5" />
                 </button>
@@ -1004,7 +1103,7 @@ export function QuotationBuilder({
             );
             if (r.kind === "section") {
               return (
-                <div key={r.uid} className="bg-slate-50/60 px-4 py-3">
+                <div key={r.uid} data-row {...dropTarget(r.uid)} className={`bg-slate-50/60 px-4 py-3 ${dropClass(r.uid, i)}`}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-500">Section {sns[i]}</span>
                     {tools}
@@ -1017,7 +1116,7 @@ export function QuotationBuilder({
             const amount = lineAmount(r);
             const big = "w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500";
             return (
-              <div key={r.uid} className="space-y-2 px-4 py-3">
+              <div key={r.uid} data-row {...dropTarget(r.uid)} className={`space-y-2 px-4 py-3 ${dropClass(r.uid, i)}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500">
                     Item {sns[i]}
@@ -1120,7 +1219,7 @@ export function QuotationBuilder({
                 <th className="px-3 py-2 w-28 text-right" title="Not printed - the document shows the rate after the discount">Disc. % (not printed)</th>
                 {withInstallation && <th className="px-3 py-2 w-36 text-right">Installation rate (₦)</th>}
                 <th className="px-3 py-2 w-36 text-right">Amount (₦)</th>
-                <th className="px-2 py-2 w-24" />
+                <th className="px-2 py-2 w-36" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1134,6 +1233,8 @@ export function QuotationBuilder({
               {d.rows.map((r, i) => {
                 const controls = (
                   <td className="px-2 py-2 align-top whitespace-nowrap text-right">
+                    {dragHandle(r.uid)}
+                    {insertMenu(r.uid)}
                     <button type="button" title="Move up" onClick={() => move(i, -1)} className="p-1 text-slate-400 hover:text-slate-700">
                       <ArrowUp className="h-4 w-4" />
                     </button>
@@ -1147,7 +1248,7 @@ export function QuotationBuilder({
                 );
                 if (r.kind === "section") {
                   return (
-                    <tr key={r.uid} className="bg-slate-50/60">
+                    <tr key={r.uid} {...dropTarget(r.uid)} className={`bg-slate-50/60 ${dropClass(r.uid, i)}`}>
                       <td className="px-3 py-2 font-semibold text-slate-700">{sns[i]}</td>
                       <td colSpan={withInstallation ? 7 : 6} className="px-3 py-2">
                         <input
@@ -1164,7 +1265,7 @@ export function QuotationBuilder({
                 const opt = r.productId ? optionById.get(r.productId) : undefined;
                 const amount = lineAmount(r);
                 return (
-                  <tr key={r.uid}>
+                  <tr key={r.uid} {...dropTarget(r.uid)} className={dropClass(r.uid, i)}>
                     <td className="px-3 py-2 align-top text-slate-500 pt-4">{sns[i]}</td>
                     <td className="px-3 py-2 align-top space-y-1.5">
                       {!r.custom && (
@@ -1279,7 +1380,7 @@ export function QuotationBuilder({
         <div className="flex flex-wrap gap-2 border-t border-slate-100 p-4">
           <button
             type="button"
-            onClick={() => addRow({ uid: uid(), kind: "item", custom: false, productId: null, description: "", detail: "", unit: "No.", qty: "1", unitPrice: "" })}
+            onClick={() => addRow(newProduct())}
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
             <PackagePlus className="h-4 w-4" />
@@ -1287,7 +1388,7 @@ export function QuotationBuilder({
           </button>
           <button
             type="button"
-            onClick={() => addRow({ uid: uid(), kind: "item", custom: true, productId: null, description: "", detail: "", unit: "Lot", qty: "1", unitPrice: "" })}
+            onClick={() => addRow(newCustom())}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <PenLine className="h-4 w-4" />
@@ -1295,7 +1396,7 @@ export function QuotationBuilder({
           </button>
           <button
             type="button"
-            onClick={() => addRow({ uid: uid(), kind: "section", label: "" })}
+            onClick={() => addRow(newSection())}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             <Heading className="h-4 w-4" />
@@ -1561,28 +1662,26 @@ export function QuotationBuilder({
         {draftNote && !error && <p className="text-sm text-emerald-700">{draftNote}</p>}
         {held && <p className="basis-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 order-last">{held}</p>}
         <div className="ml-auto flex flex-wrap gap-2">
-          {/* Not downloaded yet: save it as a draft, or throw it away. Once
-              downloaded it's saved as the quotation. */}
-          {!isIssuedQuoteRef(d.ref) && (
-            <>
-              <button
-                type="button"
-                onClick={discard}
-                disabled={busy != null || savingDraft}
-                className="rounded-lg px-3 py-2 text-sm text-rose-600 hover:text-rose-700 disabled:opacity-60"
-              >
-                Discard
-              </button>
-              <button
-                type="button"
-                onClick={saveDraft}
-                disabled={busy != null || savingDraft}
-                className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                {savingDraft ? "Saving…" : draftId ? "Save draft" : "Save as draft"}
-              </button>
-            </>
+          {/* Save the work as a draft any time (a quotation already issued
+              keeps its number); throw away one not issued yet. */}
+          {(!isIssuedQuoteRef(d.ref) || draftId) && (
+            <button
+              type="button"
+              onClick={discard}
+              disabled={busy != null || savingDraft}
+              className="rounded-lg px-3 py-2 text-sm text-rose-600 hover:text-rose-700 disabled:opacity-60"
+            >
+              Discard
+            </button>
           )}
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={busy != null || savingDraft}
+            className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {savingDraft ? "Saving…" : draftId ? "Save draft" : "Save as draft"}
+          </button>
           {linkedDealId && (
             <Link href={`/deals/${linkedDealId}`} className="rounded-lg px-3.5 py-2 text-sm text-slate-600 hover:text-slate-900">
               Back to deal

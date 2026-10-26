@@ -35,3 +35,9 @@ export const serviceInvoiceInputSchema = z.object({
   checkedBy: z.string().trim().max(120).default(""),
 });
 export type ServiceInvoiceInput = z.infer<typeof serviceInvoiceInputSchema>;
+
+// A draft (saved while working, not downloaded yet) is kept as a service
+// invoice under a placeholder number; its real number, if it has one, is in
+// its data.
+export const SERVICE_INVOICE_DRAFT_PREFIX = "DRAFT-";
+export const isServiceInvoiceDraft = (ref: string) => ref.startsWith(SERVICE_INVOICE_DRAFT_PREFIX);

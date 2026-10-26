@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/format";
 import { DiscardDraftButton } from "./discard-draft-button";
 import { SavedQuotesTable, savedQuoteSelect } from "../saved-quotes-table";
 import { QuotationTabs } from "../quotation-tabs";
+import { isIssuedQuoteRef } from "@/lib/document-format";
 
 // Every quotation downloaded from the builder, newest first.
 export default async function SavedQuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string; rep?: string; unlinked?: string }> }) {
@@ -78,7 +79,7 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
         {drafts.length > 0 && (
           <Card className="p-4">
             <h2 className="text-sm font-semibold text-slate-900">Drafts - saved, not downloaded yet</h2>
-            <p className="mb-2 text-xs text-slate-500">Open one to finish it; it gets its quotation number when downloaded.</p>
+            <p className="mb-2 text-xs text-slate-500">Open one to finish it; it gets its quotation number when downloaded (changes to an issued quotation keep its number).</p>
             <table className="w-full text-sm">
               <tbody>
                 {drafts.map((q) => {
@@ -86,7 +87,13 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
                   return (
                     <tr key={q.id} className="border-t border-slate-100">
                       <td className="py-1.5 pr-3 text-slate-600">{kind}</td>
-                      <td className="py-1.5 pr-3 font-medium text-slate-800">{q.customerName || "No customer yet"}</td>
+                      <td className="py-1.5 pr-3 font-medium text-slate-800">
+                        {q.customerName || "No customer yet"}
+                        {(() => {
+                          const ref = (q.data as { ref?: string } | null)?.ref ?? "";
+                          return isIssuedQuoteRef(ref) ? <span className="ml-2 text-xs font-normal text-slate-500">changes to {ref}</span> : null;
+                        })()}
+                      </td>
                       <td className="py-1.5 pr-3 text-slate-600">
                         {q.owner.name}
                         {q.createdBy.name !== q.owner.name ? ` (by ${q.createdBy.name})` : ""}

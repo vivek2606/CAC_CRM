@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FileDown, Heading, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui";
 import { BILLING_TYPES, type ServiceInvoiceInput } from "@/lib/service-invoice-schema";
+import { saveServiceInvoiceDraft, discardServiceInvoiceDraft } from "./actions";
 
 export type InvoicePrefill = ServiceInvoiceInput;
 
@@ -27,11 +28,14 @@ const blankItem = (): Row => ({ uid: uid(), kind: "item", description: "", unit:
 // balance is worked out. Downloading saves it (a new one gets its number).
 export function InvoiceBuilder({
   prefill,
+  draftId: openedDraftId = null,
   vatRatePct,
   defaultTerms,
   signatory,
 }: {
   prefill: InvoicePrefill | null;
+  // Opened from a saved draft: its id (gone once downloaded).
+  draftId?: string | null;
   vatRatePct: number;
   defaultTerms: string[];
   signatory: { name: string; designation: string; phone: string };
@@ -63,6 +67,8 @@ export function InvoiceBuilder({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(openedDraftId);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const setRow = (id: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.uid === id ? ({ ...r, ...patch } as Row) : r)));
   const amountOf = (r: Row) => (r.kind === "item" ? round2(num(r.qty) * num(r.rate)) : 0);
@@ -81,6 +87,50 @@ export function InvoiceBuilder({
     if (!to.trim()) return setError('Enter the customer\'s name (first line of "Bill to").');
     if (!rows.some((r) => r.kind === "item" && r.description.trim() && num(r.qty) > 0)) return setError("Add at least one line item - description, qty and rate.");
     if (paid > total + 0.005) return setError("The payment received is more than the invoice total.");
+    setBusy(true);
+    try {
+      const res = await fetch("/project-billing/invoice/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...bodyOf(), draftId }) });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        return setError(j?.error ?? "Couldn't prepare the invoice - try again.");
+      }
+      const newRef = res.headers.get("X-Invoice-Ref") ?? ref;
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "Invoice.pdf";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setRef(newRef);
+      setDraftId(null);
+      setDone(`Invoice ${newRef} downloaded and saved.`);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Save the work so far as a draft - finish and download it later.
+  const saveDraft = async () => {
+    setError(null);
+    setDone(null);
+    setSavingDraft(true);
+    const res = await saveServiceInvoiceDraft(bodyOf(), draftId);
+    setSavingDraft(false);
+    if (res.error) return setError(res.error);
+    setDraftId(res.draftId ?? null);
+    setDone(`Draft saved ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} - find it under Drafts below.`);
+    router.refresh();
+  };
+  const discardDraft = async () => {
+    if (!draftId || !window.confirm("Discard this draft? It can't be brought back.")) return;
+    const res = await discardServiceInvoiceDraft(draftId);
+    if (res.error) return setError(res.error);
+    router.push("/project-billing/invoice");
+    router.refresh();
+  };
+
+  const bodyOf = (): ServiceInvoiceInput => {
     const body: ServiceInvoiceInput = {
       ref,
       date,
@@ -97,26 +147,7 @@ export function InvoiceBuilder({
       signatoryPhone: sign.phone,
       checkedBy,
     };
-    setBusy(true);
-    try {
-      const res = await fetch("/project-billing/invoice/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const j = await res.json().catch(() => null);
-        return setError(j?.error ?? "Couldn't prepare the invoice - try again.");
-      }
-      const newRef = res.headers.get("X-Invoice-Ref") ?? ref;
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "Invoice.pdf";
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setRef(newRef);
-      setDone(`Invoice ${newRef} downloaded and saved.`);
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    return body;
   };
 
   const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -306,8 +337,21 @@ export function InvoiceBuilder({
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {done && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{done}</p>}
-      <div className="flex justify-end">
-        <button type="button" disabled={busy} onClick={download} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60">
+      <div className="flex flex-wrap justify-end gap-2">
+        {draftId && (
+          <button type="button" disabled={busy || savingDraft} onClick={discardDraft} className="rounded-lg px-3 py-2 text-sm text-rose-600 hover:text-rose-700 disabled:opacity-60">
+            Discard draft
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={busy || savingDraft}
+          onClick={saveDraft}
+          className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          {savingDraft ? "Saving…" : draftId ? "Save draft" : "Save as draft"}
+        </button>
+        <button type="button" disabled={busy || savingDraft} onClick={download} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60">
           <FileDown className="h-4 w-4" />
           {busy ? "Preparing…" : ref ? "Save & download PDF" : "Download PDF"}
         </button>

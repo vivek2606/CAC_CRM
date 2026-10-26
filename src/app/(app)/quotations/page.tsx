@@ -15,6 +15,7 @@ import { canSeeQuotation, quoteSalesPeople, DRAFT_TYPE } from "@/lib/saved-quote
 import { dealOwnerOptions } from "@/lib/deal-owner";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
+import { isIssuedQuoteRef } from "@/lib/document-format";
 
 // Quotation / proforma invoice / BOQ builder: pick models, quantities and
 // (editable) ex-VAT rates; the PDF / Excel add VAT and the total in words.
@@ -140,7 +141,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         ownerId: q.ownerId,
         dealId: q.deal?.id ?? null,
         dealTitle: q.deal?.title ?? null,
-        ref: isRevision || isDraft ? "" : q.ref,
+        ref: isRevision ? "" : isDraft ? (isIssuedQuoteRef(data.data.ref) ? data.data.ref : "") : q.ref,
         revisionOf: isRevision ? q.ref : null,
         data: data.data,
       };
@@ -167,7 +168,9 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         description={
           fromQuote
             ? fromQuote.draftId
-              ? "Draft - finish it and download to issue its number"
+              ? fromQuote.ref
+                ? `Draft of changes to ${fromQuote.ref} - download to update it`
+                : "Draft - finish it and download to issue its number"
               : fromQuote.revisionOf
               ? `Revising ${fromQuote.revisionOf}`
               : `Saved quotation ${fromQuote.ref}`

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { renderSalesDocumentPdf } from "@/lib/pdf/sales-document-pdf";
 import { buildServiceInvoice, nextServiceInvoiceRef, serviceInvoiceFilename, serviceInvoiceInputSchema } from "@/lib/service-invoice";
+import { SERVICE_INVOICE_DRAFT_PREFIX, isServiceInvoiceDraft } from "@/lib/service-invoice-schema";
 
 // Builds the Somotex service / project invoice from the form and saves it:
 // a new one gets its number now; a saved one (its ref) is updated in place.
@@ -17,6 +18,9 @@ export async function POST(request: Request) {
   const parsed = serviceInvoiceInputSchema.safeParse(body);
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Check the invoice." }, { status: 400 });
   const input = parsed.data;
+  // The draft this was opened from (if any) - gone once downloaded.
+  const draftId = typeof (body as { draftId?: unknown }).draftId === "string" ? (body as { draftId: string }).draftId : null;
+  if (isServiceInvoiceDraft(input.ref)) input.ref = "";
   if (!input.to.split("\n")[0]?.trim()) return Response.json({ error: 'Enter the customer\'s name (first line of "Bill to").' }, { status: 400 });
   if (!input.rows.some((r) => r.kind === "item" && r.description && r.qty > 0)) return Response.json({ error: "Add at least one line item." }, { status: 400 });
 
@@ -39,6 +43,7 @@ export async function POST(request: Request) {
     update: data,
     select: { id: true },
   });
+  if (draftId) await prisma.serviceInvoice.deleteMany({ where: { id: draftId, ref: { startsWith: SERVICE_INVOICE_DRAFT_PREFIX } } });
   const pdf = await renderSalesDocumentPdf(doc);
   return new Response(new Uint8Array(pdf), {
     headers: {

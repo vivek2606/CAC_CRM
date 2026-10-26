@@ -2,30 +2,40 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getCompanySettings } from "@/lib/company-profile";
 import { serviceInvoiceInputSchema, buildServiceInvoice, SOMOTEX, SOMOTEX_VAT_REG_NO, SOMOTEX_BANK_BRANCH } from "@/lib/service-invoice";
+import { SERVICE_INVOICE_DRAFT_PREFIX } from "@/lib/service-invoice-schema";
 import { InvoiceBuilder, type InvoicePrefill } from "./invoice-builder";
+import { DiscardInvoiceDraftButton } from "./discard-draft-button";
 
 // Service & project invoices under Somotex Nigeria Limited: prepare one
 // (free-text lines, with or without VAT, payment received and balance),
 // and the ones saved so far - download again, or open to change.
-export default async function ServiceInvoicePage({ searchParams }: { searchParams: Promise<{ id?: string; copy?: string }> }) {
+export default async function ServiceInvoicePage({ searchParams }: { searchParams: Promise<{ id?: string; copy?: string; draft?: string }> }) {
   const user = await requireBackOffice();
-  const { id, copy } = await searchParams;
-  const [settings, me, saved] = await Promise.all([
+  const { id, copy, draft } = await searchParams;
+  const isDraft = { ref: { startsWith: SERVICE_INVOICE_DRAFT_PREFIX } };
+  const [settings, me, saved, drafts] = await Promise.all([
     getCompanySettings(),
     prisma.user.findUnique({ where: { id: user.id }, select: { name: true, title: true, phone: true } }),
-    prisma.serviceInvoice.findMany({ orderBy: { createdAt: "desc" }, take: 200, include: { createdBy: { select: { name: true } } } }),
+    prisma.serviceInvoice.findMany({ where: { NOT: isDraft }, orderBy: { createdAt: "desc" }, take: 200, include: { createdBy: { select: { name: true } } } }),
+    prisma.serviceInvoice.findMany({ where: isDraft, orderBy: { updatedAt: "desc" }, take: 100, include: { createdBy: { select: { name: true } } } }),
   ]);
 
-  // Opened from the list: that invoice (same number), or a copy as a new one.
+  // Opened from the list: that invoice (same number), a copy as a new one,
+  // or a draft (with the number it was saved with, if any).
   let prefill: InvoicePrefill | null = null;
-  const openId = id ?? copy;
+  let draftId: string | null = null;
+  const openId = id ?? copy ?? draft;
   if (openId) {
     const row = await prisma.serviceInvoice.findUnique({ where: { id: openId } });
     const parsed = row ? serviceInvoiceInputSchema.safeParse(row.data) : null;
-    if (row && parsed?.success) prefill = { ...parsed.data, ref: copy ? "" : row.ref };
+    if (row && parsed?.success) {
+      const rowIsDraft = row.ref.startsWith(SERVICE_INVOICE_DRAFT_PREFIX);
+      prefill = { ...parsed.data, ref: copy ? "" : rowIsDraft ? parsed.data.ref : row.ref };
+      if (rowIsDraft && !copy) draftId = row.id;
+    }
   }
   const rows = await Promise.all(
     saved.map(async (r) => {
@@ -51,10 +61,42 @@ export default async function ServiceInvoicePage({ searchParams }: { searchParam
         <InvoiceBuilder
           key={`${openId ?? "new"}-${copy ? "copy" : ""}`}
           prefill={prefill}
+          draftId={draftId}
           vatRatePct={settings.vatRatePct}
           defaultTerms={["Payment is due on receipt of this invoice.", "Please quote the invoice number with your payment."]}
           signatory={{ name: me?.name ?? "", designation: me?.title ?? "", phone: me?.phone ?? "" }}
         />
+
+        {drafts.length > 0 && (
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Drafts - saved, not downloaded yet ({drafts.length})</h2>
+            <p className="mb-3 text-xs text-slate-500">Open one to finish it; a new invoice gets its number when downloaded.</p>
+            <table className="w-full text-sm">
+              <tbody>
+                {drafts.map((r) => {
+                  const ref = (r.data as { ref?: string } | null)?.ref ?? "";
+                  return (
+                    <tr key={r.id} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 font-medium text-slate-800">
+                        {r.customerName || "No customer yet"}
+                        {ref && <span className="ml-2 text-xs font-normal text-slate-500">changes to {ref}</span>}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatCurrency(r.total)}</td>
+                      <td className="px-2 py-1.5 text-slate-600">{r.createdBy.name}</td>
+                      <td className="px-2 py-1.5 text-xs text-slate-500 whitespace-nowrap">Saved {formatDateTime(r.updatedAt)}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap space-x-3 text-right">
+                        <Link href={`/project-billing/invoice?draft=${r.id}`} className={link}>
+                          Open
+                        </Link>
+                        <DiscardInvoiceDraftButton id={r.id} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        )}
 
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Saved invoices ({rows.length})</h2>
