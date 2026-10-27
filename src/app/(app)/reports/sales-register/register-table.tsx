@@ -274,34 +274,18 @@ export function SalesRegisterTable({
   );
 }
 
-// Period picker: choosing a month fills From/To with that month's dates.
+// Period: from date / to date.
 export function PeriodFields({ from, to }: { from: string; to: string }) {
-  const [range, setRange] = useState({ from, to });
   const input = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
   return (
     <>
       <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1">Month</label>
-        <input
-          type="month"
-          value={range.from.slice(0, 7) === range.to.slice(0, 7) ? range.from.slice(0, 7) : ""}
-          onChange={(e) => {
-            const m = e.target.value.match(/^(\d{4})-(\d{2})$/);
-            if (!m) return;
-            const last = new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate();
-            setRange({ from: `${m[1]}-${m[2]}-01`, to: `${m[1]}-${m[2]}-${String(last).padStart(2, "0")}` });
-          }}
-          className={input}
-        />
-      </div>
-      <span className="pb-2 text-xs text-slate-400">or dates</span>
-      <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1">From</label>
-        <input type="date" name="from" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} className={input} />
+        <label className="block text-xs font-medium text-slate-500 mb-1">From date</label>
+        <input type="date" name="from" defaultValue={from} className={input} />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1">To</label>
-        <input type="date" name="to" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} className={input} />
+        <label className="block text-xs font-medium text-slate-500 mb-1">To date</label>
+        <input type="date" name="to" defaultValue={to} className={input} />
       </div>
     </>
   );
