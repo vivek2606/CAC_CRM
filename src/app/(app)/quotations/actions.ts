@@ -9,7 +9,7 @@ import { dealOwnerProblem, dealOwnerOptions } from "@/lib/deal-owner";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
-import { canSeeQuotation, resolveQuoteOwner, DRAFT_TYPE } from "@/lib/saved-quotes";
+import { canSeeQuotation, resolveQuoteOwner, DRAFT_TYPE, withQuoteAccount } from "@/lib/saved-quotes";
 import { documentInputSchema } from "@/lib/sales-document";
 import { applyQuoteToDeal } from "../deals/actions";
 import { parseQuoteGrid, type Cell, type ImportedQuote } from "@/lib/import/parse-quote-sheet";
@@ -80,7 +80,7 @@ export async function createForQuote(
   input: { kind: "deal" | "lead"; title: string; ownerId?: string; phone?: string },
 ): Promise<{ dealId?: string; leadId?: string; error?: string }> {
   const { user } = await quoteForLinking(quoteId);
-  const q = await prisma.quotation.findUniqueOrThrow({ where: { id: quoteId }, select: { ref: true, dealId: true, customerName: true } });
+  const q = await prisma.quotation.findUniqueOrThrow({ where: { id: quoteId }, select: { ref: true, dealId: true, customerName: true, data: true } });
   if (q.dealId) return { error: "This quotation is already linked to a deal." };
   const title = input.title.trim();
   if (!title) return { error: `Enter a name for the ${input.kind}.` };
@@ -101,6 +101,7 @@ export async function createForQuote(
       value: deal.value,
       ownerId: deal.ownerId,
       convertedDealId: res.dealId,
+      accountId: await quoteAccountId(q.data),
       createdAt: deal.createdAt,
     },
     select: { id: true },
@@ -166,6 +167,13 @@ export async function importQuoteSheet(formData: FormData): Promise<ImportedQuot
 // sales person's goes under them; the Head / Coordinator pick the sales
 // person (the Head may keep it), never the Coordinator - and the quote
 // moves under that sales person too.
+// The account a quotation's customer was picked from, if it still exists.
+async function quoteAccountId(data: unknown): Promise<string | null> {
+  const id = (data as { accountId?: unknown } | null)?.accountId;
+  if (typeof id !== "string" || !id) return null;
+  return (await prisma.account.findUnique({ where: { id }, select: { id: true } }))?.id ?? null;
+}
+
 export async function createDealForQuote(ref: string, title: string, ownerId?: string): Promise<{ dealId?: string; quoteId?: string; error?: string }> {
   const user = await requireUser();
   const q = await prisma.quotation.findUnique({
@@ -179,6 +187,7 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
   const ownerProblem = await dealOwnerProblem(dealOwner);
   if (ownerProblem) return { error: ownerProblem };
   const name = title.trim() || q.customerName || ref;
+  const accountId = await quoteAccountId(q.data);
   const { STAGE_DEFAULT_PROBABILITY } = await import("@/lib/constants");
   const deal = await prisma.deal.create({
     data: {
@@ -188,6 +197,7 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
       probability: STAGE_DEFAULT_PROBABILITY.PROPOSAL,
       customerName: q.customerName || null,
       ownerId: dealOwner,
+      accountId,
     },
     select: { id: true },
   });
@@ -224,7 +234,7 @@ export async function saveQuoteDraft(
   }
   // A draft of a quotation already issued keeps its number - downloaded, it
   // updates that quotation; a new one gets its number when downloaded.
-  const data = { ...parsed.data, ref: isIssuedQuoteRef(parsed.data.ref) ? parsed.data.ref : "" };
+  const data = await withQuoteAccount({ ...parsed.data, ref: isIssuedQuoteRef(parsed.data.ref) ? parsed.data.ref : "" });
   const fields = {
     customerName: parsed.data.to.split("\n")[0]?.trim() ?? "",
     total: 0,

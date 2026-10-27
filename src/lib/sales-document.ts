@@ -49,6 +49,8 @@ export const documentInputSchema = z.object({
   ref: z.string().trim().max(80),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date."),
   to: z.string().trim().max(1000), // first line = customer name
+  // The CRM account the customer was picked from (blank: typed in).
+  accountId: z.string().trim().max(40).default(""),
   attention: z.string().trim().max(200).default(""),
   title: z.string().trim().max(300).default(""),
   rows: z.array(rowSchema).max(300),

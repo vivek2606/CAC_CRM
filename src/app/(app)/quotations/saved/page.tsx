@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
-import { visibleQuotationsWhere, quoteSalesPeople, NOT_DRAFT, DRAFT_TYPE } from "@/lib/saved-quotes";
+import { visibleQuotationsWhere, quoteSalesPeople, NOT_DRAFT, DRAFT_TYPE, attachAccounts } from "@/lib/saved-quotes";
 import { formatDateTime } from "@/lib/format";
 import { DiscardDraftButton } from "./discard-draft-button";
 import { SavedQuotesTable, savedQuoteSelect } from "../saved-quotes-table";
@@ -41,7 +41,7 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
     select: { id: true, customerName: true, updatedAt: true, data: true, owner: { select: { name: true } }, createdBy: { select: { name: true } } },
   });
   const [quotes, total, reps] = await Promise.all([
-    prisma.quotation.findMany({ where, orderBy: { createdAt: "desc" }, take: 300, select: savedQuoteSelect }),
+    prisma.quotation.findMany({ where, orderBy: { createdAt: "desc" }, take: 300, select: savedQuoteSelect }).then(attachAccounts),
     prisma.quotation.count({ where }),
     backOffice ? quoteSalesPeople() : Promise.resolve([]),
   ]);

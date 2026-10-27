@@ -17,6 +17,8 @@ export type SavedQuoteRow = {
   owner: { name: string };
   createdBy: { name: string };
   deal: { id: string; title: string } | null;
+  // The account the "To" customer is (see attachAccounts).
+  account?: { id: string; name: string } | null;
 };
 
 const TYPE_LABEL: Record<string, string> = { quote: "Quotation", proforma: "Proforma", boq: "BOQ" };
@@ -50,6 +52,7 @@ export function SavedQuotesTable({
             <th className="font-medium">Date</th>
             <th className="font-medium">Type</th>
             <th className="font-medium">Customer</th>
+            <th className="font-medium">Account</th>
             {showDeal && <th className="font-medium">Deal</th>}
             <th className="font-medium">Sales person</th>
             <th className="font-medium text-right">Amount</th>
@@ -69,6 +72,15 @@ export function SavedQuotesTable({
               </td>
               <td className="text-slate-600">{TYPE_LABEL[q.type] ?? q.type}</td>
               <td className="text-slate-700 max-w-[170px] truncate" title={q.customerName}>{q.customerName || "—"}</td>
+              <td className="max-w-[170px] truncate" title={q.account?.name}>
+                {q.account ? (
+                  <Link href={`/accounts/${q.account.id}`} className={link}>
+                    {q.account.name}
+                  </Link>
+                ) : (
+                  <span className="text-xs text-slate-400">Not linked</span>
+                )}
+              </td>
               {showDeal && (
                 <td className="max-w-[170px] truncate" title={q.deal?.title}>
                   {q.deal ? (
@@ -136,4 +148,5 @@ export const savedQuoteSelect = {
   owner: { select: { name: true } },
   createdBy: { select: { name: true } },
   deal: { select: { id: true, title: true } },
+  data: true,
 } as const;

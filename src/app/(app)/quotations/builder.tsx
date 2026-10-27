@@ -9,6 +9,7 @@ import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, 
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 import { combinedOutdoorIn, kW, vrfModelName, DEFAULT_VRF_SERIES } from "@/lib/modular-outdoor";
 import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
+import { CustomerField, type CustomerAccount } from "./customer-field";
 
 export type ModelOption = {
   id: string;
@@ -43,6 +44,7 @@ export type CompanyOption = {
 export type DealPrefill = {
   dealId: string;
   ownerId: string;
+  accountId: string | null;
   to: string;
   attention: string;
   title: string;
@@ -99,6 +101,8 @@ type Draft = {
   ref: string;
   date: string;
   to: string;
+  // The account the customer was picked from (see CustomerField).
+  accountId?: string;
   attention: string;
   title: string;
   rows: Row[];
@@ -174,6 +178,7 @@ export function QuotationBuilder({
   myId,
   isHead,
   canExcel,
+  customerAccounts = [],
 }: {
   options: ModelOption[];
   companies: CompanyOption[];
@@ -193,6 +198,8 @@ export function QuotationBuilder({
   isHead: boolean;
   // Not the Sales Coordinator: she downloads the PDF only.
   canExcel: boolean;
+  // Accounts to suggest as the customer is typed.
+  customerAccounts?: CustomerAccount[];
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   // The Head may discount anything; for everyone else a no-stock item at
@@ -229,6 +236,7 @@ export function QuotationBuilder({
       ref: q.ref,
       date: q.revisionOf ? todayIso() : x.date,
       to: x.to,
+      accountId: x.accountId ?? "",
       attention: x.attention,
       title: x.title,
       rows: x.rows.map((r, i): Row => {
@@ -283,6 +291,7 @@ export function QuotationBuilder({
       ref: "",
       date,
       to: fromDeal?.to ?? "",
+      accountId: fromDeal?.accountId ?? "",
       attention: fromDeal?.attention ?? "",
       title: fromDeal?.title ?? "SUPPLY OF AIR-CONDITIONING EQUIPMENT",
       rows: fromDeal
@@ -700,6 +709,7 @@ export function QuotationBuilder({
     ref,
     date: d.date,
     to: d.to,
+    accountId: d.accountId ?? "",
     attention: d.attention,
     title: d.title,
     rows: d.rows.map((r) =>
@@ -949,11 +959,11 @@ export function QuotationBuilder({
             <label className={label}>
               To - customer name on the first line <span className="text-rose-600">*</span> (then address / phone)
             </label>
-            <textarea
-              rows={3}
+            <CustomerField
               value={d.to}
-              onChange={(e) => update({ to: e.target.value })}
-              placeholder="Customer name (required)"
+              accountId={d.accountId ?? ""}
+              accounts={customerAccounts}
+              onChange={(to, accountId) => update({ to, accountId })}
               className={`${input} ${missingCustomer ? "border-rose-400 bg-rose-50" : ""}`}
             />
             {missingCustomer && <p className="mt-1 text-xs text-rose-600">Enter the customer&apos;s name - a quotation can&apos;t be downloaded without it.</p>}

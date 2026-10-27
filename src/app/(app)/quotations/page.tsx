@@ -113,6 +113,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       fromDeal = {
         dealId: deal.id,
         ownerId: deal.ownerId,
+        accountId: deal.accountId,
         to: to.join("\n"),
         attention: acc ? (deal.customerName ?? contactName) : contactName,
         title: deal.title,
@@ -204,6 +205,14 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           myId={user.id}
           isHead={user.role === "HEAD"}
           canExcel={canDownloadQuoteExcel(user)}
+          customerAccounts={(
+            await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true, address: true, city: true, state: true, phone: true } })
+          ).map((a) => ({
+            id: a.id,
+            name: a.name,
+            code: a.code,
+            lines: [a.address, [a.city, a.state].filter(Boolean).join(", "), a.phone].filter((x): x is string => Boolean(x)),
+          }))}
         />
       </div>
     </div>

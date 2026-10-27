@@ -47,6 +47,37 @@ export async function resolveQuoteOwner(user: SessionUser, requested: string | n
 
 // Saves (or, for a later download of the same quote, updates) the quote.
 // Returns an error message when it can't be saved.
+// The "To" customer is the quotation's account: the one picked in the
+// builder, else an existing account with exactly that name (first line).
+export async function withQuoteAccount<T extends { to: string; accountId?: string }>(input: T): Promise<T> {
+  if (input.accountId && (await prisma.account.findUnique({ where: { id: input.accountId }, select: { id: true } }))) return input;
+  const name = input.to.split("\n")[0]?.trim().replace(/\s+/g, " ");
+  const acc = name ? await prisma.account.findFirst({ where: { name: { equals: name, mode: "insensitive" } }, select: { id: true } }) : null;
+  return { ...input, accountId: acc?.id ?? "" };
+}
+
+// The accounts of saved quotations, for the lists: the one in their data,
+// else (quotes saved before) an account with the customer's exact name.
+export async function attachAccounts<T extends { data: unknown; customerName: string }>(rows: T[]): Promise<(T & { account: { id: string; name: string } | null })[]> {
+  const idOf = (r: T) => {
+    const id = (r.data as { accountId?: unknown } | null)?.accountId;
+    return typeof id === "string" && id ? id : null;
+  };
+  const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  const ids = [...new Set(rows.map(idOf).filter((x): x is string => !!x))];
+  const names = [...new Set(rows.filter((r) => !idOf(r) && r.customerName.trim()).map((r) => r.customerName.trim().replace(/\s+/g, " ")))];
+  const [byIdList, byNameList] = await Promise.all([
+    ids.length ? prisma.account.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [],
+    names.length ? prisma.account.findMany({ where: { OR: names.map((n) => ({ name: { equals: n, mode: "insensitive" as const } })) }, select: { id: true, name: true } }) : [],
+  ]);
+  const byId = new Map(byIdList.map((a) => [a.id, a]));
+  const byName = new Map(byNameList.map((a) => [norm(a.name), a]));
+  return rows.map((r) => {
+    const id = idOf(r);
+    return { ...r, account: (id ? byId.get(id) : byName.get(norm(r.customerName))) ?? null };
+  });
+}
+
 export async function saveQuotation(
   user: SessionUser,
   input: DocumentInput,
@@ -54,6 +85,7 @@ export async function saveQuotation(
   opts: { dealId: string | null; ownerId: string | null },
 ): Promise<string | null> {
   if (!isIssuedQuoteRef(input.ref)) return null;
+  input = await withQuoteAccount(input);
   // Only link a deal the user can see.
   let deal: { id: string; ownerId: string } | null = null;
   if (opts.dealId) {

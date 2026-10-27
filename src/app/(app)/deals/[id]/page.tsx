@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getOrderInvoices } from "@/lib/order-invoices";
 import { OrderInvoicesCard } from "@/components/order-invoices-card";
 import { HistoryCard } from "@/components/history-card";
-import { NOT_DRAFT } from "@/lib/saved-quotes";
+import { NOT_DRAFT, attachAccounts } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
@@ -93,7 +93,7 @@ export default async function DealDetailPage({
       where: { ownerId: { in: ownerIds } },
       select: { id: true, firstName: true, lastName: true },
     }),
-    prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }),
+    prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }).then(attachAccounts),
     getOrderInvoices(deal.id),
   ]);
   const productOptions = products.map((p) => ({
