@@ -31,15 +31,25 @@ export const FIELDS: { key: PivotField; label: string; time?: boolean }[] = [
   { key: "year", label: "Invoice year", time: true },
 ];
 
-export type Measure = "amount" | "qty" | "lines" | "invoices" | "avgInvoice" | "avgRate";
-export const MEASURES: { key: Measure; label: string; short: string; money?: boolean }[] = [
+export type Measure = "amount" | "qty" | "lines" | "invoices" | "avgInvoice" | "avgRate" | "target" | "achPct" | "toGo";
+export const MEASURES: { key: Measure; label: string; short: string; money?: boolean; pct?: boolean; target?: boolean }[] = [
   { key: "amount", label: "Sum of amount (excl. VAT)", short: "Amount", money: true },
   { key: "qty", label: "Sum of qty", short: "Qty" },
   { key: "lines", label: "Count of lines", short: "Lines" },
   { key: "invoices", label: "Count of invoices", short: "Invoices" },
   { key: "avgInvoice", label: "Average invoice value", short: "Avg invoice", money: true },
   { key: "avgRate", label: "Average rate (amount ÷ qty)", short: "Avg rate", money: true },
+  { key: "target", label: "Monthly target", short: "Target", money: true, target: true },
+  { key: "achPct", label: "Achievement % (amount ÷ target)", short: "Achieved %", pct: true, target: true },
+  { key: "toGo", label: "Balance to target (target - amount)", short: "Balance", money: true, target: true },
 ];
+// Targets are set per sales person per month - they can be grouped (and
+// filtered) only by these fields.
+export const TARGET_FIELDS: PivotField[] = ["salesPerson", "month", "quarter", "year"];
+export type TargetEntry = { salesPerson: string; month: string }; // month: YYYY-MM
+export type TargetRow = TargetEntry & { value: number };
+const targetKey = (t: TargetEntry, f: PivotField) =>
+  f === "salesPerson" ? t.salesPerson : f === "month" ? t.month : f === "year" ? t.month.slice(0, 4) : `${t.month.slice(0, 4)}-Q${Math.floor((Number(t.month.slice(5, 7)) - 1) / 3) + 1}`;
 export const measureInfo = (m: Measure) => MEASURES.find((x) => x.key === m)!;
 export const fieldLabel = (f: PivotField | "" | null | undefined) => FIELDS.find((x) => x.key === f)?.label ?? "";
 export const isTime = (f: PivotField | "" | null | undefined) => FIELDS.find((x) => x.key === f)?.time ?? false;
@@ -56,8 +66,8 @@ export const labelOf = (f: PivotField | "" | null | undefined, k: string) =>
 
 // Running totals for one cell; invoices are counted distinct, so cells are
 // merged (never subtracted) to make totals and "Other".
-export type Acc = { amount: number; qty: number; lines: number; inv: Set<string> };
-export const acc = (): Acc => ({ amount: 0, qty: 0, lines: 0, inv: new Set() });
+export type Acc = { amount: number; qty: number; lines: number; inv: Set<string>; target: number };
+export const acc = (): Acc => ({ amount: 0, qty: 0, lines: 0, inv: new Set(), target: 0 });
 export const addLine = (a: Acc, r: RegisterRow) => {
   a.amount += r.amount;
   a.qty += r.qty;
@@ -69,6 +79,7 @@ export const merge = (into: Acc, a: Acc | undefined) => {
   into.amount += a.amount;
   into.qty += a.qty;
   into.lines += a.lines;
+  into.target += a.target;
   for (const i of a.inv) into.inv.add(i);
   return into;
 };
@@ -87,12 +98,26 @@ export const valueOf = (a: Acc | undefined, m: Measure): number => {
       return a.inv.size ? a.amount / a.inv.size : 0;
     case "avgRate":
       return a.qty ? a.amount / a.qty : 0;
+    case "target":
+      return a.target;
+    case "achPct":
+      return a.target ? (a.amount / a.target) * 100 : 0;
+    case "toGo":
+      return a.target - a.amount;
   }
 };
 
 export type PivotFilter = { field: PivotField; include: string[] | null }; // null = all
 export type SortMode = "value-desc" | "value-asc" | "label";
 export type PivotSpec = { rows: PivotField[]; col: PivotField | null; values: Measure[]; filters: PivotFilter[]; sort: SortMode };
+
+// The studio's filters on targets: only those on a field targets are set by.
+export const filterTargets = (targets: TargetRow[], filters: PivotFilter[]) => {
+  const active = filters.filter((f) => f.include && TARGET_FIELDS.includes(f.field));
+  if (!active.length) return targets;
+  const sets = active.map((f) => ({ field: f.field, set: new Set(f.include!) }));
+  return targets.filter((t) => sets.every((f) => f.set.has(targetKey(t, f.field))));
+};
 
 export const applyFilters = (rows: RegisterRow[], filters: PivotFilter[]) => {
   const active = filters.filter((f) => f.include);
@@ -103,9 +128,11 @@ export const applyFilters = (rows: RegisterRow[], filters: PivotFilter[]) => {
 
 export type PivotGroup = { key: string; total: Acc; cells: Map<string, Acc> };
 export type PivotRow = PivotGroup & { subs: PivotGroup[] };
-export type Pivot = { rowList: PivotRow[]; colList: string[]; colTotals: Map<string, Acc>; grand: Acc };
+// targetOk: targets were added (false when a Rows / Columns field can't
+// carry them - targets aren't set per product or customer).
+export type Pivot = { rowList: PivotRow[]; colList: string[]; colTotals: Map<string, Acc>; grand: Acc; targetOk: boolean };
 
-export function buildPivot(lines: RegisterRow[], spec: PivotSpec): Pivot {
+export function buildPivot(lines: RegisterRow[], spec: PivotSpec, targets: TargetRow[] = []): Pivot {
   const [row, row2] = spec.rows;
   const { col } = spec;
   const m = spec.values[0] ?? "amount";
@@ -117,24 +144,28 @@ export function buildPivot(lines: RegisterRow[], spec: PivotSpec): Pivot {
     if (!a) map.set(k, (a = acc()));
     return a;
   };
-  for (const r of lines) {
-    const rk = row ? keyOf(r, row) : "All";
-    const ck = col ? keyOf(r, col) : "";
+  // Every accumulator a line (or a target) with these keys adds to.
+  const accsFor = (rk: string, sk: string | null, ck: string): Acc[] => {
     let g = byRow.get(rk);
     if (!g) byRow.set(rk, (g = { total: acc(), cells: new Map(), subs: new Map() }));
-    addLine(g.total, r);
-    if (col) {
-      addLine(cell(g.cells, ck), r);
-      addLine(cell(colTotals, ck), r);
-    }
-    if (row2) {
-      const sk = keyOf(r, row2);
+    const out = [g.total, grand];
+    if (col) out.push(cell(g.cells, ck), cell(colTotals, ck));
+    if (row2 && sk != null) {
       let s = g.subs.get(sk);
       if (!s) g.subs.set(sk, (s = { total: acc(), cells: new Map() }));
-      addLine(s.total, r);
-      if (col) addLine(cell(s.cells, ck), r);
+      out.push(s.total);
+      if (col) out.push(cell(s.cells, ck));
     }
-    addLine(grand, r);
+    return out;
+  };
+  for (const r of lines) for (const a of accsFor(row ? keyOf(r, row) : "All", row2 ? keyOf(r, row2) : null, col ? keyOf(r, col) : "")) addLine(a, r);
+  // Targets: only when every Rows / Columns field is one they're set by.
+  const targetOk = [row, row2, col].every((f) => !f || TARGET_FIELDS.includes(f));
+  if (targetOk) {
+    for (const t of targets) {
+      if (!t.value) continue;
+      for (const a of accsFor(row ? targetKey(t, row) : "All", row2 ? targetKey(t, row2) : null, col ? targetKey(t, col) : "")) a.target += t.value;
+    }
   }
   // Time fields in date order; others by the first value (or A-Z).
   const order = <T>(entries: [string, T][], f: PivotField | null | undefined, total: (t: T) => number) => {
@@ -153,7 +184,7 @@ export function buildPivot(lines: RegisterRow[], spec: PivotSpec): Pivot {
     isTime(col) || spec.sort === "label"
       ? [...colTotals.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
       : [...colTotals.entries()].sort((a, b) => valueOf(b[1], m) - valueOf(a[1], m)).map(([k]) => k);
-  return { rowList, colList, colTotals, grand };
+  return { rowList, colList, colTotals, grand, targetOk };
 }
 
 // The distinct values of a field over the lines, for a filter list.

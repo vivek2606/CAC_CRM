@@ -28,6 +28,7 @@ import {
   Trash2,
   X,
   BarChart3,
+  Target as TargetIcon,
 } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { formatCurrency } from "@/lib/format";
@@ -42,6 +43,9 @@ import {
   isTime,
   labelOf,
   measureInfo,
+  filterTargets,
+  TARGET_FIELDS,
+  type TargetRow,
   valueOf,
   type Measure,
   type PivotField,
@@ -83,7 +87,7 @@ const DEFAULT: Config = {
   size: "m",
   mode: "simple",
 };
-const SIMPLE_CHARTS: ChartType[] = ["bar", "column", "line", "donut", "treemap"];
+const SIMPLE_CHARTS: ChartType[] = ["target", "bar", "column", "line", "donut", "treemap"];
 const PRESETS: { name: string; cfg: Partial<Config> }[] = [
   { name: "Product mix - donut", cfg: { rows: ["category"], col: null, values: ["amount"], chart: "donut" } },
   { name: "Monthly sales by product type - stacked", cfg: { rows: ["month"], col: "category", values: ["amount"], chart: "column" } },
@@ -96,6 +100,8 @@ const PRESETS: { name: string; cfg: Partial<Config> }[] = [
   { name: "Products: amount vs qty - scatter", cfg: { rows: ["product"], col: null, values: ["amount", "qty"], chart: "scatter", top: 50 } },
   { name: "Sales person profile - radar", cfg: { rows: ["category"], col: "salesPerson", values: ["amount"], chart: "radar" } },
   { name: "Companies - 3D columns", cfg: { rows: ["company"], col: null, values: ["amount"], chart: "column3d" } },
+  { name: "Monthly target vs achievement", cfg: { rows: ["month"], col: null, values: ["amount", "target", "achPct", "toGo"], chart: "target" } },
+  { name: "Sales person target vs achievement", cfg: { rows: ["salesPerson"], col: null, values: ["amount", "target", "achPct", "toGo"], chart: "target", top: 0 } },
 ];
 const CHARTS: { key: ChartType; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "bar", label: "Bar", icon: BarChartHorizontal },
@@ -112,6 +118,7 @@ const CHARTS: { key: ChartType; label: string; icon: ComponentType<{ className?:
   { key: "radar", label: "Radar", icon: RadarIcon },
   { key: "heatmap", label: "Heatmap", icon: Grid3x3 },
   { key: "scatter", label: "Scatter", icon: ChartScatter },
+  { key: "target", label: "Target vs achieved", icon: TargetIcon },
 ];
 const HEIGHTS = { s: 260, m: 360, l: 520 };
 const STORE = "cac-register-pivot-v2";
@@ -140,6 +147,7 @@ export function RegisterPivot({
   showSalesPerson,
   onPick,
   side,
+  targets = [],
 }: {
   rows: RegisterRow[];
   showSalesPerson: boolean;
@@ -147,6 +155,8 @@ export function RegisterPivot({
   // The register's own filters (period, sales person, type, entity), shown
   // at the top of the side panel.
   side?: ReactNode;
+  // Monthly targets for the period (per sales person).
+  targets?: TargetRow[];
 }) {
   const fields = showSalesPerson ? FIELDS : FIELDS.filter((f) => f.key !== "salesPerson");
   const [cfg, setCfg] = useState<Config>(DEFAULT);
@@ -224,7 +234,11 @@ export function RegisterPivot({
 
   const lines = useMemo(() => applyFilters(rows, cfg.filters), [rows, cfg.filters]);
   const spec = { rows: cfg.rows, col: cfg.col, values: cfg.values, filters: cfg.filters, sort: cfg.sort };
-  const pivot = useMemo(() => buildPivot(lines, spec), [lines, cfg.rows, cfg.col, cfg.values, cfg.sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const usesTarget = cfg.chart === "target" || cfg.values.some((v) => measureInfo(v).target);
+  const pivot = useMemo(
+    () => buildPivot(lines, spec, usesTarget ? filterTargets(targets, cfg.filters) : []),
+    [lines, cfg.rows, cfg.col, cfg.values, cfg.sort, cfg.filters, targets, usesTarget], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const rowField = cfg.rows[0] ?? null;
   const row2 = cfg.rows[1] ?? null;
   const pickRow = (k: string) => {
@@ -334,7 +348,12 @@ export function RegisterPivot({
 
   // The pivot table (all the Values; Columns across).
   const cols = cfg.col ? pivot.colList.slice(0, 60) : [];
-  const fmt = (m: Measure, n: number) => (measureInfo(m).money ? formatCurrency(n) : n.toLocaleString("en-NG", { maximumFractionDigits: 2 }));
+  const fmt = (m: Measure, n: number) => {
+    const i = measureInfo(m);
+    if (i.target && !pivot.targetOk) return "—";
+    if (m === "achPct") return n ? `${n.toFixed(1)}%` : "—";
+    return i.money ? formatCurrency(n) : n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+  };
   const additive = (m: Measure) => m === "amount" || m === "qty" || m === "lines";
   const share = (n: number) => {
     const g = valueOf(pivot.grand, m0);
@@ -625,7 +644,7 @@ export function RegisterPivot({
               <div>
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Quick charts</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {PRESETS.filter((pr) => SIMPLE_CHARTS.includes(pr.cfg.chart as ChartType) && (pr.cfg.values?.length ?? 1) === 1).map((pr) => (
+                  {PRESETS.filter((pr) => SIMPLE_CHARTS.includes(pr.cfg.chart as ChartType) && ((pr.cfg.values?.length ?? 1) === 1 || pr.cfg.chart === "target")).map((pr) => (
                     <button
                       key={pr.name}
                       type="button"
@@ -719,6 +738,13 @@ export function RegisterPivot({
                     set({
                       chart: c.key,
                       ...(c.key === "scatter" && cfg.values.length < 2 ? { values: [cfg.values[0], cfg.values[0] === "qty" ? "amount" : "qty"] } : {}),
+                      // Target vs achieved: amount and target, grouped by a field targets are set by.
+                      ...(c.key === "target"
+                        ? {
+                            values: ["amount", "target", "achPct", "toGo"] as Measure[],
+                            ...([cfg.rows[0], cfg.rows[1], cfg.col].every((f) => !f || TARGET_FIELDS.includes(f)) ? {} : { rows: ["month" as PivotField], col: null }),
+                          }
+                        : {}),
                     })
                   }
                   title={c.label}
@@ -799,6 +825,12 @@ export function RegisterPivot({
               {!isTime(rowField) && cfg.top && pivot.rowList.length > cfg.top ? ` · top ${cfg.top} of ${pivot.rowList.length}` : ""}
               {rowField && rowField !== "quarter" ? " · click a bar, slice or row to filter the table below" : ""}
             </p>
+            {usesTarget && (
+              <p className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+                Targets are the monthly targets per sales person (whole months, all products, both entities) - so product type / entity filters
+                {pivot.targetOk ? "" : ", and grouping by product or customer,"} don&apos;t change them. Achieved is the amount of the lines shown.
+              </p>
+            )}
             {full ? (
               <div className="fixed inset-0 z-50 overflow-auto bg-white p-6">
                 <div className="mb-3 flex items-center justify-between">

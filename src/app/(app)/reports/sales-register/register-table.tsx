@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { RegisterPivot, type PivotField } from "./register-pivot";
+import type { TargetRow } from "./pivot-engine";
 import { BillingCompanyCell } from "../../project-billing/forms";
 import { AccountCell } from "./account-cell";
 import { DateCell } from "./date-cell";
@@ -63,6 +64,7 @@ export function SalesRegisterTable({
   accounts = [],
   pageFilters,
   sidePageFilters,
+  targets,
 }: {
   rows: RegisterRow[];
   filename: string;
@@ -76,6 +78,7 @@ export function SalesRegisterTable({
   // studio's side panel, or above the table when the studio is hidden.
   pageFilters?: ReactNode;
   sidePageFilters?: ReactNode;
+  targets?: TargetRow[];
 }) {
   const columns = showSalesPerson ? COLUMNS : COLUMNS.filter((c) => c.key !== "salesPerson");
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
@@ -138,7 +141,7 @@ export function SalesRegisterTable({
         {showCharts ? "Hide pivot" : "Show pivot table & chart"}
       </button>
     </div>
-    {showCharts ? <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} side={sidePageFilters} /> : pageFilters}
+    {showCharts ? <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} side={sidePageFilters} targets={targets} /> : pageFilters}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">
         <p className="text-sm text-slate-600">

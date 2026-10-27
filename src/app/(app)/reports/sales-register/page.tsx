@@ -112,6 +112,17 @@ export default async function SalesRegisterPage({
           select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true } }, account: { select: { name: true, code: true } } },
         });
 
+  // Monthly targets for the months the period touches (whole months), for
+  // the chart studio's target values.
+  const targetRows = await prisma.target.findMany({
+    where: {
+      month: { gte: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1)), lt: end },
+      ...(repId ? { userId: repId } : {}),
+    },
+    select: { month: true, targetValue: true, user: { select: { name: true } } },
+  });
+  const targets = targetRows.map((t) => ({ salesPerson: t.user.name, month: t.month.toISOString().slice(0, 7), value: t.targetValue }));
+
   // Account codes for project billing lines (they carry the customer name only).
   const custNames = [...new Set(billings.map((b) => b.custName))];
   const accounts = custNames.length
@@ -361,7 +372,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} pageFilters={filterForm(false)} sidePageFilters={filterForm(true)} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} pageFilters={filterForm(false)} sidePageFilters={filterForm(true)} targets={targets} />
       </div>
     </div>
   );

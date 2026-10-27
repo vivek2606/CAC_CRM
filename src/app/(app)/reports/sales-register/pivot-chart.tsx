@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Funnel,
   FunnelChart,
   Label,
@@ -48,7 +49,8 @@ export type ChartType =
   | "radar"
   | "heatmap"
   | "scatter"
-  | "column3d";
+  | "column3d"
+  | "target";
 
 const INK = "#334155";
 const MUTED = "#64748b";
@@ -108,8 +110,11 @@ export function PivotChart({
   const m = values[0] ?? "amount";
   const info = measureInfo(m);
   const money = !!info.money;
-  const fmtAxis = (x: unknown) => (money ? formatAxisCurrency(Number(x)) : Number(x).toLocaleString("en-NG", { maximumFractionDigits: 1 }));
-  const fmtTip = (x: unknown) => (money ? formatCompactCurrency(Number(x)) : Number(x).toLocaleString("en-NG", { maximumFractionDigits: 2 }));
+  const pct = !!info.pct;
+  const fmtAxis = (x: unknown) =>
+    money ? formatAxisCurrency(Number(x)) : pct ? `${Math.round(Number(x))}%` : Number(x).toLocaleString("en-NG", { maximumFractionDigits: 1 });
+  const fmtTip = (x: unknown) =>
+    money ? formatCompactCurrency(Number(x)) : pct ? `${Number(x).toFixed(1)}%` : Number(x).toLocaleString("en-NG", { maximumFractionDigits: 2 });
   const fmtLabel = (x: unknown) => (Number(x) ? fmtAxis(x) : "");
   const clickKey = (d: unknown) => {
     const o = d as { payload?: { key?: string }; key?: string } | undefined;
@@ -159,7 +164,56 @@ export function PivotChart({
     return out.filter((s) => s.value > 0);
   })();
 
+  if ((type === "target" || values.some((v) => measureInfo(v).target)) && !pivot.targetOk)
+    return (
+      <p className="py-10 text-center text-sm text-slate-500">
+        Targets are set per sales person per month - group by Sales person, Invoice month, quarter or year to see them (not by product or customer).
+      </p>
+    );
+
   switch (type) {
+    case "target": {
+      // Achieved (columns) against the target (line), on one axis.
+      const rowsT = rows.map((g) => ({
+        key: g.key,
+        label: labelOf(rowField, g.key),
+        Achieved: g.total.amount,
+        Target: g.total.target,
+        pct: g.total.target ? (g.total.amount / g.total.target) * 100 : null,
+      }));
+      // Over time the target is a line; per person / group a marker on each bar.
+      const tilt = rowsT.length > 12 || (!time && rowsT.length > 5);
+      const marker = (p: unknown) => {
+        const { cx, cy, payload } = p as { cx?: number; cy?: number; payload?: { Target?: number } };
+        if (cx == null || cy == null || !payload?.Target) return <g />;
+        return <line x1={cx - 16} x2={cx + 16} y1={cy} y2={cy} stroke={INK} strokeWidth={3} strokeLinecap="round" />;
+      };
+      return (
+        <ResponsiveContainer width="100%" height={height}>
+          <ComposedChart data={rowsT} margin={{ top: 20, right: 24, left: 0, bottom: tilt ? 50 : 0 }}>
+            <CartesianGrid vertical={false} stroke={GRID} />
+            <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} interval={0} angle={tilt ? -35 : 0} textAnchor={tilt ? "end" : "middle"} height={tilt ? 80 : 30} />
+            <YAxis tick={tick} axisLine={false} tickLine={false} width={64} tickFormatter={(x) => formatAxisCurrency(Number(x))} />
+            <Tooltip
+              {...tipStyle}
+              formatter={(x, n, item) => {
+                const p = (item as { payload?: { pct?: number | null } }).payload?.pct;
+                return [n === "Achieved" && p != null ? `${formatCompactCurrency(Number(x))} (${p.toFixed(1)}% of target)` : formatCompactCurrency(Number(x)), n];
+              }}
+            />
+            <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} formatter={legendText} />
+            <Bar dataKey="Achieved" fill={CATEGORY_PALETTE[0]} radius={[4, 4, 0, 0]} maxBarSize={44} cursor="pointer" onClick={clickKey} isAnimationActive={false}>
+              {labels && <LabelList dataKey="pct" position="top" style={{ fontSize: 10, fontWeight: 600, fill: INK }} formatter={(x: unknown) => (x == null ? "" : `${Number(x).toFixed(0)}%`)} />}
+            </Bar>
+            {time ? (
+              <Line dataKey="Target" type="monotone" stroke={INK} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: SURFACE, stroke: INK, strokeWidth: 2 }} isAnimationActive={false} />
+            ) : (
+              <Line dataKey="Target" stroke={INK} strokeWidth={0} dot={marker} activeDot={false} legendType="plainline" isAnimationActive={false} />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
     case "bar":
       return (
         <ResponsiveContainer width="100%" height={Math.max(height, data.length * 28 + 60)}>
