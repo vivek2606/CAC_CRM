@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
@@ -61,6 +61,8 @@ export function SalesRegisterTable({
   canEditCompany = false,
   canEditDate = false,
   accounts = [],
+  pageFilters,
+  sidePageFilters,
 }: {
   rows: RegisterRow[];
   filename: string;
@@ -70,6 +72,10 @@ export function SalesRegisterTable({
   canEditDate?: boolean;
   // For linking lines without an account (Head / Coordinator).
   accounts?: { id: string; label: string }[];
+  // The page's period / sales person / type / entity form: in the chart
+  // studio's side panel, or above the table when the studio is hidden.
+  pageFilters?: ReactNode;
+  sidePageFilters?: ReactNode;
 }) {
   const columns = showSalesPerson ? COLUMNS : COLUMNS.filter((c) => c.key !== "salesPerson");
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
@@ -132,9 +138,7 @@ export function SalesRegisterTable({
         {showCharts ? "Hide pivot" : "Show pivot table & chart"}
       </button>
     </div>
-    {showCharts && (
-      <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} />
-    )}
+    {showCharts ? <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} side={sidePageFilters} /> : pageFilters}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">
         <p className="text-sm text-slate-600">

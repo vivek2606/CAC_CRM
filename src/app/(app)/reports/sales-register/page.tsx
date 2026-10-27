@@ -226,6 +226,50 @@ export default async function SalesRegisterPage({
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
   const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service", "No products listed"];
 
+  // The period / sales person / type / entity filters: down the chart
+  // studio's side panel, or a row above the table when the studio is hidden.
+  const filterForm = (vertical: boolean) => (
+        <form className={vertical ? "flex flex-col items-stretch gap-2 [&_input]:w-full [&_select]:w-full" : "flex flex-wrap items-end gap-3"} action="/reports/sales-register">
+          <PeriodFields from={iso(from)} to={iso(to)} />
+          {all && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Sales person</label>
+              <select name="rep" defaultValue={repId ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                <option value="">Everyone</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Product type</label>
+            <select name="category" defaultValue={category ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="">All types</option>
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Entity</label>
+            <select name="company" defaultValue={company ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="">Both companies</option>
+              <option value="Sakuragi">Sakuragi</option>
+              <option value="Somotex">Somotex</option>
+              <option value="none">Not recorded</option>
+            </select>
+          </div>
+          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+            Show
+          </button>
+        </form>
+  );
+
   return (
     <div>
       <PageHeader title="Sales Register" description={description} />
@@ -254,50 +298,11 @@ export default async function SalesRegisterPage({
             )}
           </div>
         )}
-        <form className="flex flex-wrap items-end gap-3" action="/reports/sales-register">
-          <PeriodFields from={iso(from)} to={iso(to)} />
-          {all && (
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Sales person</label>
-              <select name="rep" defaultValue={repId ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                <option value="">Everyone</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Product type</label>
-            <select name="category" defaultValue={category ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <option value="">All types</option>
-              {categoryOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+        {all && (
+          <div className="flex justify-end">
+            <ResyncCategoryButton />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Company</label>
-            <select name="company" defaultValue={company ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-              <option value="">Both companies</option>
-              <option value="Sakuragi">Sakuragi</option>
-              <option value="Somotex">Somotex</option>
-              <option value="none">Not recorded</option>
-            </select>
-          </div>
-          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
-            Show
-          </button>
-          {all && (
-            <div className="ml-auto">
-              <ResyncCategoryButton />
-            </div>
-          )}
-        </form>
+        )}
         {missingInvoice.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50">
             <div className="px-4 pt-3 pb-2">
@@ -356,7 +361,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} pageFilters={filterForm(false)} sidePageFilters={filterForm(true)} />
       </div>
     </div>
   );
