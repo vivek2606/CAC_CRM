@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { RegisterCharts } from "./register-charts";
+import { RegisterPivot, type PivotField } from "./register-pivot";
 import { BillingCompanyCell } from "../../project-billing/forms";
 import { AccountCell } from "./account-cell";
 import { DateCell } from "./date-cell";
@@ -115,8 +115,13 @@ export function SalesRegisterTable({
   };
   const anyFilter = Object.values(filters).some((v) => v && v.trim());
   const [showCharts, setShowCharts] = useState(true);
-  const pick = (k: Key) => (value: string) => {
-    setFilters((f) => ({ ...f, [k]: `=${value}` }));
+  // A pivot row clicked: filter the table to it (a month / year by its
+  // date prefix, anything else exactly).
+  const pickPivot = (field: PivotField, key: string) => {
+    if (field === "quarter") return;
+    const k: Key = field === "month" || field === "year" ? "invoiceDate" : field;
+    const value = field === "month" || field === "year" ? key : key === "(blank)" ? "=" : `=${key}`;
+    setFilters((f) => ({ ...f, [k]: value }));
     setShown(PAGE);
   };
 
@@ -124,11 +129,11 @@ export function SalesRegisterTable({
     <div className="space-y-3">
     <div className="flex justify-end">
       <button type="button" onClick={() => setShowCharts(!showCharts)} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
-        {showCharts ? "Hide charts" : "Show charts"}
+        {showCharts ? "Hide pivot" : "Show pivot table & chart"}
       </button>
     </div>
     {showCharts && (
-      <RegisterCharts rows={visible} showSalesPerson={showSalesPerson} onPickCategory={pick("category")} onPickSalesPerson={pick("salesPerson")} onPickCompany={pick("company")} />
+      <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} />
     )}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">
