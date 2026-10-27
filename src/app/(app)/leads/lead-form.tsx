@@ -18,6 +18,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
 import { FormDraft, draftNumber, draftOrNull, type DraftValues } from "@/components/form-draft";
 import type { LeadStatus, LeadSource, EquipmentType, EndUseSegment, PurchaseTimeframe } from "@prisma/client";
+import { CompetitorBrandSelect } from "@/components/competitor-brand-select";
 
 type Option = { id: string; label: string };
 
@@ -271,10 +272,10 @@ function LeadFormFields({
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Competing brand</label>
-          <input
+          <CompetitorBrandSelect
             name="competitorBrand"
-            placeholder="e.g. Daikin, LG, Gree"
             defaultValue={defaultValues?.competitorBrand ?? ""}
+            placeholder="None / not known"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

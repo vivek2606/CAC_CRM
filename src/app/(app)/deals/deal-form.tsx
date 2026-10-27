@@ -20,6 +20,7 @@ import { CompletenessBar } from "@/components/completeness-bar";
 import { parseWonItemsSheet } from "./actions";
 import { groupSheetInvoices, type SheetInvoice } from "@/lib/sheet-invoices";
 import type { DealStage, EquipmentType, EndUseSegment, PaymentTerms } from "@prisma/client";
+import { CompetitorBrandSelect } from "@/components/competitor-brand-select";
 
 type Option = { id: string; label: string };
 type ProductOption = {
@@ -477,10 +478,10 @@ function DealFormFields({
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Competing brand</label>
-          <input
+          <CompetitorBrandSelect
             name="competitorBrand"
-            placeholder="e.g. Daikin, LG, Gree"
             defaultValue={defaultValues?.competitorBrand ?? ""}
+            placeholder="None / not known"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LOST_REASONS, LOST_REASON_LABELS } from "@/lib/constants";
 import type { LostReason } from "@prisma/client";
+import { CompetitorBrandSelect } from "@/components/competitor-brand-select";
 
 export type LostInput = { category: LostReason; note: string; lostToBrand: string; closedAt: string };
 
@@ -29,7 +30,7 @@ export function MarkLostDialog({
   const confirm = () => {
     if (!category) return setError("Pick the reason the deal was lost.");
     if (category === "OTHER" && !note.trim()) return setError("Write the reason in the box below.");
-    if (category === "COMPETITOR" && !brand.trim()) return setError("Enter the brand the customer preferred.");
+    if (category === "COMPETITOR" && !brand.trim()) return setError("Pick the brand the customer preferred.");
     onConfirm({ category, note: note.trim(), lostToBrand: brand.trim(), closedAt });
   };
 
@@ -78,13 +79,13 @@ export function MarkLostDialog({
         />
 
         <label className="block text-xs font-medium text-slate-500 mb-1">Brand that won the deal{category === "COMPETITOR" ? " *" : ""}</label>
-        <input
+        <CompetitorBrandSelect
           value={brand}
-          onChange={(e) => {
-            setBrand(e.target.value);
+          onChange={(b) => {
+            setBrand(b);
             setError(null);
           }}
-          placeholder="e.g. Daikin, LG, Gree - leave blank if not known"
+          placeholder="Not known"
           className={`${input} mb-3`}
         />
 

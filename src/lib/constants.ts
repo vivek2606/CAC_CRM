@@ -321,3 +321,20 @@ export const STAGE_DEFAULT_PROBABILITY: Record<DealStage, number> = {
   WON: 100,
   LOST: 0,
 };
+
+// Competing brands offered in the pickers (deal, lead, Mark Lost).
+export const COMPETITOR_BRANDS = [
+  "Daikin",
+  "Trane",
+  "York",
+  "LG",
+  "Hisense",
+  "Bluestar",
+  "Toshiba",
+  "Hitachi",
+  "Samsung",
+  "Gree",
+  "Kenstar",
+  "Midea (Other Source)",
+  "Others",
+] as const;
