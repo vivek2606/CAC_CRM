@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
+import { getStudioViews } from "@/lib/studio-views";
 import { PageHeader } from "@/components/ui";
 import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-table";
 import { InvoiceEntry } from "../../deals/invoice-entry";
@@ -372,7 +373,7 @@ export default async function SalesRegisterPage({
             Showing the first {MAX_ROWS.toLocaleString()} lines - narrow the period or filters to see everything.
           </p>
         )}
-        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} pageFilters={filterForm(false)} sidePageFilters={filterForm(true)} targets={targets} />
+        <SalesRegisterTable rows={rows} filename={`sales-register-${iso(from)}-to-${iso(to)}.csv`} showSalesPerson={all} canEditCompany={all} canEditDate={user.role === "HEAD"} accounts={linkAccounts} pageFilters={filterForm(false)} sidePageFilters={filterForm(true)} targets={targets} views={await getStudioViews("register", user.id)} />
       </div>
     </div>
   );

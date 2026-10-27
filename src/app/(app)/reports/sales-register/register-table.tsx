@@ -4,8 +4,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
-import { RegisterPivot, type PivotField } from "./register-pivot";
-import type { TargetRow } from "./pivot-engine";
+import { RegisterPivot, type TargetRow } from "./register-pivot";
+import type { StudioView } from "@/components/chart-studio/studio";
 import { BillingCompanyCell } from "../../project-billing/forms";
 import { AccountCell } from "./account-cell";
 import { DateCell } from "./date-cell";
@@ -65,6 +65,7 @@ export function SalesRegisterTable({
   pageFilters,
   sidePageFilters,
   targets,
+  views,
 }: {
   rows: RegisterRow[];
   filename: string;
@@ -79,6 +80,8 @@ export function SalesRegisterTable({
   pageFilters?: ReactNode;
   sidePageFilters?: ReactNode;
   targets?: TargetRow[];
+  // The user's saved chart-studio views.
+  views?: StudioView[];
 }) {
   const columns = showSalesPerson ? COLUMNS : COLUMNS.filter((c) => c.key !== "salesPerson");
   const [filters, setFilters] = useState<Partial<Record<Key, string>>>({});
@@ -126,10 +129,11 @@ export function SalesRegisterTable({
   const [showCharts, setShowCharts] = useState(true);
   // A pivot row clicked: filter the table to it (a month / year by its
   // date prefix, anything else exactly).
-  const pickPivot = (field: PivotField, key: string) => {
-    if (field === "quarter") return;
-    const k: Key = field === "month" || field === "year" ? "invoiceDate" : field;
-    const value = field === "month" || field === "year" ? key : key === "(blank)" ? "=" : `=${key}`;
+  const pickPivot = (dim: string, key: string) => {
+    const byDate = dim.startsWith("invoiceDate:");
+    if (dim.endsWith(":quarter") || (!byDate && !COLUMNS.some((c) => c.key === dim))) return;
+    const k = (byDate ? "invoiceDate" : dim) as Key;
+    const value = byDate ? key : key === "(blank)" ? "=" : `=${key}`;
     setFilters((f) => ({ ...f, [k]: value }));
     setShown(PAGE);
   };
@@ -141,7 +145,7 @@ export function SalesRegisterTable({
         {showCharts ? "Hide pivot" : "Show pivot table & chart"}
       </button>
     </div>
-    {showCharts ? <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} side={sidePageFilters} targets={targets} /> : pageFilters}
+    {showCharts ? <RegisterPivot rows={visible} showSalesPerson={showSalesPerson} onPick={pickPivot} side={sidePageFilters} targets={targets} views={views} /> : pageFilters}
     <div className="rounded-xl border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 p-4">
         <p className="text-sm text-slate-600">

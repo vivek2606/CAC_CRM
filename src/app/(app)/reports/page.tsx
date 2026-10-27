@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { requireBackOffice } from "@/lib/rbac";
+import { getStudioViews } from "@/lib/studio-views";
+import { getTeamStudioData } from "@/lib/team-studio-data";
+import { TeamTabs } from "./team-tabs";
+import { TeamStudio } from "./team-studio";
 import { PageHeader, Card, StatCard } from "@/components/ui";
 import { formatCompactCurrency, formatDuration } from "@/lib/format";
 import { DEAL_STAGE_LABELS, LEAD_SOURCE_LABELS, END_USE_SEGMENT_LABELS, LOST_REASON_LABELS } from "@/lib/constants";
@@ -53,9 +57,25 @@ function Section({ id, title, note, children, right }: { id?: string; title: str
   );
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireBackOffice();
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; tab?: string }> }) {
+  const user = await requireBackOffice();
   const params = await searchParams;
+  const tabs = await getStudioViews("team", user.id);
+
+  // A chart / table tab of the user's own (or a new one).
+  if (params.tab && params.tab !== "overview") {
+    const tab = tabs.find((t) => t.id === params.tab) ?? null;
+    const active = tab ? tab.id : "new";
+    return (
+      <div>
+        <PageHeader title="Team Reports" description={tab ? tab.name : "New tab - build a chart or table, then save it as a tab"} />
+        <TeamTabs tabs={tabs} active={active} />
+        <div className="p-6">
+          <TeamStudio key={active} data={await getTeamStudioData()} tab={tab} />
+        </div>
+      </div>
+    );
+  }
 
   const now = new Date();
   const nowMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -146,6 +166,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </form>
         }
       />
+      <TeamTabs tabs={tabs} active="overview" />
 
       <div className="p-6 space-y-5">
         {/* Headline KPIs */}

@@ -33,24 +33,7 @@ import {
 } from "recharts";
 import { CATEGORY_OTHER_COLOR, CATEGORY_PALETTE, MAX_CATEGORY_SLOTS, OTHER_CATEGORY_LABEL } from "@/lib/category-colors";
 import { formatAxisCurrency, formatCompactCurrency } from "@/lib/format";
-import { acc, isTime, labelOf, measureInfo, merge, valueOf, type Measure, type Pivot, type PivotField, type PivotGroup } from "./pivot-engine";
-
-export type ChartType =
-  | "bar"
-  | "column"
-  | "clustered"
-  | "percent"
-  | "line"
-  | "area"
-  | "donut"
-  | "pie"
-  | "treemap"
-  | "funnel"
-  | "radar"
-  | "heatmap"
-  | "scatter"
-  | "column3d"
-  | "target";
+import { acc, isTime, labelOf, merge, type Acc, type ChartType, type MeasureDef, type Pivot, type PivotGroup } from "./engine";
 
 const INK = "#334155";
 const MUTED = "#64748b";
@@ -86,11 +69,20 @@ function Column3D(props: unknown) {
   );
 }
 
+export const fmtMeasure = (info: MeasureDef, x: unknown, compact = true) => {
+  const n = Number(x);
+  if (info.money) return compact ? formatCompactCurrency(n) : n.toLocaleString("en-NG", { style: "currency", currency: "NGN" });
+  if (info.pct) return `${n.toFixed(1)}%`;
+  return n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+};
+
 export function PivotChart({
   pivot,
   rowField,
   colField,
-  values,
+  measures,
+  actual,
+  targetNote,
   type,
   top,
   labels,
@@ -98,17 +90,22 @@ export function PivotChart({
   onPick,
 }: {
   pivot: Pivot;
-  rowField: PivotField | null;
-  colField: PivotField | null;
-  values: Measure[];
+  rowField: string | null;
+  colField: string | null;
+  // The Values picked (the chart uses the first; scatter the first two).
+  measures: MeasureDef[];
+  // What "Target vs achieved" compares with the target.
+  actual?: MeasureDef;
+  // Why targets can't show for this grouping.
+  targetNote?: string;
   type: ChartType;
   top: number; // 0 = all
   labels: boolean;
   height: number;
   onPick: (rowKey: string) => void;
 }) {
-  const m = values[0] ?? "amount";
-  const info = measureInfo(m);
+  const info = measures[0];
+  const val = (a: Acc | undefined) => (a ? info.value(a) : 0);
   const money = !!info.money;
   const pct = !!info.pct;
   const fmtAxis = (x: unknown) =>
@@ -130,14 +127,14 @@ export function PivotChart({
   const series = colField ? [...seriesKeys.map((k) => labelOf(colField, k)), ...(hasOther ? [OTHER_CATEGORY_LABEL] : [])] : [info.short];
   const colors = series.map((_, i) => (hasOther && i === series.length - 1 ? CATEGORY_OTHER_COLOR : CATEGORY_PALETTE[i]));
   const data = rows.map((g) => {
-    const d: Record<string, string | number> = { key: g.key, label: labelOf(rowField, g.key), __total: valueOf(g.total, m) };
-    if (!colField) d[info.short] = valueOf(g.total, m);
+    const d: Record<string, string | number> = { key: g.key, label: labelOf(rowField, g.key), __total: val(g.total) };
+    if (!colField) d[info.short] = val(g.total);
     else {
-      seriesKeys.forEach((k, i) => (d[series[i]] = valueOf(g.cells.get(k), m)));
+      seriesKeys.forEach((k, i) => (d[series[i]] = val(g.cells.get(k))));
       if (hasOther) {
         const rest = acc();
         for (const k of pivot.colList.slice(MAX_CATEGORY_SLOTS)) merge(rest, g.cells.get(k));
-        d[OTHER_CATEGORY_LABEL] = valueOf(rest, m);
+        d[OTHER_CATEGORY_LABEL] = val(rest);
       }
     }
     return d;
@@ -152,34 +149,37 @@ export function PivotChart({
 
   // Slices (donut / pie / treemap / funnel): the rows, the largest 8 + Other.
   const slices = (() => {
-    const ranked = [...rows].sort((a, b) => valueOf(b.total, m) - valueOf(a.total, m));
+    const ranked = [...rows].sort((a, b) => val(b.total) - val(a.total));
     const keep = ranked.slice(0, MAX_CATEGORY_SLOTS);
     const rest = ranked.slice(MAX_CATEGORY_SLOTS);
-    const out = keep.map((g, i) => ({ key: g.key, name: labelOf(rowField, g.key), value: valueOf(g.total, m), fill: CATEGORY_PALETTE[i] }));
+    const out = keep.map((g, i) => ({ key: g.key, name: labelOf(rowField, g.key), value: val(g.total), fill: CATEGORY_PALETTE[i] }));
     if (rest.length) {
       const a = acc();
       for (const g of rest) merge(a, g.total);
-      out.push({ key: "", name: `${OTHER_CATEGORY_LABEL} (${rest.length})`, value: valueOf(a, m), fill: CATEGORY_OTHER_COLOR });
+      out.push({ key: "", name: `${OTHER_CATEGORY_LABEL} (${rest.length})`, value: val(a), fill: CATEGORY_OTHER_COLOR });
     }
     return out.filter((s) => s.value > 0);
   })();
 
-  if ((type === "target" || values.some((v) => measureInfo(v).target)) && !pivot.targetOk)
-    return (
-      <p className="py-10 text-center text-sm text-slate-500">
-        Targets are set per sales person per month - group by Sales person, Invoice month, quarter or year to see them (not by product or customer).
-      </p>
-    );
+  if ((type === "target" || measures.some((v) => v.target)) && !pivot.targetOk)
+    return <p className="py-10 text-center text-sm text-slate-500">{targetNote ?? "Targets can't be shown for this grouping."}</p>;
+
+  // A funnel keeps the rows' order (e.g. pipeline stages), the top N.
+  const funnelData = rows
+    .map((g, i) => ({ key: g.key, name: labelOf(rowField, g.key), value: val(g.total), fill: CATEGORY_PALETTE[i % MAX_CATEGORY_SLOTS] }))
+    .filter((x) => x.value > 0);
 
   switch (type) {
+    case "table":
+      return null;
     case "target": {
       // Achieved (columns) against the target (line), on one axis.
       const rowsT = rows.map((g) => ({
         key: g.key,
         label: labelOf(rowField, g.key),
-        Achieved: g.total.amount,
+        Achieved: actual ? actual.value(g.total) : 0,
         Target: g.total.target,
-        pct: g.total.target ? (g.total.amount / g.total.target) * 100 : null,
+        pct: g.total.target && actual ? (actual.value(g.total) / g.total.target) * 100 : null,
       }));
       // Over time the target is a line; per person / group a marker on each bar.
       const tilt = rowsT.length > 12 || (!time && rowsT.length > 5);
@@ -443,7 +443,7 @@ export function PivotChart({
           <FunnelChart margin={{ right: 160 }}>
             <Tooltip formatter={(x) => fmtTip(x)} {...tipStyle} />
             <Funnel
-              data={[...slices].sort((a, b) => b.value - a.value)}
+              data={funnelData}
               dataKey="value"
               nameKey="name"
               stroke={SURFACE}
@@ -475,16 +475,16 @@ export function PivotChart({
       );
     }
     case "scatter": {
-      const m2 = values[1];
+      const m2 = measures[1];
       if (!m2)
         return (
           <p className="py-10 text-center text-sm text-slate-500">
-            A scatter plots two values against each other - drag a second field into Values (e.g. Sum of qty).
+            A scatter plots two values against each other - add a second value in Values.
           </p>
         );
-      const i2 = measureInfo(m2);
+      const i2 = m2;
       const fmt2 = (x: unknown) => (i2.money ? formatAxisCurrency(Number(x)) : Number(x).toLocaleString("en-NG", { maximumFractionDigits: 1 }));
-      const pts = rows.map((g) => ({ key: g.key, name: labelOf(rowField, g.key), x: valueOf(g.total, m), y: valueOf(g.total, m2), z: g.total.lines }));
+      const pts = rows.map((g) => ({ key: g.key, name: labelOf(rowField, g.key), x: val(g.total), y: i2.value(g.total), z: g.total.n }));
       return (
         <ResponsiveContainer width="100%" height={height}>
           <ScatterChart margin={{ top: 12, right: 24, left: 0, bottom: 20 }}>
@@ -506,7 +506,7 @@ export function PivotChart({
               width={64}
               label={{ value: i2.short, angle: -90, position: "insideLeft", fontSize: 11, fill: MUTED }}
             />
-            <ZAxis type="number" dataKey="z" range={[60, 400]} name="Lines" />
+            <ZAxis type="number" dataKey="z" range={[60, 400]} name="Records" />
             <Tooltip
               cursor={{ strokeDasharray: "3 3" }}
               contentStyle={tipStyle.contentStyle}
@@ -532,7 +532,7 @@ export function PivotChart({
     }
     case "heatmap": {
       const cols = colField ? pivot.colList.slice(0, 24) : [];
-      const cellsOf = (g: PivotGroup) => (colField ? cols.map((c) => valueOf(g.cells.get(c), m)) : [valueOf(g.total, m)]);
+      const cellsOf = (g: PivotGroup) => (colField ? cols.map((c) => val(g.cells.get(c))) : [val(g.total)]);
       const all = rows.flatMap(cellsOf);
       const max = Math.max(0, ...all);
       // One hue, light -> dark (sequential).
