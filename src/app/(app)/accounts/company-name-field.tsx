@@ -25,7 +25,7 @@ export function CompanyNameField({
   const exactMatch = query ? candidates.find((a) => a.name.trim().toLowerCase() === query) : undefined;
   const partialMatches =
     query.length >= 2 && !exactMatch
-      ? candidates.filter((a) => a.name.toLowerCase().includes(query)).slice(0, 5)
+      ? candidates.filter((a) => a.name.toLowerCase().includes(query) || (a.code ?? "").toLowerCase().includes(query)).slice(0, 5)
       : [];
 
   return (

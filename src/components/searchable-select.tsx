@@ -59,10 +59,15 @@ export function SearchableSelect({
     setQuery(resolveLabel(value));
   }
 
+  // Matches what's typed anywhere in the label (name, account / product
+  // code…), also ignoring spaces and punctuation - "mvcm730" finds MVC-M730.
+  const q = query.trim().toLowerCase();
+  const bare = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const qBare = bare(q);
   const matches =
-    query.trim() === ""
+    q === ""
       ? options.slice(0, limit)
-      : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase())).slice(0, limit);
+      : options.filter((o) => o.label.toLowerCase().includes(q) || (qBare !== "" && bare(o.label).includes(qBare))).slice(0, limit);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

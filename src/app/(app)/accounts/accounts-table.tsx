@@ -39,7 +39,7 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
     const rows =
       q === ""
         ? accounts
-        : accounts.filter((a) => a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q)));
+        : accounts.filter((a) => a.name.toLowerCase().includes(q) || (a.code ?? "").toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q)));
     if (!sortKey) return rows;
     const dir = sortDir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
@@ -88,7 +88,7 @@ export function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
           type="text"
           value={query}
           onChange={(e) => updateQuery(e.target.value)}
-          placeholder="Search company name or tag..."
+          placeholder="Search company name, account code or tag..."
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         {query && (

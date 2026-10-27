@@ -24,7 +24,7 @@ export default async function NewContactPage() {
             action={createContact}
             isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
-            accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
+            accounts={accounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
             defaultValues={{ ownerId: isBackOffice(user) ? owners[0]?.id : user.id }}
             submitLabel="Create Contact"
           />

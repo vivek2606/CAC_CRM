@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
-import { Search, Target, Building2, Contact, KanbanSquare, X } from "lucide-react";
+import { Search, Target, Building2, Contact, KanbanSquare, Package, X } from "lucide-react";
 import { searchAll, type SearchResults } from "./search-actions";
 import { DEAL_STAGE_LABELS } from "@/lib/constants";
 
-const EMPTY: SearchResults = { leads: [], accounts: [], contacts: [], deals: [] };
+const EMPTY: SearchResults = { leads: [], accounts: [], products: [], contacts: [], deals: [] };
 
 export function SearchBox() {
   const [query, setQuery] = useState("");
@@ -43,7 +43,7 @@ export function SearchBox() {
   }, []);
 
   const hasQuery = query.trim().length >= 2;
-  const totalCount = results.leads.length + results.accounts.length + results.contacts.length + results.deals.length;
+  const totalCount = results.leads.length + results.accounts.length + results.products.length + results.contacts.length + results.deals.length;
 
   function closeAndClear() {
     setOpen(false);
@@ -69,7 +69,7 @@ export function SearchBox() {
             }
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search leads, accounts, contacts, deals..."
+          placeholder="Search leads, accounts, products, contacts, deals - by name or code..."
           className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
         />
         {query && (
@@ -98,7 +98,12 @@ export function SearchBox() {
               </ResultGroup>
               <ResultGroup label="Accounts" icon={Building2} count={results.accounts.length}>
                 {results.accounts.map((a) => (
-                  <ResultRow key={a.id} href={`/accounts/${a.id}`} title={a.name} subtitle={a.city} onNavigate={closeAndClear} />
+                  <ResultRow key={a.id} href={`/accounts/${a.id}`} title={a.name} subtitle={[a.code, a.city].filter(Boolean).join(" · ") || null} onNavigate={closeAndClear} />
+                ))}
+              </ResultGroup>
+              <ResultGroup label="Products" icon={Package} count={results.products.length}>
+                {results.products.map((p) => (
+                  <ResultRow key={p.id} href={`/products/${p.id}`} title={p.model} subtitle={p.code} onNavigate={closeAndClear} />
                 ))}
               </ResultGroup>
               <ResultGroup label="Contacts" icon={Contact} count={results.contacts.length}>

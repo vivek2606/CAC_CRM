@@ -32,7 +32,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
             action={action}
             isHead={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
-            accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
+            accounts={accounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
             defaultValues={{
               firstName: contact.firstName,
               lastName: contact.lastName,

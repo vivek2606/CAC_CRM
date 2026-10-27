@@ -77,7 +77,7 @@ export default async function EditDealPage({
             isHead={isBackOffice(user)}
             canEditCompany={isBackOffice(user)}
             owners={owners.map((o) => ({ id: o.id, label: o.name }))}
-            accounts={accounts.map((a) => ({ id: a.id, label: a.name }))}
+            accounts={accounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
             contacts={contacts.map((c) => ({
               id: c.id,
               label: `${c.firstName} ${c.lastName}`,
