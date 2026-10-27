@@ -99,8 +99,15 @@ export function MarkWonDialog({
   // auto rows take the rest.
   const billedElsewhere = (line: number) =>
     blocks.slice(1).reduce((s, b) => s + b.rows.filter((r) => r.dealLine === line).reduce((t, r) => t + num(r.qty), 0), 0);
+  // What's left of a deal line for the first invoice - a sales return's
+  // (negative) quantity stays negative.
+  const leftToBill = (line: number) => {
+    const onDeal = existingItems[line]?.qty ?? 0;
+    const left = onDeal - billedElsewhere(line);
+    return onDeal < 0 ? Math.min(0, left) : Math.max(0, left);
+  };
   const qtyOf = (r: Row, n: number) =>
-    n === 0 && r.auto && r.dealLine != null ? Math.max(0, (existingItems[r.dealLine]?.qty ?? 0) - billedElsewhere(r.dealLine)) : num(r.qty);
+    n === 0 && r.auto && r.dealLine != null ? leftToBill(r.dealLine) : num(r.qty);
   const qtyText = (r: Row, n: number) => (n === 0 && r.auto && r.dealLine != null ? String(qtyOf(r, n)) : r.qty);
   // A deal line left at 0 on an invoice simply isn't billed on it.
   const skipped = (r: Row, n: number) => r.dealLine != null && qtyOf(r, n) === 0;
