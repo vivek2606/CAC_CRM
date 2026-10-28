@@ -60,6 +60,9 @@ export const DEALS: DatasetDef = {
     { name: "Open pipeline by sales person", cfg: { rows: ["owner"], col: "stage", values: ["openValue"], chart: "bar", filters: [], top: 0 } },
     { name: "Won value by month", cfg: { rows: ["closedAt:month"], values: ["wonValue", "won"], chart: "column", period: { field: "closedAt", preset: "last12m" } } },
     { name: "Target vs achievement by sales person", cfg: { rows: ["owner"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", top: 0, period: { field: "closedAt", preset: "thisYear" } } },
+    { name: "Won value by quarter", cfg: { rows: ["closedAt:quarter"], values: ["wonValue", "won", "winRate"], chart: "column", period: { field: "closedAt", preset: "all" } } },
+    { name: "Quarterly target vs achievement", cfg: { rows: ["closedAt:quarter"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
+    { name: "Quarter on quarter by sales person", cfg: { rows: ["owner"], col: "closedAt:quarter", values: ["wonValue"], chart: "clustered", top: 0, period: { field: "closedAt", preset: "last12m" } }, simple: false },
     { name: "Monthly target vs achievement", cfg: { rows: ["closedAt:month"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
     { name: "Win rate by sales person", cfg: { rows: ["owner"], values: ["winRate", "won", "lost"], chart: "bar", top: 0, period: { field: "closedAt", preset: "last12m" } } },
     { name: "Why we lose - donut", cfg: { rows: ["lostReason"], values: ["lost", "lostValue"], chart: "donut", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },
@@ -102,6 +105,7 @@ export const LEADS: DatasetDef = {
   presets: [
     { name: "Leads by source", cfg: { rows: ["source"], values: ["count", "converted", "convRate"], chart: "bar" } },
     { name: "Leads by month and source", cfg: { rows: ["createdAt:month"], col: "source", values: ["count"], chart: "column" } },
+    { name: "Leads and conversion by quarter", cfg: { rows: ["createdAt:quarter"], values: ["count", "converted", "convRate"], chart: "column", period: { field: "createdAt", preset: "all" } } },
     { name: "Conversion by sales person", cfg: { rows: ["owner"], values: ["convRate", "count", "converted"], chart: "bar", top: 0 } },
     { name: "Lead status - donut", cfg: { rows: ["status"], values: ["count"], chart: "donut" } },
     { name: "Segments - treemap", cfg: { rows: ["segment"], values: ["count"], chart: "treemap" } },

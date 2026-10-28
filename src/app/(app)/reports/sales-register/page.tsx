@@ -241,7 +241,7 @@ export default async function SalesRegisterPage({
   // The period / sales person / type / entity filters: down the chart
   // studio's side panel, or a row above the table when the studio is hidden.
   const filterForm = (vertical: boolean) => (
-        <form className={vertical ? "flex flex-col items-stretch gap-2 [&_input]:w-full [&_select]:w-full" : "flex flex-wrap items-end gap-3"} action="/reports/sales-register">
+        <form key={vertical ? "side" : "row"} className={vertical ? "flex flex-col items-stretch gap-2 [&_input]:w-full [&_select]:w-full" : "flex flex-wrap items-end gap-3"} action="/reports/sales-register">
           <PeriodFields from={iso(from)} to={iso(to)} />
           {all && (
             <div>

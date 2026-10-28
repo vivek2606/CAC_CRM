@@ -96,6 +96,13 @@ export function SalesRegisterTable({
         const q = v.trim().toLowerCase();
         // "=Duct" matches exactly (so it doesn't also catch "Large Duct").
         if (q.startsWith("=")) return String(r[k]).toLowerCase() === q.slice(1).trim();
+        // Invoice date by quarter: "2026-Q3" or "Q3 2026".
+        if (k === "invoiceDate") {
+          const qa = /^(\d{4})-?q([1-4])$/.exec(q);
+          const qb = /^q([1-4])\s*(\d{4})$/.exec(q);
+          const yq = qa ? [qa[1], qa[2]] : qb ? [qb[2], qb[1]] : null;
+          if (yq) return r.invoiceDate.slice(0, 4) === yq[0] && Math.floor((Number(r.invoiceDate.slice(5, 7)) - 1) / 3) + 1 === Number(yq[1]);
+        }
         // Numbers: ">1000", "<5", or plain text match on the shown value.
         const col = COLUMNS.find((c) => c.key === k);
         if (col?.numeric && /^[<>]=?\s*-?[\d,.]+$/.test(q)) {
@@ -131,7 +138,7 @@ export function SalesRegisterTable({
   // date prefix, anything else exactly).
   const pickPivot = (dim: string, key: string) => {
     const byDate = dim.startsWith("invoiceDate:");
-    if (dim.endsWith(":quarter") || (!byDate && !COLUMNS.some((c) => c.key === dim))) return;
+    if (!byDate && !COLUMNS.some((c) => c.key === dim)) return;
     const k = (byDate ? "invoiceDate" : dim) as Key;
     const value = byDate ? key : key === "(blank)" ? "=" : `=${key}`;
     setFilters((f) => ({ ...f, [k]: value }));
@@ -280,16 +287,51 @@ export function SalesRegisterTable({
 
 // Period: from date / to date.
 export function PeriodFields({ from, to }: { from: string; to: string }) {
+  const [range, setRange] = useState({ from, to });
   const input = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
+  // Quick periods: fill the dates and show.
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const today = iso(new Date(Date.UTC(y, m, now.getUTCDate())));
+  const first = (yy: number, mm: number) => iso(new Date(Date.UTC(yy, mm, 1)));
+  const last = (yy: number, mm: number) => iso(new Date(Date.UTC(yy, mm + 1, 0)));
+  const q0 = m - (m % 3);
+  const quick: [string, string, string][] = [
+    ["This month", first(y, m), today],
+    ["Last month", first(y, m - 1), last(y, m - 1)],
+    ["This quarter", first(y, q0), today],
+    ["Last quarter", first(y, q0 - 3), last(y, q0 - 1)],
+    ["This year", first(y, 0), today],
+    ["Last year", first(y - 1, 0), last(y - 1, 11)],
+  ];
   return (
     <>
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">From date</label>
-        <input type="date" name="from" defaultValue={from} className={input} />
+        <input type="date" name="from" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} className={input} />
       </div>
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">To date</label>
-        <input type="date" name="to" defaultValue={to} className={input} />
+        <input type="date" name="to" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} className={input} />
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {quick.map(([label, f, t]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={(e) => {
+              setRange({ from: f, to: t });
+              const form = e.currentTarget.form;
+              // After the dates are in the inputs.
+              setTimeout(() => form?.requestSubmit(), 0);
+            }}
+            className={`rounded-full border px-2 py-0.5 text-[11px] ${range.from === f && range.to === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300"}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </>
   );

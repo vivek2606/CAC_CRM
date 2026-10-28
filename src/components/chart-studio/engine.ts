@@ -65,7 +65,18 @@ export type ChartType =
   | "table";
 export type SortMode = "value-desc" | "value-asc" | "label";
 export type PivotFilter = { field: string; include: string[] | null }; // null = all
-export type PeriodPreset = "all" | "thisMonth" | "lastMonth" | "last3m" | "last6m" | "last12m" | "thisYear" | "lastYear" | "custom";
+export type PeriodPreset =
+  | "all"
+  | "thisMonth"
+  | "lastMonth"
+  | "thisQuarter"
+  | "lastQuarter"
+  | "last3m"
+  | "last6m"
+  | "last12m"
+  | "thisYear"
+  | "lastYear"
+  | "custom";
 export type Period = { field: string; preset: PeriodPreset; from?: string; to?: string };
 export type StudioConfig = {
   dataset: string;
@@ -95,6 +106,23 @@ export function dimsOf(ds: DatasetDef): Dim[] {
 }
 const grainOf = (dim: string | null | undefined): Grain | undefined => (dim?.includes(":") ? (dim.split(":")[1] as Grain) : undefined);
 export const isTime = (dim: string | null | undefined) => !!grainOf(dim);
+
+// The key of the period `back` periods before a month / quarter / year key
+// ("2026-07" -> "2026-04" for back 3) - for change vs previous / last year.
+export function shiftKey(dim: string | null | undefined, k: string, back: number): string | null {
+  const g = grainOf(dim);
+  if (!g || k.startsWith("(")) return null;
+  const y = Number(k.slice(0, 4));
+  if (g === "year") return String(y - back);
+  if (g === "month") {
+    const i = y * 12 + Number(k.slice(5, 7)) - 1 - back;
+    return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
+  }
+  const i = y * 4 + Number(k.slice(6)) - 1 - back;
+  return `${Math.floor(i / 4)}-Q${(i % 4) + 1}`;
+}
+// How many periods make a year at this grain (12 months, 4 quarters, 1 year).
+export const perYear = (dim: string | null | undefined) => ({ month: 12, quarter: 4, year: 1 })[grainOf(dim) ?? "year"];
 
 export function dateKey(iso: string, g: Grain): string {
   if (g === "month") return iso.slice(0, 7);
@@ -177,6 +205,10 @@ export function periodRange(p: Period | undefined, now = new Date()): { from: st
       return { from: first(y, m - 5), to: today };
     case "last12m":
       return { from: first(y, m - 11), to: today };
+    case "thisQuarter":
+      return { from: first(y, m - (m % 3)), to: today };
+    case "lastQuarter":
+      return { from: first(y, m - (m % 3) - 3), to: last(y, m - (m % 3) - 1) };
     case "thisYear":
       return { from: first(y, 0), to: today };
     case "lastYear":

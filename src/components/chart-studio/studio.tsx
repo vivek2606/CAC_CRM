@@ -46,6 +46,8 @@ import {
   isTime,
   labelOf,
   periodRange,
+  perYear,
+  shiftKey,
   sanitize,
   targetsInPeriod,
   type Acc,
@@ -107,6 +109,8 @@ const CHARTS: { key: ChartType; label: string; icon: ComponentType<{ className?:
 const PERIODS: { key: PeriodPreset; label: string }[] = [
   { key: "thisMonth", label: "This month" },
   { key: "lastMonth", label: "Last month" },
+  { key: "thisQuarter", label: "This quarter" },
+  { key: "lastQuarter", label: "Last quarter" },
   { key: "last3m", label: "Last 3 months" },
   { key: "last6m", label: "Last 6 months" },
   { key: "last12m", label: "Last 12 months" },
@@ -162,7 +166,9 @@ export function ChartStudio({
   views?: { list: StudioView[]; save: (name: string, cfg: StudioConfig) => Promise<void>; remove: (id: string) => Promise<void> };
 }) {
   const dsOf = (key: string | undefined) => datasets.find((d) => d.key === key) ?? datasets[0];
-  const [cfg, setCfg] = useState<StudioConfig>(() => (initial ? sanitize(initial, dsOf(initial.dataset), defaultConfig(dsOf(initial.dataset))) : defaultConfig(datasets[0])));
+  const [cfg, setCfg] = useState<StudioConfig>(() =>
+    initial ? sanitize(initial, dsOf(initial.dataset), defaultConfig(dsOf(initial.dataset))) : defaultConfig(datasets[0]),
+  );
   const [full, setFull] = useState(false);
   const [help, setHelp] = useState(false);
   const [dragging, setDragging] = useState<Drag | null>(null);
@@ -229,10 +235,19 @@ export function ChartStudio({
       return;
     }
     if (d.kind === "measure") {
-      if (zone === "values") addMeasure(d.key);
+      // Simple: the dropped value becomes the Measure.
+      if (zone !== "values") return;
+      if (cfg.mode === "simple") set({ values: [d.key, ...cfg.values.filter((v) => v !== d.key)] });
+      else addMeasure(d.key);
       return;
     }
     if (zone === "values") return;
+    // Simple: the dropped field becomes Compare by / Split by.
+    if (cfg.mode === "simple") {
+      if (zone === "rows") update((c) => ({ ...c, rows: [d.key], col: c.col === d.key ? null : c.col }));
+      if (zone === "col" && d.key !== cfg.rows[0]) set({ col: d.key });
+      return;
+    }
     if (d.from && d.from !== zone && d.from !== "filters") removeField(d.from, d.key);
     addField(zone, d.key);
   };
@@ -253,18 +268,26 @@ export function ChartStudio({
   const picked = cfg.values.map(mOf);
   const usesTarget = cfg.chart === "target" || picked.some((m) => m.target);
   const monthTargetDim = ds.targetDims?.find((d) => d.endsWith(":month"));
-  const pivotTargets = usesTarget && ds.targets ? filterTargets(periodControl ? targetsInPeriod(ds.targets, cfg.period, monthTargetDim) : ds.targets, cfg.filters, ds.targetDims ?? []) : [];
+  const pivotTargets =
+    usesTarget && ds.targets
+      ? filterTargets(periodControl ? targetsInPeriod(ds.targets, cfg.period, monthTargetDim) : ds.targets, cfg.filters, ds.targetDims ?? [])
+      : [];
   const pivot = buildPivot(recs, { rows: cfg.rows, col: cfg.col, values: cfg.values, sort: cfg.sort }, ds, pivotTargets);
   const rowField = cfg.rows[0] ?? null;
   const row2 = cfg.rows[1] ?? null;
-  const canPick = !!onPick && !!rowField && !rowField.endsWith(":quarter");
+  const canPick = !!onPick && !!rowField;
   const pickRow = (k: string) => {
     if (canPick && rowField) onPick!(rowField, k);
   };
   const m0 = picked[0];
   const actual = ds.actualMeasure ? mOf(ds.actualMeasure) : undefined;
   const title = `${m0.label} by ${rowField ? dimLabel(rowField).toLowerCase() : "all"}${cfg.col ? ` and ${dimLabel(cfg.col).toLowerCase()}` : ""}`;
-  const targetNote = `Targets are set per ${(ds.targetDims ?? []).filter((d) => !d.includes(":")).map((d) => dimLabel(d).toLowerCase()).join(" / ") || "period"} per month - group by those or by month / quarter / year to see them.`;
+  const targetNote = `Targets are set per ${
+    (ds.targetDims ?? [])
+      .filter((d) => !d.includes(":"))
+      .map((d) => dimLabel(d).toLowerCase())
+      .join(" / ") || "period"
+  } per month - group by those or by month / quarter / year to see them.`;
 
   const downloadPng = () => {
     // The chart's own drawing (the largest SVG - legend icons are SVGs too),
@@ -376,16 +399,43 @@ export function ChartStudio({
     const g = m0.value(pivot.grand);
     return g ? `${((m0.value(a) / g) * 100).toFixed(1)}%` : "—";
   };
+  // Rows by month / quarter / year: the first value's change vs the period
+  // before and vs the same period a year before (when those are in the data).
+  const growth = isTime(rowField) && !m0.target ? { prev: 1, year: perYear(rowField) } : null;
+  const byKey = new Map(pivot.rowList.map((g) => [g.key, m0.value(g.total)]));
+  const change = (k: string, back: number): number | null => {
+    const pk = shiftKey(rowField, k, back);
+    const prev = pk != null ? byKey.get(pk) : undefined;
+    const cur = byKey.get(k);
+    return prev && cur != null ? ((cur - prev) / Math.abs(prev)) * 100 : null;
+  };
+  const growthLabel = { month: ["vs previous month", "vs same month last year"], quarter: ["vs previous quarter", "vs same quarter last year"], year: ["vs previous year", ""] }[
+    (rowField?.split(":")[1] as "month" | "quarter" | "year") ?? "year"
+  ] ?? ["", ""];
+  const growthCell = (k: string, back: number) => {
+    const c = change(k, back);
+    if (c == null) return <span className="text-slate-300">—</span>;
+    return <span className={c >= 0 ? "text-emerald-700" : "text-rose-700"}>{`${c >= 0 ? "▲" : "▼"} ${Math.abs(c).toFixed(1)}%`}</span>;
+  };
+  const showYoY = growth && growth.year > 1;
   const csvHeaders = [
     rowField ? dimLabel(rowField) : "",
     ...(row2 ? [dimLabel(row2)] : []),
     ...cols.flatMap((c) => picked.map((m) => `${labelOf(cfg.col, c)} - ${m.short}`)),
     ...picked.map((m) => `Total - ${m.short}`),
+    ...(growth ? [`${m0.short} ${growthLabel[0]} %`, ...(showYoY ? [`${m0.short} ${growthLabel[1]} %`] : [])] : []),
   ];
+  const pctOrBlank = (x: number | null) => (x == null ? "" : Math.round(x * 10) / 10);
   const num = (m: MeasureDef, a: Acc | undefined) => (a ? Math.round(m.value(a) * 100) / 100 : 0);
   const csvRows: (string | number)[][] = [];
   for (const g of pivot.rowList) {
-    csvRows.push([labelOf(rowField, g.key), ...(row2 ? [""] : []), ...cols.flatMap((c) => picked.map((m) => num(m, g.cells.get(c)))), ...picked.map((m) => num(m, g.total))]);
+    csvRows.push([
+      labelOf(rowField, g.key),
+      ...(row2 ? [""] : []),
+      ...cols.flatMap((c) => picked.map((m) => num(m, g.cells.get(c)))),
+      ...picked.map((m) => num(m, g.total)),
+      ...(growth ? [pctOrBlank(change(g.key, 1)), ...(showYoY ? [pctOrBlank(change(g.key, growth.year))] : [])] : []),
+    ]);
     for (const s of g.subs)
       csvRows.push([
         labelOf(rowField, g.key),
@@ -394,7 +444,12 @@ export function ChartStudio({
         ...picked.map((m) => num(m, s.total)),
       ]);
   }
-  csvRows.push(["Grand total", ...(row2 ? [""] : []), ...cols.flatMap((c) => picked.map((m) => num(m, pivot.colTotals.get(c)))), ...picked.map((m) => num(m, pivot.grand))]);
+  csvRows.push([
+    "Grand total",
+    ...(row2 ? [""] : []),
+    ...cols.flatMap((c) => picked.map((m) => num(m, pivot.colTotals.get(c)))),
+    ...picked.map((m) => num(m, pivot.grand)),
+  ]);
 
   const chartBox =
     cfg.chart === "table" ? null : (
@@ -417,18 +472,30 @@ export function ChartStudio({
   const range = periodRange(cfg.period);
   const dateFields = ds.fields.filter((f) => f.date);
 
+  // Simple mode's three steps take a dropped field / value too.
+  const stepDrop = (z: Zone) => ({ onDragOver: (e: DragEvent) => accepts(z) && e.preventDefault(), onDrop: drop(z) });
+  const stepTone = (z: Zone) =>
+    dragging ? (accepts(z) ? "border-2 border-dashed border-indigo-300 bg-indigo-50/50" : "border-slate-200 opacity-50") : "border-slate-200 bg-slate-50/50";
+
   // While dragging: the drop boxes pinned to the top of the screen, so a
   // field can be dropped wherever the page is scrolled to.
   const dropBar = dragging && (
     <div className="fixed inset-x-0 top-3 z-50 flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto grid w-full max-w-3xl grid-cols-2 gap-2 rounded-xl border border-indigo-200 bg-white/95 p-2 shadow-xl backdrop-blur sm:grid-cols-4">
-        {(
-          [
-            ["filters", "Filters", Filter],
-            ["rows", "Rows", Rows3],
-            ["col", "Columns", Columns3],
-            ["values", "Values", Sigma],
-          ] as const
+      <div
+        className={`pointer-events-auto grid w-full max-w-3xl gap-2 rounded-xl border border-indigo-200 bg-white/95 p-2 shadow-xl backdrop-blur ${cfg.mode === "simple" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}
+      >
+        {(cfg.mode === "simple"
+          ? ([
+              ["rows", "1 · Compare by", Rows3],
+              ["col", "2 · Split by", Columns3],
+              ["values", "3 · Measure", Sigma],
+            ] as const)
+          : ([
+              ["filters", "Filters", Filter],
+              ["rows", "Rows", Rows3],
+              ["col", "Columns", Columns3],
+              ["values", "Values", Sigma],
+            ] as const)
         ).map(([z, label, Icon]) => {
           const ok = accepts(z);
           return (
@@ -439,7 +506,7 @@ export function ChartStudio({
               className={`flex items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-3 py-3 text-xs font-semibold ${ok ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-100 text-slate-300"}`}
             >
               <Icon className="h-3.5 w-3.5" />
-              Drop in {label}
+              {cfg.mode === "simple" ? label : `Drop in ${label}`}
             </div>
           );
         })}
@@ -507,7 +574,11 @@ export function ChartStudio({
                 </option>
               ))}
             </select>
-            <button type="button" onClick={saveView} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={saveView}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
               <Save className="h-3.5 w-3.5" />
               Save view
             </button>
@@ -552,15 +623,15 @@ export function ChartStudio({
           ) : (
             <ul className="list-disc space-y-1 pl-4">
               <li>
-                Drag fields from the left into <b>Rows</b> (up to 2 - the second nests under the first with subtotals), <b>Columns</b> (splits into
-                columns / chart series) or <b>Filters</b>. Drag a chip back to the list - or click its × - to remove it. Clicking a field adds it.
+                Drag fields from the left into <b>Rows</b> (up to 2 - the second nests under the first with subtotals), <b>Columns</b> (splits into columns /
+                chart series) or <b>Filters</b>. Drag a chip back to the list - or click its × - to remove it. Clicking a field adds it.
               </li>
               <li>
                 <b>Filters</b>: drop any field there, then tick the values to keep (e.g. some sales persons, stages or months).
               </li>
               <li>
-                <b>Values</b>: up to 4 - the table shows them all, the chart uses the first (click &quot;chart it&quot; to swap). Scatter plots the first
-                two against each other.
+                <b>Values</b>: up to 4 - the table shows them all, the chart uses the first (click &quot;chart it&quot; to swap). Scatter plots the first two
+                against each other.
               </li>
               <li>Charts with many rows show the top N (largest first) - change it under Show / Sort. Months, quarters and years run in date order.</li>
               <li>Download the chart as PNG or the table as CSV; open it full screen.</li>
@@ -624,11 +695,21 @@ export function ChartStudio({
                 <div className="space-y-1">
                   <label className="block text-[11px] text-slate-500">
                     From date
-                    <input type="date" value={cfg.period.from ?? ""} onChange={(e) => set({ period: { ...cfg.period!, from: e.target.value } })} className={`${select} w-full`} />
+                    <input
+                      type="date"
+                      value={cfg.period.from ?? ""}
+                      onChange={(e) => set({ period: { ...cfg.period!, from: e.target.value } })}
+                      className={`${select} w-full`}
+                    />
                   </label>
                   <label className="block text-[11px] text-slate-500">
                     To date
-                    <input type="date" value={cfg.period.to ?? ""} onChange={(e) => set({ period: { ...cfg.period!, to: e.target.value } })} className={`${select} w-full`} />
+                    <input
+                      type="date"
+                      value={cfg.period.to ?? ""}
+                      onChange={(e) => set({ period: { ...cfg.period!, to: e.target.value } })}
+                      className={`${select} w-full`}
+                    />
                   </label>
                 </div>
               )}
@@ -645,52 +726,59 @@ export function ChartStudio({
               {side}
             </div>
           )}
-          {cfg.mode === "advanced" && (
-            <>
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fields</p>
-                <div className="flex flex-col items-stretch gap-1.5">
-                  {dims.map((f) => (
-                    <span
-                      key={f.key}
-                      {...dragProps({ kind: "field", key: f.key, from: null })}
-                      onClick={() => addField(cfg.rows.length ? (cfg.col ? "rows" : "col") : "rows", f.key)}
-                      title="Drag into Rows, Columns or Filters - or click to add"
-                      className={`${fieldChip} ${f.grain && f.grain !== "month" ? "ml-3" : ""}`}
-                    >
-                      <GripVertical className="h-3 w-3 text-slate-300" />
-                      {f.label}
-                    </span>
-                  ))}
-                </div>
+          <>
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fields</p>
+              {cfg.mode === "simple" && <p className="mb-1.5 text-[11px] text-slate-400">Drag onto 1 Compare by or 2 Split by - or click to compare by it.</p>}
+              <div className="flex flex-col items-stretch gap-1.5">
+                {dims.map((f) => (
+                  <span
+                    key={f.key}
+                    {...dragProps({ kind: "field", key: f.key, from: null })}
+                    onClick={() =>
+                      cfg.mode === "simple"
+                        ? update((c) => ({ ...c, rows: [f.key], col: c.col === f.key ? null : c.col }))
+                        : addField(cfg.rows.length ? (cfg.col ? "rows" : "col") : "rows", f.key)
+                    }
+                    title={
+                      cfg.mode === "simple"
+                        ? "Drag onto Compare by or Split by - or click to compare by it"
+                        : "Drag into Rows, Columns or Filters - or click to add"
+                    }
+                    className={`${fieldChip} ${f.grain && f.grain !== "month" ? "ml-3" : ""}`}
+                  >
+                    <GripVertical className="h-3 w-3 text-slate-300" />
+                    {f.label}
+                  </span>
+                ))}
               </div>
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Values</p>
-                <div className="flex flex-col items-stretch gap-1.5">
-                  {measures.map((m) => (
-                    <span
-                      key={m.key}
-                      {...dragProps({ kind: "measure", key: m.key, from: null })}
-                      onClick={() => addMeasure(m.key)}
-                      title="Drag into Values - or click to add"
-                      className={measureChip}
-                    >
-                      <Sigma className="h-3 w-3 opacity-60" />
-                      {m.label}
-                    </span>
-                  ))}
-                </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Values</p>
+              <div className="flex flex-col items-stretch gap-1.5">
+                {measures.map((m) => (
+                  <span
+                    key={m.key}
+                    {...dragProps({ kind: "measure", key: m.key, from: null })}
+                    onClick={() => (cfg.mode === "simple" ? set({ values: [m.key, ...cfg.values.filter((v) => v !== m.key)] }) : addMeasure(m.key))}
+                    title={cfg.mode === "simple" ? "Drag onto Measure - or click to use it" : "Drag into Values - or click to add"}
+                    className={measureChip}
+                  >
+                    <Sigma className="h-3 w-3 opacity-60" />
+                    {m.label}
+                  </span>
+                ))}
               </div>
-              <p className="text-[11px] text-slate-400">Drag a field back here to remove it.</p>
-            </>
-          )}
+            </div>
+            {cfg.mode === "advanced" && <p className="text-[11px] text-slate-400">Drag a field back here to remove it.</p>}
+          </>
         </div>
 
         <div className="min-w-0 space-y-3">
           {cfg.mode === "simple" ? (
             <>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <label className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                <label {...stepDrop("rows")} className={`rounded-lg border p-2.5 ${stepTone("rows")}`}>
                   <Step n="1" label="Compare by" />
                   <select
                     value={rowField ?? ""}
@@ -708,9 +796,13 @@ export function ChartStudio({
                   </select>
                   <span className="mt-1 block text-[11px] text-slate-400">What each bar / slice is</span>
                 </label>
-                <label className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                <label {...stepDrop("col")} className={`rounded-lg border p-2.5 ${stepTone("col")}`}>
                   <Step n="2" label="Split by (optional)" />
-                  <select value={cfg.col ?? ""} onChange={(e) => (e.target.value ? addField("col", e.target.value) : removeField("col", ""))} className={`${select} w-full`}>
+                  <select
+                    value={cfg.col ?? ""}
+                    onChange={(e) => (e.target.value ? addField("col", e.target.value) : removeField("col", ""))}
+                    className={`${select} w-full`}
+                  >
                     <option value="">Nothing</option>
                     {dims
                       .filter((f) => f.key !== rowField)
@@ -722,9 +814,13 @@ export function ChartStudio({
                   </select>
                   <span className="mt-1 block text-[11px] text-slate-400">Colours each bar by a second field</span>
                 </label>
-                <label className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                <label {...stepDrop("values")} className={`rounded-lg border p-2.5 ${stepTone("values")}`}>
                   <Step n="3" label="Measure" />
-                  <select value={m0.key} onChange={(e) => set({ values: [e.target.value, ...cfg.values.slice(1).filter((v) => v !== e.target.value)] })} className={`${select} w-full`}>
+                  <select
+                    value={m0.key}
+                    onChange={(e) => set({ values: [e.target.value, ...cfg.values.slice(1).filter((v) => v !== e.target.value)] })}
+                    className={`${select} w-full`}
+                  >
                     {measures.map((m) => (
                       <option key={m.key} value={m.key}>
                         {m.label}
@@ -788,16 +884,30 @@ export function ChartStudio({
                 "Values (up to 4 - the chart uses the first)",
                 Sigma,
                 picked.map((m, i) => (
-                  <span key={m.key} {...dragProps({ kind: "measure", key: m.key, from: "values" })} className={`${measureChip} ${i === 0 ? "ring-1 ring-emerald-400" : ""}`}>
+                  <span
+                    key={m.key}
+                    {...dragProps({ kind: "measure", key: m.key, from: "values" })}
+                    className={`${measureChip} ${i === 0 ? "ring-1 ring-emerald-400" : ""}`}
+                  >
                     <GripVertical className="h-3 w-3 opacity-50" />
                     {m.label}
                     {i > 0 && (
-                      <button type="button" title="Use this one in the chart" onClick={() => set({ values: [m.key, ...cfg.values.filter((x) => x !== m.key)] })} className="ml-0.5 text-[10px] underline">
+                      <button
+                        type="button"
+                        title="Use this one in the chart"
+                        onClick={() => set({ values: [m.key, ...cfg.values.filter((x) => x !== m.key)] })}
+                        className="ml-0.5 text-[10px] underline"
+                      >
                         chart it
                       </button>
                     )}
                     {cfg.values.length > 1 && (
-                      <button type="button" onClick={() => removeField("values", m.key)} className="ml-0.5 text-emerald-500 hover:text-rose-600" aria-label="Remove">
+                      <button
+                        type="button"
+                        onClick={() => removeField("values", m.key)}
+                        className="ml-0.5 text-emerald-500 hover:text-rose-600"
+                        aria-label="Remove"
+                      >
                         <X className="h-3 w-3" />
                       </button>
                     )}
@@ -820,7 +930,8 @@ export function ChartStudio({
                   onClick={() =>
                     update((cc) => {
                       const next: StudioConfig = { ...cc, chart: c.key };
-                      if (c.key === "scatter" && cc.values.length < 2) next.values = [cc.values[0], measures.find((m) => m.key !== cc.values[0] && !m.target)?.key ?? cc.values[0]];
+                      if (c.key === "scatter" && cc.values.length < 2)
+                        next.values = [cc.values[0], measures.find((m) => m.key !== cc.values[0] && !m.target)?.key ?? cc.values[0]];
                       if (c.key === "target") {
                         // Achieved and target, grouped by something targets are set by.
                         const td = ds.targetDims ?? [];
@@ -888,12 +999,20 @@ export function ChartStudio({
             {cfg.chart !== "table" && (
               <div className="ml-auto flex gap-2">
                 {cfg.chart !== "heatmap" && (
-                  <button type="button" onClick={downloadPng} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={downloadPng}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+                  >
                     <ImageDown className="h-3.5 w-3.5" />
                     PNG
                   </button>
                 )}
-                <button type="button" onClick={() => setFull(true)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setFull(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+                >
                   <Maximize2 className="h-3.5 w-3.5" />
                   Full screen
                 </button>
@@ -918,7 +1037,11 @@ export function ChartStudio({
               <div className="fixed inset-0 z-50 overflow-auto bg-white p-6">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-                  <button type="button" onClick={() => setFull(false)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => setFull(false)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  >
                     <Minimize2 className="h-4 w-4" />
                     Close
                   </button>
@@ -965,6 +1088,16 @@ export function ChartStudio({
                         Share
                       </th>
                     )}
+                    {growth && (
+                      <th rowSpan={cfg.col && picked.length > 1 ? 2 : 1} className="px-2 py-1.5 text-right font-medium whitespace-nowrap" title={`${m0.label}, change ${growthLabel[0]}`}>
+                        {m0.short} {growthLabel[0]}
+                      </th>
+                    )}
+                    {showYoY && (
+                      <th rowSpan={cfg.col && picked.length > 1 ? 2 : 1} className="px-2 py-1.5 text-right font-medium whitespace-nowrap" title={`${m0.label}, change ${growthLabel[1]}`}>
+                        {m0.short} {growthLabel[1]}
+                      </th>
+                    )}
                   </tr>
                   {cfg.col && picked.length > 1 && (
                     <tr className="border-b border-slate-200">
@@ -1004,6 +1137,8 @@ export function ChartStudio({
                           </td>
                         ))}
                         {m0.additive && <td className="px-2 py-1 text-right tabular-nums text-slate-500">{share(g.total)}</td>}
+                        {growth && <td className="px-2 py-1 text-right tabular-nums whitespace-nowrap">{growthCell(g.key, 1)}</td>}
+                        {showYoY && <td className="px-2 py-1 text-right tabular-nums whitespace-nowrap">{growthCell(g.key, growth.year)}</td>}
                       </tr>
                       {g.subs.map((s) => (
                         <tr key={s.key} className="hover:bg-slate-50">
@@ -1021,6 +1156,8 @@ export function ChartStudio({
                             </td>
                           ))}
                           {m0.additive && <td className="px-2 py-1 text-right tabular-nums text-slate-400">{share(s.total)}</td>}
+                          {growth && <td />}
+                          {showYoY && <td />}
                         </tr>
                       ))}
                     </Fragment>
@@ -1049,6 +1186,8 @@ export function ChartStudio({
                       </td>
                     ))}
                     {m0.additive && <td className="px-2 py-1.5 text-right tabular-nums">100%</td>}
+                    {growth && <td />}
+                    {showYoY && <td />}
                   </tr>
                 </tfoot>
               </table>
@@ -1075,7 +1214,17 @@ function Step({ n, label }: { n: string; label: string }) {
 }
 
 // A filter field's value list: tick the values to keep.
-function FilterPicker({ all, label, include, onChange }: { all: string[]; label: (k: string) => string; include: string[] | null; onChange: (include: string[] | null) => void }) {
+function FilterPicker({
+  all,
+  label,
+  include,
+  onChange,
+}: {
+  all: string[];
+  label: (k: string) => string;
+  include: string[] | null;
+  onChange: (include: string[] | null) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -1094,14 +1243,24 @@ function FilterPicker({ all, label, include, onChange }: { all: string[]; label:
   };
   return (
     <span className="relative" onClick={(e) => e.stopPropagation()}>
-      <button type="button" onClick={() => setOpen(!open)} className="ml-1 rounded bg-white px-1 text-[10px] text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="ml-1 rounded bg-white px-1 text-[10px] text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"
+      >
         {include ? `${include.length} of ${all.length}` : "All"} ▾
       </button>
       {open && (
         <>
           <span className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <span className="absolute left-0 top-full z-40 mt-1 flex w-64 cursor-default flex-col rounded-lg border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="mb-1.5 rounded border border-slate-200 px-2 py-1 text-xs" autoFocus />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search…"
+              className="mb-1.5 rounded border border-slate-200 px-2 py-1 text-xs"
+              autoFocus
+            />
             <span className="mb-1 flex gap-3">
               <button type="button" onClick={() => onChange(null)} className="text-indigo-600 hover:underline">
                 Select all
