@@ -44,6 +44,7 @@ import {
   distinctValues,
   filterTargets,
   isTime,
+  keyOf,
   labelOf,
   periodRange,
   perYear,
@@ -351,11 +352,115 @@ export function ChartStudio({
   const measureChip = `${chip} border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400`;
   const height = full ? Math.max(400, (typeof window !== "undefined" ? window.innerHeight : 800) - 220) : HEIGHTS[cfg.size];
   const presets = ds.presets.filter((p) => (!p.cfg.values?.some((v) => mOf(v).target) && p.cfg.chart !== "target") || ds.targets);
+  // A quick chart: from the source's defaults (keeping the mode and
+  // period), then its own settings.
+  const applyCfg = (pc: Partial<StudioConfig>) => update((c) => sanitize({ ...defaultConfig(ds), mode: c.mode, period: c.period, ...pc }, ds, defaultConfig(ds)));
   const applyPreset = (name: string) => {
     const p = presets.find((x) => x.name === name);
-    // From the source's defaults (keeping the mode and period), then the preset.
-    if (p) update((c) => sanitize({ ...defaultConfig(ds), mode: c.mode, period: c.period, ...p.cfg }, ds, defaultConfig(ds)));
+    if (p) applyCfg(p.cfg);
   };
+
+  // Advanced: quick charts suited to the chart type picked - its ready-made
+  // ones, then ones made from this source's fields (a donut gets fields with
+  // a few values, a line the months / quarters, a heatmap field x month...).
+  const sig = (c: Partial<StudioConfig>) => JSON.stringify([c.rows ?? [], c.col ?? null, c.values ?? []]);
+  const suggestions = (() => {
+    if (cfg.mode !== "advanced") return [];
+    const type = cfg.chart;
+    const sizes = new Map(dims.filter((d) => !d.grain).map((d) => [d.key, new Set(inPeriod.map((r) => keyOf(r, d.key))).size]));
+    const cats = dims.filter((d) => !d.grain && (sizes.get(d.key) ?? 0) >= 2);
+    const small = cats.filter((d) => (sizes.get(d.key) ?? 0) <= 10);
+    const medium = cats.filter((d) => (sizes.get(d.key) ?? 0) <= 40);
+    const large = [...cats].sort((a, b) => (sizes.get(b.key) ?? 0) - (sizes.get(a.key) ?? 0));
+    const ordered = cats.filter((d) => ds.fields.find((f) => f.key === d.key)?.order);
+    const dateField = cfg.period?.field ?? ds.periodField ?? ds.fields.find((f) => f.date)?.key;
+    const month = dateField ? `${dateField}:month` : null;
+    const quarter = dateField ? `${dateField}:quarter` : null;
+    const year = dateField ? `${dateField}:year` : null;
+    const plain = measures.filter((m) => !m.target);
+    const m1 = plain[0];
+    const m2 = plain.find((m) => m.key !== m1.key && m.additive) ?? plain[1];
+    const out: { name: string; cfg: Partial<StudioConfig> }[] = [];
+    const add = (rows: (string | null | undefined)[], col: string | null | undefined, values: MeasureDef[], extra: Partial<StudioConfig> = {}) => {
+      const r = rows.filter((x): x is string => !!x);
+      if (!r.length || values.some((v) => !v)) return;
+      const name = `${type === "scatter" && values[1] ? `${values[0].short} vs ${values[1].short.toLowerCase()}` : values[0].short} by ${dimLabel(r[0]).toLowerCase()}${r[1] ? ` then ${dimLabel(r[1]).toLowerCase()}` : ""}${col ? ` × ${dimLabel(col).toLowerCase()}` : ""}`;
+      out.push({ name, cfg: { rows: r, col: col ?? null, values: values.map((v) => v.key), chart: type, ...extra } });
+    };
+    switch (type) {
+      case "bar":
+        medium.slice(0, 4).forEach((d) => add([d.key], null, [m1], { top: 20 }));
+        if (small[0] && medium[1]) add([medium[1].key], small[0].key === medium[1].key ? small[1]?.key : small[0].key, [m1]);
+        break;
+      case "column":
+      case "percent":
+        small.slice(0, 3).forEach((d) => add([month], d.key, [m1]));
+        if (small[0]) add([quarter], small[0].key, [m1]);
+        break;
+      case "clustered":
+        medium.slice(0, 2).forEach((d) => add([d.key], year, [m1], { top: 10 }));
+        small.slice(0, 2).forEach((d) => add([quarter], d.key, [m1]));
+        break;
+      case "column3d":
+        small.slice(0, 4).forEach((d) => add([d.key], null, [m1]));
+        break;
+      case "line":
+        add([month], null, [m1]);
+        add([quarter], null, [m1]);
+        small.slice(0, 2).forEach((d) => add([month], d.key, [m1]));
+        if (m2) add([month], null, [m2]);
+        break;
+      case "area":
+        add([month], null, [m1]);
+        small.slice(0, 3).forEach((d) => add([month], d.key, [m1]));
+        break;
+      case "donut":
+      case "pie":
+        small.slice(0, 5).forEach((d) => add([d.key], null, [m1]));
+        break;
+      case "treemap":
+        large.slice(0, 4).forEach((d) => add([d.key], null, [m1], { top: 30 }));
+        break;
+      case "funnel":
+        [...ordered, ...small.filter((d) => !ordered.includes(d))].slice(0, 4).forEach((d) => add([d.key], null, [m1]));
+        break;
+      case "radar":
+        small.filter((d) => (sizes.get(d.key) ?? 0) >= 3).slice(0, 2).forEach((d) => {
+          const other = small.find((x) => x.key !== d.key);
+          add([d.key], other?.key, [m1]);
+          add([d.key], null, [m1]);
+        });
+        break;
+      case "heatmap":
+        medium.slice(0, 3).forEach((d) => add([d.key], month, [m1]));
+        if (small[0]) add([small[0].key], quarter, [m1]);
+        break;
+      case "scatter":
+        if (m2) medium.slice(0, 4).forEach((d) => add([d.key], null, [m1, m2], { top: 50 }));
+        break;
+      case "target": {
+        const td = ds.targetDims ?? [];
+        const actualM = ds.actualMeasure ? mOf(ds.actualMeasure) : undefined;
+        const tVals = actualM ? [actualM, ...measures.filter((m) => m.target)] : [];
+        td.filter((d) => d.endsWith(":month") || d.endsWith(":quarter") || !d.includes(":")).forEach((d) => add([d], null, tVals, { top: 0 }));
+        break;
+      }
+      case "table":
+        small.slice(0, 2).forEach((d) => add([d.key, quarter], null, plain.slice(0, 3)));
+        add([quarter], null, plain.slice(0, 3));
+        medium.slice(0, 2).forEach((d) => add([d.key], year, [m1]));
+        break;
+    }
+    const seen = new Set<string>();
+    return [...presets.filter((p) => p.cfg.chart === type), ...out]
+      .filter((p) => {
+        const k = sig(p.cfg);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .slice(0, 8);
+  })();
 
   const zone = (z: Zone, label: string, icon: ComponentType<{ className?: string }>, children: ReactNode[], hint: string) => {
     const Icon = icon;
@@ -953,6 +1058,29 @@ export function ChartStudio({
               );
             })}
           </div>
+
+          {suggestions.length > 0 && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
+              <p className="mb-1.5 text-[11px] font-semibold text-indigo-800">
+                Suggested {CHARTS.find((c) => c.key === cfg.chart)?.label.toLowerCase()} charts for this data
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((sg) => {
+                  const on = sig(sg.cfg) === sig(cfg);
+                  return (
+                    <button
+                      key={`${sg.name}-${sig(sg.cfg)}`}
+                      type="button"
+                      onClick={() => applyCfg(sg.cfg)}
+                      className={`rounded-full border px-3 py-1 text-xs ${on ? "border-indigo-500 bg-indigo-600 text-white" : "border-indigo-200 bg-white text-slate-700 hover:border-indigo-400 hover:text-indigo-700"}`}
+                    >
+                      {sg.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Options. */}
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
