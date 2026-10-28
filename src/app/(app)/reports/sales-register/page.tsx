@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
+import { buildRegisterRows } from "@/lib/sales-register";
 import { getStudioViews } from "@/lib/studio-views";
 import { PageHeader } from "@/components/ui";
 import { SalesRegisterTable, PeriodFields, type RegisterRow } from "./register-table";
@@ -24,17 +25,6 @@ function parseDate(raw: string | undefined): Date | null {
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : null;
 }
 const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-// Invoice no. from an imported line's key: "<docKey>-<itemCode>-<n>", docKey
-// being "<Txn Code>/<Txn No>" (optionally "~date~customer~salesman").
-function invoiceFromKey(sourceKey: string, itemCode: string): string | null {
-  if (sourceKey.startsWith("deal-item:") || sourceKey.startsWith("manual:") || sourceKey.startsWith("upload:")) return null;
-  const suffix = `-${itemCode}-`;
-  const at = sourceKey.lastIndexOf(suffix);
-  const docKey = (at > 0 ? sourceKey.slice(0, at) : sourceKey).split("~")[0];
-  const no = docKey.split("/").pop();
-  return no && /\d/.test(no) ? no : null;
-}
 
 export default async function SalesRegisterPage({
   searchParams,
@@ -131,61 +121,7 @@ export default async function SalesRegisterPage({
     : [];
   const codeByName = new Map(accounts.map((a) => [a.name, a.code]));
 
-  const rows: RegisterRow[] = [
-    ...lines.map((l) => ({
-      id: l.id,
-      accountName: l.deal?.account?.name ?? l.deal?.title.split(" — ")[0] ?? "—",
-      accountCode: l.deal?.account?.code ?? "",
-      salesPerson: l.owner.name,
-      productCode: l.product.code,
-      product: l.product.model,
-      category: l.product.category,
-      qty: l.qty,
-      rate: l.qty ? Math.round((l.value / l.qty) * 100) / 100 : l.value,
-      amount: l.value,
-      invoiceNo:
-        l.deal?.sourceTxnNo != null ? String(l.deal.sourceTxnNo) : (l.deal?.invoiceNo ?? invoiceFromKey(l.sourceKey, l.product.code) ?? ""),
-      invoiceDate: iso(l.docDate),
-      company: l.deal?.billingCompany ?? "Not recorded",
-      dealId: l.deal?.id ?? null,
-      accountLinked: !l.deal || !!l.deal.account,
-    })),
-    ...bareDeals.map((d) => ({
-      id: d.id,
-      accountName: d.account?.name ?? d.title,
-      accountCode: d.account?.code ?? "",
-      salesPerson: d.owner.name,
-      productCode: "",
-      product: d.title,
-      category: "No products listed",
-      qty: 1,
-      rate: d.value,
-      amount: d.value,
-      invoiceNo: d.invoiceNo ?? "",
-      invoiceDate: iso(d.closedAt!),
-      company: d.billingCompany ?? "Not recorded",
-      dealId: d.id,
-      accountLinked: !!d.account,
-    })),
-    ...billings.map((b) => ({
-      id: b.id,
-      accountName: b.custName,
-      accountCode: codeByName.get(b.custName) ?? "",
-      salesPerson: b.owner.name,
-      productCode: b.itemCode,
-      product: b.itemName,
-      category: "Project & Service",
-      qty: 1,
-      rate: b.value,
-      amount: b.value,
-      invoiceNo: b.txnNo ? String(b.txnNo) : b.docKey,
-      invoiceDate: iso(b.docDate),
-      company: b.billingCompany ?? "Not recorded",
-      dealId: null,
-      billingId: b.id,
-      accountLinked: codeByName.has(b.custName),
-    })),
-  ];
+  const rows: RegisterRow[] = buildRegisterRows(lines, bareDeals, billings, codeByName);
   // Accounts to link unlinked lines to (Head / Coordinator only).
   const linkAccounts =
     all && rows.some((r) => r.accountLinked === false)

@@ -1,0 +1,34 @@
+# Runs the money-path tests (quote pricing & discounts, invoice numbering,
+# Sales Register totals, incentives) and the type check on every push.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: crm_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # A throwaway database in this job only - never the real one.
+      DATABASE_URL: postgresql://test:test@localhost:5432/crm_test
+      TEST_DATABASE_URL: postgresql://test:test@localhost:5432/crm_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen && npx tsc --noEmit -p .
+      - run: npm test

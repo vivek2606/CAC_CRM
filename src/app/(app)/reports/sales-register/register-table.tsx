@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ChevronsUpDown, X } from "lucide-react";
 import { ExportCsvButton } from "@/components/export-csv-button";
+import { registerTotals } from "@/lib/sales-register";
 import { RegisterPivot, type TargetRow } from "./register-pivot";
 import type { StudioView } from "@/components/chart-studio/studio";
 import { BillingCompanyCell } from "../../project-billing/forms";
@@ -121,10 +122,7 @@ export function SalesRegisterTable({
     });
   }, [rows, filters, sortKey, dir]);
 
-  const totals = useMemo(
-    () => ({ qty: visible.reduce((s, r) => s + r.qty, 0), amount: visible.reduce((s, r) => s + r.amount, 0), invoices: new Set(visible.map((r) => r.invoiceNo).filter(Boolean)).size }),
-    [visible],
-  );
+  const totals = useMemo(() => registerTotals(visible), [visible]);
   const sortBy = (k: Key) => {
     if (k === sortKey) setDir(dir === "asc" ? "desc" : "asc");
     else {
