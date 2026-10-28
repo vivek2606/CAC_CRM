@@ -8,6 +8,9 @@ import {
   getAvailableStockByProduct,
   getInTransitByProduct,
   getLatestPriceByProduct,
+  priceChangesSince,
+  quoteProductLines,
+  productIdByModel,
   getQuotableProducts,
 } from "@/lib/pricing";
 import { documentInputSchema } from "@/lib/sales-document";
@@ -149,6 +152,17 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     }
   }
 
+  // A reopened quotation: its products' prices changed since its date (or
+  // changing soon) - the builder warns before old rates are sent.
+  const priceChanges = fromQuote
+    ? (
+        await priceChangesSince(
+          quoteProductLines(fromQuote.data.rows, await productIdByModel()),
+          new Date(`${fromQuote.data.date}T00:00:00Z`),
+        )
+      ).map((c) => ({ description: c.description, from: c.from, to: c.to, on: c.on.toISOString().slice(0, 10), upcoming: c.upcoming }))
+    : [];
+
   // Head / Coordinator pick the sales person; the deal's or saved quote's
   // own sales person is always in the list.
   let salesPeople: { id: string; name: string }[] | null = null;
@@ -200,6 +214,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           signatory={{ name: me?.name ?? user.name ?? "", designation: me?.title ?? "", phone: me?.phone ?? "" }}
           fromDeal={fromQuote ? null : fromDeal}
           fromQuote={fromQuote}
+          priceChanges={priceChanges}
           salesPeople={salesPeople}
           dealOwners={isBackOffice(user) ? await dealOwnerOptions() : null}
           myId={user.id}

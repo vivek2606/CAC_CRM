@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
+import { getQuoteFollowUps } from "@/lib/quote-followups";
 
-type Tab = "new" | "saved" | "report" | "approvals";
+type Tab = "new" | "saved" | "followups" | "report" | "approvals";
 
-// New quotation (the builder) / Saved quotations / Quote-to-win report /
-// (Head) discount approvals, with how many are waiting.
+// New quotation (the builder) / Saved quotations / Follow-ups due /
+// Quote-to-win report / (Head) discount approvals, with how many are waiting.
 export async function QuotationTabs({ active }: { active: Tab }) {
   const user = await requireUser();
-  const waiting = user.role === "HEAD" ? await prisma.quotation.count({ where: { discountStatus: "pending" } }) : null;
+  const [waiting, followUps] = await Promise.all([
+    user.role === "HEAD" ? prisma.quotation.count({ where: { discountStatus: "pending" } }) : null,
+    getQuoteFollowUps(isBackOffice(user) ? null : [user.id], { prices: false }),
+  ]);
   const tab = (key: Tab, href: string, label: string, badge?: number) => (
     <Link
       href={href}
@@ -22,6 +26,7 @@ export async function QuotationTabs({ active }: { active: Tab }) {
     <div className="inline-flex flex-wrap rounded-lg bg-slate-100 p-1">
       {tab("new", "/quotations", "New quotation")}
       {tab("saved", "/quotations/saved", "Saved quotations")}
+      {tab("followups", "/quotations/follow-ups", "Follow-ups", followUps.length)}
       {tab("report", "/quotations/report", "Report")}
       {waiting != null && tab("approvals", "/quotations/approvals", "Approvals", waiting)}
     </div>

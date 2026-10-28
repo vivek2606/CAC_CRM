@@ -651,6 +651,9 @@ model Pricelist {
   // goods cost to land, not what to charge, so it must never surface as
   // the suggested/reference selling price a rep quotes from.
   landedCost    Float?
+  // The date this price applies from (uploads can be made ahead of time);
+  // until then the earlier price stays current.
+  effectiveFrom DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -760,6 +763,16 @@ model Quotation {
   discountRequestedAt DateTime?
   discountDecidedAt   DateTime?
   discountDecidedById String?
+
+  // Sent to the customer by WhatsApp / email from the CRM (the first time).
+  sentAt         DateTime?
+  // Follow-up reminders: a quote not converted 7 / 14 days after it went out
+  // shows on the sales person's dashboard and the Head's notifications until
+  // it's followed up (next follow-up date) or marked lost.
+  lastFollowUpAt DateTime?
+  nextFollowUpAt DateTime?
+  outcome        String?  // "lost"
+  outcomeNote    String?
 
   @@index([dealId])
   @@index([ownerId])

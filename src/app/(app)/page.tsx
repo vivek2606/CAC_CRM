@@ -17,6 +17,8 @@ import { getYtdSummary, achievementPct } from "@/lib/ytd";
 import { getProjectBillings } from "@/lib/project-billing";
 import { getLeadStats } from "@/lib/lead-stats";
 import { getMonthSales } from "@/lib/month-sales";
+import { getQuoteFollowUps, followUpItems, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
+import { FollowUpList } from "./quotations/follow-ups/follow-up-list";
 
 const TREND_MONTHS = 6;
 const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -44,6 +46,11 @@ export default async function DashboardPage() {
     ? await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } })
     : [{ id: user.id, name: user.name ?? "Me" }];
   const repIds = reps.map((r) => r.id);
+
+  // A sales person's quotations due a follow-up (the Head / Coordinator get
+  // the team's in their notifications and the Follow-ups tab).
+  const followUps = team ? [] : await getQuoteFollowUps([user.id]);
+  const followUpRed = followUps.filter((q) => q.level === "red").length;
 
   const [targets, wonDeals, projects, openDeals, ytd, leadStats, upcoming, overdueCount, myLeads, leadStatusGroups, pipeStart, pipeNew, pipeLost, pipeWon] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: months } }, select: { month: true, targetValue: true } }),
@@ -196,6 +203,28 @@ export default async function DashboardPage() {
             accent="rose"
           />
         </div>
+
+        {followUps.length > 0 && (
+          <Card className="p-5">
+            <div className="mb-1 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Quotations to follow up</h2>
+                <Badge bg="bg-amber-100" text="text-amber-800">
+                  {followUps.length}
+                </Badge>
+                {followUpRed > 0 && (
+                  <Badge bg="bg-rose-100" text="text-rose-700">
+                    {followUpRed} over {FOLLOW_UP_RED_DAYS} days
+                  </Badge>
+                )}
+              </div>
+              <Link href="/quotations/follow-ups" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                View all <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <FollowUpList items={followUpItems(followUps.slice(0, 5))} />
+          </Card>
+        )}
 
         <Card className="p-5">
           <div className="flex items-center justify-between mb-1">

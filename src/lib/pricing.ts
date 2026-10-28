@@ -1,20 +1,72 @@
 import { prisma } from "@/lib/prisma";
 
-// Each product's current reference price - the most recent Pricelist entry's
-// landed price, falling back to dealer price when landed isn't set. Used
-// both to auto-fill a line item's rate when a product is picked, and as the
-// "catalog price" a deal's itemized total is compared against for discount
-// approval.
-export async function getLatestPriceByProduct(): Promise<Map<string, number>> {
-  const recentPrices = await prisma.pricelist.findMany({
-    orderBy: { month: "desc" },
-    select: { productId: true, landedPrice: true, dealerPrice: true },
-  });
+// Each product's current reference price - the latest Pricelist entry in
+// effect today (its "effective from" date, else the 1st of its month; one
+// uploaded ahead of time waits for its date), landed price first, falling
+// back to dealer price when landed isn't set. Used both to auto-fill a line
+// item's rate when a product is picked, and as the "catalog price" a deal's
+// itemized total is compared against for discount approval.
+export async function getLatestPriceByProduct(asOf = new Date()): Promise<Map<string, number>> {
+  const history = await getPriceHistory();
   const map = new Map<string, number>();
-  for (const p of recentPrices) {
-    if (!map.has(p.productId)) map.set(p.productId, p.landedPrice ?? p.dealerPrice);
+  for (const [productId, entries] of history) {
+    const p = priceAt(entries, asOf);
+    if (p) map.set(productId, p.price);
   }
   return map;
+}
+
+// A product's prices over time, oldest first: from when each applies, and
+// the quote-facing price (landed, else dealer).
+export type PricePoint = { from: Date; price: number };
+const firstOfMonth = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+export async function getPriceHistory(productIds?: string[]): Promise<Map<string, PricePoint[]>> {
+  const rows = await prisma.pricelist.findMany({
+    where: productIds ? { productId: { in: productIds } } : {},
+    select: { productId: true, month: true, effectiveFrom: true, landedPrice: true, dealerPrice: true },
+  });
+  const map = new Map<string, PricePoint[]>();
+  for (const r of rows) {
+    const list = map.get(r.productId) ?? [];
+    list.push({ from: r.effectiveFrom ?? firstOfMonth(r.month), price: r.landedPrice ?? r.dealerPrice });
+    map.set(r.productId, list);
+  }
+  for (const list of map.values()) list.sort((a, b) => a.from.getTime() - b.from.getTime());
+  return map;
+}
+// The price in effect on a date (a product with only later prices: its
+// first one).
+export function priceAt(points: PricePoint[], date: Date): PricePoint | null {
+  let cur: PricePoint | null = null;
+  for (const p of points) if (p.from.getTime() <= date.getTime()) cur = p;
+  return cur ?? points[0] ?? null;
+}
+
+// For an open quotation's products: prices changed since its date, and
+// changes coming up (uploaded ahead of time) - so old rates aren't sent.
+export type PriceChange = { productId: string; description: string; from: number; to: number; on: Date; upcoming: boolean };
+export async function priceChangesSince(lines: { productId: string; description: string }[], quoteDate: Date, now = new Date()): Promise<PriceChange[]> {
+  const ids = [...new Set(lines.map((l) => l.productId))];
+  if (!ids.length) return [];
+  return priceChangesIn(await getPriceHistory(ids), lines, quoteDate, now);
+}
+// The same, from price history already loaded (many quotations at once).
+export function priceChangesIn(history: Map<string, PricePoint[]>, lines: { productId: string; description: string }[], quoteDate: Date, now = new Date()): PriceChange[] {
+  const out: PriceChange[] = [];
+  const seen = new Set<string>();
+  for (const l of lines) {
+    if (seen.has(l.productId)) continue;
+    seen.add(l.productId);
+    const points = history.get(l.productId) ?? [];
+    const then = priceAt(points, quoteDate);
+    const current = priceAt(points, now);
+    if (then && current && Math.abs(current.price - then.price) > 0.005)
+      out.push({ productId: l.productId, description: l.description, from: then.price, to: current.price, on: current.from, upcoming: false });
+    const next = points.find((p) => p.from.getTime() > now.getTime());
+    if (next && current && Math.abs(next.price - current.price) > 0.005)
+      out.push({ productId: l.productId, description: l.description, from: current.price, to: next.price, on: next.from, upcoming: true });
+  }
+  return out;
 }
 
 // Each product's current stock: its latest opening stock (Stock & Price
@@ -139,4 +191,26 @@ export async function getAllTentativePrices(): Promise<{ model: string; category
     select: { model: true, category: true, dealerPrice: true },
     orderBy: { model: "asc" },
   });
+}
+
+// A saved quotation's product lines, for price checks: the product each
+// line was picked from (older quotes: matched by model), a modular outdoor's
+// modules, never custom lines or tentative prices.
+type QuoteRowLike = { kind: string; productId?: string | null; description?: string; modules?: { productId: string; model: string }[] };
+export function quoteProductLines(rows: QuoteRowLike[], idByModel: Map<string, string>): { productId: string; description: string }[] {
+  const out: { productId: string; description: string }[] = [];
+  for (const r of rows) {
+    if (r.kind !== "item") continue;
+    if (r.modules?.length) {
+      for (const m of r.modules) if (!m.productId.startsWith("tentative:")) out.push({ productId: m.productId, description: m.model });
+      continue;
+    }
+    const id = r.productId ?? idByModel.get((r.description ?? "").trim().toLowerCase());
+    if (id && !id.startsWith("tentative:")) out.push({ productId: id, description: r.description ?? "" });
+  }
+  return out;
+}
+export async function productIdByModel(): Promise<Map<string, string>> {
+  const products = await prisma.product.findMany({ select: { id: true, model: true } });
+  return new Map(products.map((p) => [p.model.trim().toLowerCase(), p.id]));
 }

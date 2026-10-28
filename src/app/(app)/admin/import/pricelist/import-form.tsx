@@ -23,6 +23,16 @@ export function ImportForm() {
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1" title="Upload prices ahead of time: until this date the earlier prices stay current, and open quotes are warned of the change">
+            Prices effective from (optional)
+          </label>
+          <input
+            type="date"
+            name="effectiveFrom"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
         <input
           type="file"
           name="file"

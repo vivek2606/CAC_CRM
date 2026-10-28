@@ -24,6 +24,15 @@ export type ImportSummary = {
 
 export type ImportState = { error?: string; summary?: ImportSummary };
 
+// "Prices effective from" (optional): prices uploaded ahead of time apply
+// from this date; empty = from the 1st of their month.
+function effectiveFromOf(formData: FormData): Date | null | "invalid" {
+  const raw = formData.get("effectiveFrom");
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const d = new Date(`${raw.trim()}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? "invalid" : d;
+}
+
 async function importPriceMasterUnlabelled(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
   await requireBackOffice();
 
@@ -33,6 +42,9 @@ async function importPriceMasterUnlabelled(_prevState: ImportState | undefined, 
   }
   const month = parseMonthInput(monthRaw);
   if (!month) return { error: "Please choose a valid month." };
+
+  const effectiveFrom = effectiveFromOf(formData);
+  if (effectiveFrom === "invalid") return { error: "Pick a valid 'effective from' date." };
 
   const rate = await prisma.monthlyExchangeRate.findUnique({ where: { month } });
   if (!rate) {
@@ -85,8 +97,8 @@ async function importPriceMasterUnlabelled(_prevState: ImportState | undefined, 
     const landedPrice = entry.dealerPrice * rate.rate;
     await prisma.pricelist.upsert({
       where: { productId_month: { productId, month } },
-      create: { productId, month, dealerPrice: entry.dealerPrice, landedPrice },
-      update: { dealerPrice: entry.dealerPrice, landedPrice },
+      create: { productId, month, dealerPrice: entry.dealerPrice, landedPrice, effectiveFrom },
+      update: { dealerPrice: entry.dealerPrice, landedPrice, effectiveFrom },
     });
     priceEntriesSet++;
   }

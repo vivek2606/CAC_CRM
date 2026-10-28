@@ -4,6 +4,7 @@ import { FileDown, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { LinkDealButton } from "./link-deal-button";
 import { UseQuoteProductsButton } from "./use-quote-products-button";
+import { SendQuoteButton } from "./send-quote-button";
 
 export type SavedQuoteRow = {
   id: string;
@@ -124,6 +125,7 @@ export function SavedQuotesTable({
                       <span className="sr-only">Excel</span>
                     </a>
                   )}
+                  <SendQuoteButton quoteId={q.id} />
                   <Link href={`/quotations?quote=${q.id}&revise=1`} className={link} title="Copy into a new quotation with a new reference number">
                     Revise
                   </Link>

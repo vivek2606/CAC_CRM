@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { NOT_DRAFT } from "@/lib/quote-draft";
+import { getQuoteFollowUps, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
 import { isBackOffice, type SessionUser } from "@/lib/rbac";
 import { computeDealDiscount } from "@/lib/discount";
 import { getLatestPriceByProduct } from "@/lib/pricing";
@@ -14,8 +14,6 @@ export type Notifications = { total: number; groups: NotificationGroup[]; pushKe
 const STALE_DAYS = 14;
 // An open deal in the same stage this long: move it on, or close it.
 const STUCK_DAYS = 30;
-// A quotation on an open deal with no activity since: follow it up.
-const QUOTE_FOLLOW_UP_DAYS = 7;
 const SHOW = 5;
 const day = 86400000;
 const fmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -34,9 +32,8 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   const groups: NotificationGroup[] = [];
   const who = (name: string) => (team ? ` · ${name}` : "");
 
-  const quoteBefore = new Date(now.getTime() - QUOTE_FOLLOW_UP_DAYS * day);
   const stuckBefore = new Date(now.getTime() - STUCK_DAYS * day);
-  const [tasks, pastClose, quiet, noInvoice, quotes, stuck] = await Promise.all([
+  const [tasks, pastClose, quiet, noInvoice, followUps, stuck] = await Promise.all([
     prisma.activity.findMany({
       where: { ownerId: user.id, status: "PENDING", dueAt: { lt: endOfToday } },
       orderBy: { dueAt: "asc" },
@@ -65,19 +62,8 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       select: { id: true, title: true, owner: { select: { name: true } } },
       take: 200,
     }),
-    // The latest quotation per open deal, sent 7+ days ago, with no
-    // activity on the deal since.
-    prisma.quotation.findMany({
-      where: {
-        ...(team ? {} : { ownerId: user.id }),
-        ...NOT_DRAFT,
-        updatedAt: { lt: quoteBefore, gte: new Date(now.getTime() - 60 * day) },
-        deal: { stage: { notIn: ["WON", "LOST"] }, activities: { none: { createdAt: { gte: quoteBefore } } } },
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { ref: true, updatedAt: true, dealId: true, deal: { select: { title: true } }, owner: { select: { name: true } } },
-      take: 300,
-    }),
+    // Quotations sent and not converted, due a follow-up (quote-followups.ts).
+    getQuoteFollowUps(team ? null : [user.id], { now }),
     // Same stage for 30+ days (deals from before the stage date was kept:
     // since they were created).
     prisma.deal.findMany({
@@ -124,20 +110,33 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       items: quiet.slice(0, SHOW).map((d) => ({ label: d.title, sub: `Last touched ${fmt(d.updatedAt)}${who(d.owner.name)}`, href: `/deals/${d.id}` })),
     });
   }
-  // One reminder per deal (its latest quotation).
-  const seenDeals = new Set<string>();
-  const followUps = quotes.filter((q) => q.dealId && !seenDeals.has(q.dealId) && seenDeals.add(q.dealId));
   if (followUps.length) {
+    const red = followUps.filter((q) => q.level === "red").length;
     groups.push({
       key: "quoteFollowUp",
-      label: `Quotations with no follow-up for ${QUOTE_FOLLOW_UP_DAYS}+ days`,
+      label: `Quotations due a follow-up${red ? ` (${red} over ${FOLLOW_UP_RED_DAYS} days)` : ""}`,
       count: followUps.length,
-      href: "/quotations/saved",
+      href: "/quotations/follow-ups",
       items: followUps.slice(0, SHOW).map((q) => ({
-        label: q.deal?.title ?? q.ref,
-        sub: `${q.ref} sent ${fmt(q.updatedAt)}${who(q.owner.name)}`,
-        href: `/deals/${q.dealId}`,
+        label: q.dealTitle ?? q.customerName,
+        sub: `${q.ref} sent ${fmt(q.sentOn)} · ${q.ageDays} days${who(q.ownerName)}`,
+        href: "/quotations/follow-ups",
       })),
+    });
+  }
+  // Prices changed since an open quotation went out - revise before re-sending.
+  const repriced = followUps.filter((q) => q.priceChanges.length);
+  if (repriced.length) {
+    groups.push({
+      key: "quotePrices",
+      label: `Prices changed on ${repriced.length} open quotation${repriced.length === 1 ? "" : "s"}`,
+      count: repriced.length,
+      href: "/quotations/follow-ups",
+      items: repriced.slice(0, SHOW).map((q) => {
+        const c = q.priceChanges[0];
+        const verb = c.upcoming ? (c.to > c.from ? "increases" : "drops") : c.to > c.from ? "increased" : "dropped";
+        return { label: `${q.ref} - ${q.customerName}`, sub: `${c.description} ${verb} on ${fmt(c.on)}${q.priceChanges.length > 1 ? ` (+${q.priceChanges.length - 1} more)` : ""}${who(q.ownerName)}`, href: `/quotations?quote=${q.id}` };
+      }),
     });
   }
   if (stuck.length) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { SendQuoteButton } from "./send-quote-button";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, GripVertical, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
@@ -179,6 +180,7 @@ export function QuotationBuilder({
   isHead,
   canExcel,
   customerAccounts = [],
+  priceChanges = [],
 }: {
   options: ModelOption[];
   companies: CompanyOption[];
@@ -200,6 +202,9 @@ export function QuotationBuilder({
   canExcel: boolean;
   // Accounts to suggest as the customer is typed.
   customerAccounts?: CustomerAccount[];
+  // A saved quotation / draft reopened: its products' price changes since
+  // its date, and changes coming up (so old rates aren't sent).
+  priceChanges?: { description: string; from: number; to: number; on: string; upcoming: boolean }[];
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   // The Head may discount anything; for everyone else a no-stock item at
@@ -884,6 +889,25 @@ export function QuotationBuilder({
               </Link>
             </>
           )}
+        </div>
+      )}
+      {priceChanges.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Prices have changed - check the rates before sending this quotation</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+            {priceChanges.map((c, i) => {
+              const day = c.on.split("-").reverse().join("/");
+              const up = c.to > c.from;
+              return (
+                <li key={i}>
+                  <b>{c.description}</b>:{" "}
+                  {c.upcoming
+                    ? `price ${up ? "increases" : "drops"} to ${naira(c.to)} on ${day} (now ${naira(c.from)})`
+                    : `price ${up ? "increased" : "dropped"} from ${naira(c.from)} to ${naira(c.to)} on ${day}`}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
       {!dirty && !prefilled && hasSavedDraft && (
@@ -1697,6 +1721,8 @@ export function QuotationBuilder({
               Back to deal
             </Link>
           )}
+          {/* Issued and downloaded: send the saved quotation to the customer. */}
+          {isIssuedQuoteRef(d.ref) && !draftId && <SendQuoteButton quoteId={d.ref} variant="button" />}
           <button
             type="button"
             disabled={busy != null}
