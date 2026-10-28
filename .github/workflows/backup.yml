@@ -14,8 +14,10 @@
 name: Database backup
 
 on:
-  schedule:
-    - cron: "30 1 * * *" # 01:30 UTC = 02:30 Lagos, every day
+  # On hold: the nightly schedule is off until the two secrets below are set.
+  # To start daily backups, remove the "#" from the two schedule lines.
+  # schedule:
+  #   - cron: "30 1 * * *" # 01:30 UTC = 02:30 Lagos, every day
   workflow_dispatch: # "Run workflow" button, for a backup on demand
 
 jobs:

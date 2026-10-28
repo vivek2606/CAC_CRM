@@ -16,6 +16,10 @@ Two layers protect the CRM's data:
 
 ## One-time setup
 
+> **Currently on hold:** the nightly schedule in `.github/workflows/backup.yml`
+> is switched off. To start: add the two secrets below, then remove the `#`
+> from the two `schedule` lines in that file (or ask for it to be done).
+
 1. In GitHub: *Settings -> Secrets and variables -> Actions -> New repository secret*:
    - `PROD_DATABASE_URL` - the live connection string from Neon
      (*Connection details*, **un-tick "Connection pooling"** so the host has no
