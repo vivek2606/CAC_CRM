@@ -174,13 +174,20 @@ export function ChartStudio({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after mount (localStorage isn't there on the server)
     if (saved) setCfg(sanitize(saved, dsOf(saved.dataset), defaultConfig(dsOf(saved.dataset))));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const update = (f: (c: StudioConfig) => StudioConfig) =>
+  // A change by the user: remembered here, and the host told after the
+  // render (not during it).
+  const [changes, setChanges] = useState(0);
+  const update = (f: (c: StudioConfig) => StudioConfig) => {
     setCfg((c) => {
       const next = f(c);
       if (storageKey) store(storageKey, next);
-      onChange?.(next);
       return next;
     });
+    setChanges((n) => n + 1);
+  };
+  useEffect(() => {
+    if (changes) onChange?.(cfg);
+  }, [changes]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (patch: Partial<StudioConfig>) => update((c) => ({ ...c, ...patch }));
 
   const ds = dsOf(cfg.dataset);
@@ -235,7 +242,7 @@ export function ChartStudio({
     onDragStart: (e: DragEvent) => {
       e.dataTransfer.setData(MIME, JSON.stringify(d));
       e.dataTransfer.effectAllowed = "move";
-      setDragging(d);
+      setTimeout(() => setDragging(d), 0);
     },
     onDragEnd: () => setDragging(null),
   });
@@ -410,8 +417,39 @@ export function ChartStudio({
   const range = periodRange(cfg.period);
   const dateFields = ds.fields.filter((f) => f.date);
 
+  // While dragging: the drop boxes pinned to the top of the screen, so a
+  // field can be dropped wherever the page is scrolled to.
+  const dropBar = dragging && (
+    <div className="fixed inset-x-0 top-3 z-50 flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto grid w-full max-w-3xl grid-cols-2 gap-2 rounded-xl border border-indigo-200 bg-white/95 p-2 shadow-xl backdrop-blur sm:grid-cols-4">
+        {(
+          [
+            ["filters", "Filters", Filter],
+            ["rows", "Rows", Rows3],
+            ["col", "Columns", Columns3],
+            ["values", "Values", Sigma],
+          ] as const
+        ).map(([z, label, Icon]) => {
+          const ok = accepts(z);
+          return (
+            <div
+              key={z}
+              onDragOver={(e) => ok && e.preventDefault()}
+              onDrop={drop(z)}
+              className={`flex items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-3 py-3 text-xs font-semibold ${ok ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-slate-100 text-slate-300"}`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              Drop in {label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white">
+      {dropBar}
       {/* Header: mode, help, quick charts, views, the host's buttons. */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
         <h2 className="mr-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
@@ -533,7 +571,11 @@ export function ChartStudio({
 
       <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-[210px_1fr]">
         {/* Side panel: source, period, the host's filters, the fields. */}
-        <div onDragOver={(e) => dragging?.from && e.preventDefault()} onDrop={drop(null)} className="space-y-3">
+        <div
+          onDragOver={(e) => dragging?.from && e.preventDefault()}
+          onDrop={drop(null)}
+          className="space-y-3 md:sticky md:top-2 md:max-h-[calc(100vh-1rem)] md:self-start md:overflow-y-auto md:pr-1"
+        >
           {datasets.length > 1 && (
             <label className="block rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
               <span className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
