@@ -5,15 +5,18 @@ import { DEAL_STAGE_LABELS } from "@/lib/constants";
 // accounts - with every field to group by and the values to show. The
 // records themselves come from team-studio-data.ts (labels already applied).
 
+// Project billing rows sit in the deals source as their own stage / status.
+const BILLING = "Project & Service billing";
+
 const M = (key: string, label: string, short: string, value: MeasureDef["value"], o: Partial<MeasureDef> = {}): MeasureDef => ({ key, label, short, value, ...o });
 
 export const DEALS: DatasetDef = {
   key: "deals",
-  label: "Deals (pipeline & won)",
-  noun: "deals",
+  label: "Deals & project billing",
+  noun: "records (deals + project billings)",
   fields: [
-    { key: "stage", label: "Stage", order: Object.values(DEAL_STAGE_LABELS) },
-    { key: "status", label: "Open / Won / Lost", order: ["Open", "Won", "Lost"] },
+    { key: "stage", label: "Stage", order: [...Object.values(DEAL_STAGE_LABELS), BILLING] },
+    { key: "status", label: "Open / Won / Lost / Project billing", order: ["Open", "Won", "Lost", "Project billing"] },
     { key: "owner", label: "Sales person" },
     { key: "account", label: "Account" },
     { key: "accountCode", label: "Account code" },
@@ -32,38 +35,42 @@ export const DEALS: DatasetDef = {
     { key: "closedAt", label: "Closed", date: true },
   ],
   measures: [
-    M("count", "Count of deals", "Deals", (a) => a.n, { additive: true }),
+    M("count", "Count of deals", "Deals", (a) => sum(a, "isDeal"), { additive: true }),
     M("value", "Sum of deal value", "Value", (a) => sum(a, "value"), { money: true, additive: true }),
-    M("avgValue", "Average deal value", "Avg deal", (a) => ratio(sum(a, "value"), a.n), { money: true }),
+    M("avgValue", "Average deal value", "Avg deal", (a) => ratio(sum(a, "value"), sum(a, "isDeal")), { money: true }),
     M("open", "Open deals", "Open", (a) => sum(a, "open"), { additive: true }),
     M("openValue", "Open pipeline value", "Pipeline", (a) => sum(a, "openValue"), { money: true, additive: true }),
     M("weighted", "Weighted pipeline (value × probability)", "Weighted", (a) => sum(a, "weighted"), { money: true, additive: true }),
     M("won", "Won deals", "Won", (a) => sum(a, "won"), { additive: true }),
     M("wonValue", "Won value", "Won value", (a) => sum(a, "wonValue"), { money: true, additive: true }),
     M("avgWon", "Average won deal", "Avg won", (a) => ratio(sum(a, "wonValue"), sum(a, "won")), { money: true }),
+    M("billing", "Project billing value", "Project billing", (a) => sum(a, "billing"), { money: true, additive: true }),
+    M("achieved", "Achieved (won value + project billing)", "Achieved", (a) => sum(a, "wonValue") + sum(a, "billing"), { money: true, additive: true }),
     M("lost", "Lost deals", "Lost", (a) => sum(a, "lost"), { additive: true }),
     M("lostValue", "Lost value", "Lost value", (a) => sum(a, "lostValue"), { money: true, additive: true }),
     M("winRate", "Win rate % (won ÷ won + lost)", "Win rate", (a) => ratio(sum(a, "won"), sum(a, "won") + sum(a, "lost"), 100), { pct: true }),
     M("cycle", "Average sales cycle (days, closed deals)", "Cycle days", (a) => ratio(sum(a, "cycleDays"), sum(a, "closed"))),
     M("overdue", "Open deals past expected close", "Overdue", (a) => sum(a, "overdue"), { additive: true }),
     M("target", "Monthly target", "Target", (a) => a.target, { money: true, target: true }),
-    M("achPct", "Achievement % (won value ÷ target)", "Achieved %", (a) => ratio(sum(a, "wonValue"), a.target, 100), { pct: true, target: true }),
-    M("toGo", "Balance to target (target - won value)", "Balance", (a) => a.target - sum(a, "wonValue"), { money: true, target: true }),
+    M("achPct", "Achievement % (achieved ÷ target)", "Achieved %", (a) => ratio(sum(a, "wonValue") + sum(a, "billing"), a.target, 100), { pct: true, target: true }),
+    M("toGo", "Balance to target (target - achieved)", "Balance", (a) => a.target - sum(a, "wonValue") - sum(a, "billing"), { money: true, target: true }),
   ],
-  sums: ["value", "open", "openValue", "weighted", "won", "wonValue", "lost", "lostValue", "cycleDays", "closed", "overdue"],
+  sums: ["isDeal", "value", "open", "openValue", "weighted", "won", "wonValue", "billing", "lost", "lostValue", "cycleDays", "closed", "overdue"],
   targetDims: ["owner", "closedAt:month", "closedAt:quarter", "closedAt:year"],
-  actualMeasure: "wonValue",
+  // Achieved = won deals + project billing under the sales person's name
+  // (as on the Overview and the Targets page).
+  actualMeasure: "achieved",
   periodField: "createdAt",
   defaultCfg: { rows: ["stage"], values: ["count", "value"], chart: "column" },
   presets: [
     { name: "Open pipeline by stage - funnel", cfg: { rows: ["stage"], values: ["openValue", "open", "weighted"], chart: "funnel", period: { field: "createdAt", preset: "all" } } },
     { name: "Open pipeline by sales person", cfg: { rows: ["owner"], col: "stage", values: ["openValue"], chart: "bar", filters: [], top: 0 } },
-    { name: "Won value by month", cfg: { rows: ["closedAt:month"], values: ["wonValue", "won"], chart: "column", period: { field: "closedAt", preset: "last12m" } } },
-    { name: "Target vs achievement by sales person", cfg: { rows: ["owner"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", top: 0, period: { field: "closedAt", preset: "thisYear" } } },
-    { name: "Won value by quarter", cfg: { rows: ["closedAt:quarter"], values: ["wonValue", "won", "winRate"], chart: "column", period: { field: "closedAt", preset: "all" } } },
-    { name: "Quarterly target vs achievement", cfg: { rows: ["closedAt:quarter"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
+    { name: "Achieved by month (won + project billing)", cfg: { rows: ["closedAt:month"], values: ["achieved", "wonValue", "billing"], chart: "column", period: { field: "closedAt", preset: "last12m" } } },
+    { name: "Target vs achievement by sales person", cfg: { rows: ["owner"], values: ["achieved", "target", "achPct", "toGo"], chart: "target", top: 0, period: { field: "closedAt", preset: "thisYear" } } },
+    { name: "Achieved by quarter (won + project billing)", cfg: { rows: ["closedAt:quarter"], values: ["achieved", "wonValue", "billing", "winRate"], chart: "column", period: { field: "closedAt", preset: "all" } } },
+    { name: "Quarterly target vs achievement", cfg: { rows: ["closedAt:quarter"], values: ["achieved", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
     { name: "Quarter on quarter by sales person", cfg: { rows: ["owner"], col: "closedAt:quarter", values: ["wonValue"], chart: "clustered", top: 0, period: { field: "closedAt", preset: "last12m" } }, simple: false },
-    { name: "Monthly target vs achievement", cfg: { rows: ["closedAt:month"], values: ["wonValue", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
+    { name: "Monthly target vs achievement", cfg: { rows: ["closedAt:month"], values: ["achieved", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
     { name: "Win rate by sales person", cfg: { rows: ["owner"], values: ["winRate", "won", "lost"], chart: "bar", top: 0, period: { field: "closedAt", preset: "last12m" } } },
     { name: "Why we lose - donut", cfg: { rows: ["lostReason"], values: ["lost", "lostValue"], chart: "donut", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },
     { name: "Lost to which brand", cfg: { rows: ["lostTo"], values: ["lost", "lostValue"], chart: "bar", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },

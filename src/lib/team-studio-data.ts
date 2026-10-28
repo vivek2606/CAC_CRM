@@ -31,7 +31,7 @@ export type TeamStudioData = { deals: Rec[]; leads: Rec[]; activities: Rec[]; ac
 export async function getTeamStudioData(now = new Date()): Promise<TeamStudioData> {
   const since = new Date(Date.UTC(now.getUTCFullYear() - YEARS, 0, 1));
   const today = day(now)!;
-  const [deals, leads, activities, accounts, targets] = await Promise.all([
+  const [deals, leads, activities, accounts, targets, billings] = await Promise.all([
     prisma.deal.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { closedAt: { gte: since } }, { stage: { notIn: ["WON", "LOST"] } }] },
       select: {
@@ -93,6 +93,12 @@ export async function getTeamStudioData(now = new Date()): Promise<TeamStudioDat
       },
     }),
     prisma.target.findMany({ where: { month: { gte: since } }, select: { month: true, targetValue: true, user: { select: { name: true } } } }),
+    // Project billing under the sales persons' names counts as achieved (as
+    // on the Overview: active Sales Managers).
+    prisma.projectBilling.findMany({
+      where: { docDate: { gte: since }, owner: { isActive: true, title: "Sales Manager" } },
+      select: { docDate: true, value: true, custName: true, billingCompany: true, owner: { select: { name: true } } },
+    }),
   ]);
   // A deal's lead source, from the lead it was converted from.
   const sourceOf = new Map(
@@ -136,6 +142,30 @@ export async function getTeamStudioData(now = new Date()): Promise<TeamStudioDat
       overdue: flag(open && !!d.expectedCloseDate && day(d.expectedCloseDate)! < today),
     };
   });
+  for (const r of dealRecs) r.isDeal = 1;
+  for (const b of billings)
+    dealRecs.push({
+      stage: "Project & Service billing",
+      status: "Project billing",
+      owner: b.owner.name,
+      account: b.custName,
+      accountCode: "",
+      source: "",
+      origin: "Project billing",
+      equipment: "",
+      segment: "",
+      competitor: "",
+      lostReason: "",
+      lostTo: "",
+      entity: b.billingCompany ?? "Not recorded",
+      paymentTerms: "",
+      size: "",
+      createdAt: day(b.docDate),
+      expectedClose: null,
+      closedAt: day(b.docDate),
+      isDeal: 0,
+      billing: b.value,
+    });
   const leadRecs: Rec[] = leads.map((l) => ({
     status: LEAD_STATUS_LABELS[l.status],
     source: LEAD_SOURCE_LABELS[l.source],

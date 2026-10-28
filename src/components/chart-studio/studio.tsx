@@ -1158,7 +1158,7 @@ export function ChartStudio({
             </p>
             {usesTarget && pivot.targetOk && (
               <p className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
-                Targets are the monthly targets per sales person (whole months) - filters on other fields don&apos;t change them.
+                Achieved = won sales + project billing under the sales person&apos;s name. Targets are the monthly targets per sales person (whole months) - filters on other fields don&apos;t change them.
               </p>
             )}
             {full ? (
