@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { buildDocument, documentInputSchema, type SalesDocument } from "@/lib/sales-document";
+import { withChangeReason } from "@/lib/change-log";
 import { saveQuotation, DRAFT_TYPE } from "@/lib/saved-quotes";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 import { coveredByApproval, excessDiscounts, noStockDiscounts } from "@/lib/quote-discount";
@@ -54,7 +55,7 @@ export async function documentFromRequest(request: Request): Promise<{ doc: Sale
     return { error: Response.json({ error: "Only the Head of Sales can prepare a quote below the permissible discount." }, { status: 403 }) };
   }
 
-  const saveError = await saveQuotation(user, parsed.data, doc, { dealId: str(extra.dealId), ownerId: str(extra.ownerId) });
+  const saveError = await withChangeReason("Downloaded", () => saveQuotation(user, parsed.data, doc, { dealId: str(extra.dealId), ownerId: str(extra.ownerId) }));
   if (saveError) return { error: Response.json({ error: saveError }, { status: 409 }) };
   // Saved as the quotation now - the draft it was made from goes.
   const draftId = str(extra.draftId);

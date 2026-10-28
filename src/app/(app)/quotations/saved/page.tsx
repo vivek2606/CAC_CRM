@@ -117,7 +117,7 @@ export default async function SavedQuotationsPage({ searchParams }: { searchPara
             <EmptyState title="No saved quotations" description="A quotation is saved here the first time it's downloaded." />
           ) : (
             <>
-              <SavedQuotesTable quotes={quotes} canExcel={canDownloadQuoteExcel(user)} canDelete={user.role === "HEAD"} />
+              <SavedQuotesTable quotes={quotes} canExcel={canDownloadQuoteExcel(user)} canDelete={user.role === "HEAD"} canSeeHistory={user.role === "HEAD"} />
               {total > quotes.length && <p className="mt-3 text-xs text-slate-500">Showing the latest {quotes.length} of {total} - search to narrow down.</p>}
             </>
           )}

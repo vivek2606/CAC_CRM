@@ -1,5 +1,6 @@
 "use server";
 
+import { withChangeReason } from "@/lib/change-log";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
@@ -14,7 +15,7 @@ export type ImportSummary = {
 
 export type ImportState = { error?: string; summary?: ImportSummary };
 
-export async function importTentativePricelist(
+async function importTentativePricelistUnlabelled(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
@@ -73,4 +74,9 @@ export async function deleteTentativePrice(id: string) {
   revalidatePath("/products");
   revalidatePath("/products/tentative");
   revalidatePath("/admin/import/tentative-pricelist");
+}
+
+// Its changes go into the change history marked as "Tentative price list upload".
+export async function importTentativePricelist(...args: Parameters<typeof importTentativePricelistUnlabelled>): ReturnType<typeof importTentativePricelistUnlabelled> {
+  return withChangeReason("Tentative price list upload", () => importTentativePricelistUnlabelled(...args));
 }

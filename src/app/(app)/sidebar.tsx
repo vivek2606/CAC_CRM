@@ -25,7 +25,7 @@ import {
   Receipt,
   Landmark,
   TableProperties,
-  FileText, HeartPulse, Trash2 } from "lucide-react";
+  FileText, HeartPulse, Trash2, History } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
 import { SakuragiMark } from "@/components/sakuragi-logo";
@@ -91,6 +91,7 @@ const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDa
   { href: "/reports/target-achievement", label: "Target vs Achievement", icon: Crosshair, color: "violet" },
   { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red" },
   { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink" },
+  { href: "/admin/change-history", label: "Change History", icon: History, color: "sky", headOnly: true },
   { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal" },
   { href: "/service-billings", label: "Service Billings", icon: Wrench, color: "orange", headOnly: true },
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },

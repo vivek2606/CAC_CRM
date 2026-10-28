@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
+import { HistoryCard } from "@/components/history-card";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { VAT_RATE } from "@/lib/constants";
@@ -154,6 +155,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </Card>
         </div>
 
+        <div className="space-y-6">
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
           <dl className="space-y-3 text-sm">
@@ -183,6 +185,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </div>
           </dl>
         </Card>
+        {user.role === "HEAD" && <HistoryCard entity="product" id={product.id} title="Price & product history" />}
+        </div>
       </div>
     </div>
   );

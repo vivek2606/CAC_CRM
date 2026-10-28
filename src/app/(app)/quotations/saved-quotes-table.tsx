@@ -33,6 +33,7 @@ export function SavedQuotesTable({
   dealProducts,
   canExcel = true,
   canDelete = false,
+  canSeeHistory = false,
 }: {
   quotes: SavedQuoteRow[];
   showDeal?: boolean;
@@ -41,6 +42,8 @@ export function SavedQuotesTable({
   canExcel?: boolean;
   // The Head only.
   canDelete?: boolean;
+  // The Head: each quotation's change history.
+  canSeeHistory?: boolean;
 }) {
   const link = "text-indigo-600 hover:text-indigo-500 font-medium";
   return (
@@ -125,6 +128,11 @@ export function SavedQuotesTable({
                     Revise
                   </Link>
                   {dealProducts && <UseQuoteProductsButton quoteId={q.id} hasProducts={dealProducts.hasProducts} />}
+                  {canSeeHistory && (
+                    <Link href={`/quotations/history/${q.id}`} className={link} title="Who changed this quotation, what and when">
+                      History
+                    </Link>
+                  )}
                   {canDelete && <DeleteQuoteButton quoteId={q.id} quoteRef={q.ref} />}
                 </span>
               </td>

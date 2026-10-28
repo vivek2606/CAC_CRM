@@ -1,6 +1,7 @@
 "use server";
 
-import { audit, auditDiff, fmtDate, fmtMoney, userNames } from "@/lib/audit";
+import { audit, fmtMoney, userNames } from "@/lib/audit";
+import { withChangeReason } from "@/lib/change-log";
 import { keepConversionBeforeClose } from "@/lib/conversion-date";
 import { dealOwnerProblem } from "@/lib/deal-owner";
 import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
@@ -307,7 +308,6 @@ export async function updateDeal(dealId: string, formData: FormData) {
   if (isClosed) await keepConversionBeforeClose(dealId);
   const convertedOn = (await prisma.deal.findUnique({ where: { id: dealId }, select: { createdAt: true } }))!.createdAt;
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, createdAt: { gt: convertedOn } }, data: { createdAt: convertedOn } });
-  let productsChanged = false;
   // Products edited in the form (sent whenever the form shows the editor).
   if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
     const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
@@ -315,7 +315,6 @@ export async function updateDeal(dealId: string, formData: FormData) {
     const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
       rows.map((r) => `${r.productId}|${r.qty}|${Math.round(r.unitPrice * 100) / 100}`).sort().join(",");
     if (key(next) !== key(current)) {
-      productsChanged = true;
       if (existing.stage === "WON" && next.length === 0) throw new Error("A won deal needs at least one product billed.");
       if (existing.stage === "WON" && next.some((i) => i.unitPrice === 0)) throw new Error("Every product billed needs a basic rate (negative for a return).");
       await prisma.dealLineItem.deleteMany({ where: { dealId } });
@@ -326,35 +325,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
   }
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
-  // History: what this edit changed.
-  {
-    const after = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
-    const [names, accounts] = await Promise.all([
-      userNames([existing.ownerId, after.ownerId]),
-      prisma.account.findMany({ where: { id: { in: [existing.accountId, after.accountId].filter((x): x is string => !!x) } }, select: { id: true, name: true } }),
-    ]);
-    const acc = new Map(accounts.map((a) => [a.id, a.name]));
-    const changes = auditDiff(existing as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, [
-      { key: "title", label: "Name" },
-      { key: "ownerId", label: "Sales person", fmt: (v) => names.get(String(v)) ?? String(v) },
-      { key: "stage", label: "Stage", fmt: (v) => DEAL_STAGE_LABELS[v as DealStage] ?? String(v) },
-      { key: "value", label: "Value", fmt: fmtMoney },
-      { key: "accountId", label: "Account", fmt: (v) => acc.get(String(v)) ?? String(v) },
-      { key: "customerName", label: "Customer" },
-      { key: "customerPhone", label: "Phone" },
-      { key: "expectedCloseDate", label: "Expected close", fmt: fmtDate },
-      { key: "createdAt", label: "Lead / conversion date", fmt: fmtDate },
-      { key: "closedAt", label: "Closed / invoice date", fmt: fmtDate },
-      { key: "invoiceNo", label: "Invoice no." },
-      { key: "billingCompany", label: "Company" },
-      { key: "paymentTerms", label: "Payment terms" },
-      { key: "expectedDeliveryDate", label: "Expected delivery", fmt: fmtDate },
-      { key: "equipmentType", label: "Equipment" },
-      { key: "competitorBrand", label: "Competitor" },
-    ]);
-    if (productsChanged) changes.push("products changed");
-    if (changes.length) await audit("deal", dealId, user.id, "edited", changes.join("; "));
-  }
+  // History: recorded by the change log (src/lib/change-log.ts).
   const wonError = await applySheetInvoices(dealId, formData);
 
   revalidatePath("/deals");
@@ -378,7 +349,6 @@ export async function deleteDeal(dealId: string, formData?: FormData) {
   // lines go with it (they'd otherwise stay counted with no deal), and the
   // lead it came from is open again.
   await binDeal(dealId, user.id);
-  await audit("deal", dealId, user.id, "deleted", `${existing.title} - moved to the recycle bin.`);
   await prisma.saleLineItem.deleteMany({ where: { dealId } });
   await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { convertedDealId: null, status: "QUALIFIED" } });
   await clearWonPlan(dealId);
@@ -552,10 +522,6 @@ export async function addDealLineItem(dealId: string, formData: FormData) {
   assertCanEditItems(user, deal.stage);
 
   const parsed = dealLineItemSchema.parse(Object.fromEntries(formData.entries()));
-  {
-    const p = await prisma.product.findUnique({ where: { id: parsed.productId }, select: { model: true } });
-    await logDealChange(dealId, user.id, `Product added: ${p?.model ?? "product"} - ${parsed.qty} x ${naira(parsed.unitPrice)}.`);
-  }
 
   await prisma.dealLineItem.create({
     data: { dealId, productId: parsed.productId, qty: parsed.qty, unitPrice: parsed.unitPrice },
@@ -574,8 +540,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   assertCanEditItems(user, deal.stage);
 
-  const removed = await prisma.dealLineItem.delete({ where: { id: lineItemId }, include: { product: { select: { model: true } } } });
-  await logDealChange(dealId, user.id, `Product removed: ${removed.product.model} - ${removed.qty} x ${naira(removed.unitPrice)}.`);
+  await prisma.dealLineItem.delete({ where: { id: lineItemId } });
   await syncDealValueFromItems(dealId);
   await syncSaleLineItemsForDeal(dealId);
   await revokeDiscountApproval(dealId);
@@ -690,7 +655,6 @@ async function setDealInvoiceImpl(dealId: string, invoiceNo: string, invoiceDate
   if (clash) throw new Error(clash);
   await prisma.deal.update({ where: { id: dealId }, data: { invoiceNo: no.slice(0, 60), closedAt: parseDateInput(invoiceDate), billingCompany } });
   await keepConversionBeforeClose(dealId);
-  await logDealChange(dealId, user.id, `Invoice no. set: ${no} (${billingCompany}), dated ${invoiceDate}.`);
   await syncSaleLineItemsForDeal(dealId);
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");
@@ -1026,7 +990,6 @@ export async function linkDealAccount(dealId: string, input: AccountInput): Prom
   const accountId = acc.id;
 
   await prisma.deal.update({ where: { id: dealId }, data: { accountId } });
-  await audit("deal", dealId, user.id, "edited", `Account linked: ${acc.name}${"accountId" in input ? "" : " (new account)"}.`);
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, accountId: null }, data: { accountId } });
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/deals");
@@ -1197,7 +1160,6 @@ export async function setDealCompany(dealId: string, company: string): Promise<A
       if (clash) throw new Error(clash);
     }
     await prisma.deal.update({ where: { id: dealId }, data: { billingCompany } });
-    await logDealChange(dealId, user.id, `Billing company: ${deal.billingCompany ?? "not recorded"} → ${billingCompany}.`);
     revalidatePath("/admin/data-health");
     revalidatePath(`/deals/${dealId}`);
     revalidatePath("/reports/sales-register");
@@ -1210,7 +1172,7 @@ export async function setDealCompany(dealId: string, company: string): Promise<A
 // again) or a Project & Service Billing line.
 export async function setWonOrderDate(target: { dealId?: string; billingId?: string }, date: string): Promise<ActionResult> {
   return attempt(async () => {
-    const user = await requireHead();
+    await requireHead();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Pick the date.");
     const d = parseDateInput(date);
     if (d.getTime() > Date.now()) throw new Error("The date can't be in the future.");
@@ -1221,14 +1183,13 @@ export async function setWonOrderDate(target: { dealId?: string; billingId?: str
     } else if (target.dealId) {
       const deal = await prisma.deal.findUnique({ where: { id: target.dealId }, select: { stage: true, closedAt: true, sourceTxnNo: true } });
       if (!deal || deal.stage !== "WON") throw new Error("This isn't a won deal.");
-      await prisma.deal.update({ where: { id: target.dealId }, data: { closedAt: d } });
+      await withChangeReason("from the Sales Register", () => prisma.deal.update({ where: { id: target.dealId }, data: { closedAt: d } }));
       if (deal.sourceTxnNo == null) {
         await keepConversionBeforeClose(target.dealId);
         await syncSaleLineItemsForDeal(target.dealId);
       } else {
         await prisma.saleLineItem.updateMany({ where: { dealId: target.dealId }, data: { docDate: d, month } });
       }
-      await logDealChange(target.dealId, user.id, `Won date: ${deal.closedAt ? fmtDate(deal.closedAt) : "-"} → ${fmtDate(d)} (from the Sales Register).`);
       revalidatePath(`/deals/${target.dealId}`);
     } else throw new Error("Nothing to change.");
     revalidatePath("/reports/sales-register");

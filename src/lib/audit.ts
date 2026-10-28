@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 
-// The change history of leads and deals (AuditLog): who, what and when.
+// The change history (AuditLog): who changed what, and when.
 // Best-effort - a failure to log never blocks the change itself.
 
-export type AuditEntity = "lead" | "deal";
+// deal / lead / quote / product (with its prices) / tentative (tentative
+// price, by model) / exchangeRate (by month) - see change-log.ts.
+export type AuditEntity = "lead" | "deal" | "quote" | "product" | "tentative" | "exchangeRate";
 
 export async function audit(entity: AuditEntity, entityId: string, userId: string, action: string, details?: string | null): Promise<void> {
   try {

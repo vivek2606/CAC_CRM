@@ -1,5 +1,6 @@
 "use server";
 
+import { withChangeReason } from "@/lib/change-log";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -8,7 +9,7 @@ import { notifyQuoteDiscountDecided } from "@/lib/push-events";
 
 // The Head approves (the discounts asked for become the approved ones - a
 // download within them goes ahead) or rejects a quotation's discount.
-export async function decideQuoteDiscount(quoteId: string, approve: boolean): Promise<{ error?: string }> {
+async function decideQuoteDiscountUnlabelled(quoteId: string, approve: boolean): Promise<{ error?: string }> {
   const head = await requireHead();
   const q = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { discountStatus: true, discountRequest: true } });
   if (!q || q.discountStatus !== "pending") return { error: "This request has already been dealt with." };
@@ -26,4 +27,9 @@ export async function decideQuoteDiscount(quoteId: string, approve: boolean): Pr
   revalidatePath("/quotations/saved");
   revalidatePath("/notifications");
   return {};
+}
+
+// Its changes go into the change history marked as "Head's discount decision".
+export async function decideQuoteDiscount(...args: Parameters<typeof decideQuoteDiscountUnlabelled>): ReturnType<typeof decideQuoteDiscountUnlabelled> {
+  return withChangeReason("Head's discount decision", () => decideQuoteDiscountUnlabelled(...args));
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
+import { withChangeReason } from "@/lib/change-log";
 import { audit, auditDiff, fmtDate, fmtMoney } from "@/lib/audit";
 import { billingCompanyOf } from "@/lib/billing-company";
 import { invoiceTypeOf, type InvoiceType } from "@/lib/invoice-key";
@@ -286,7 +287,8 @@ async function run(formData: FormData, apply: boolean): Promise<WonUpdateResult>
 
       // ---- save
       const account = accountId ? await prisma.account.findUnique({ where: { id: accountId }, select: { name: true } }) : null;
-      await prisma.$transaction(async (tx) => {
+      // The deal's changes go into its history (change-log.ts) marked as this upload.
+      await withChangeReason(`Won deals upload, invoice ${g.invoiceNo}`, () => prisma.$transaction(async (tx) => {
         await tx.deal.update({
           where: { id: deal.id },
           data: {
@@ -323,14 +325,16 @@ async function run(formData: FormData, apply: boolean): Promise<WonUpdateResult>
             },
           });
         }
-      });
+      }));
       await syncSaleLineItemsForDeal(deal.id);
       if (itemsChange || (!lead && leadDate.value)) {
         // The lead behind an order is worth the whole order.
         const order = await prisma.deal.aggregate({ where: { stage: "WON", OR: [{ id: root }, { orderDealId: root }] }, _sum: { value: true } });
         await prisma.lead.updateMany({ where: { convertedDealId: root }, data: { value: round2(order._sum.value ?? 0) } });
       }
-      await audit("deal", deal.id, user.id, "edited", `Won deals upload - ${plan.changes.join("; ")}.`);
+      // Lead changes aren't the deal's own fields - noted on the deal too.
+      const leadChanges = plan.changes.filter((c) => c.startsWith("Lead"));
+      if (leadChanges.length) await audit("deal", deal.id, user.id, "edited", `Won deals upload - ${leadChanges.join("; ")}.`);
       if (leadDateChange) {
         const l = lead ?? (await prisma.lead.findUnique({ where: { convertedDealId: root }, select: { id: true } }));
         if (l) await audit("lead", l.id, user.id, lead ? "edited" : "created", `Won deals upload (invoice ${g.invoiceNo}) - ${plan.changes.filter((c) => c.startsWith("Lead")).join("; ")}.`);

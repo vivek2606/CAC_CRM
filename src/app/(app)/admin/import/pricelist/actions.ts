@@ -1,5 +1,6 @@
 "use server";
 
+import { withChangeReason } from "@/lib/change-log";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export type ImportState = { error?: string; summary?: ImportSummary };
 
 const stockDateSchema = z.string().min(1, "Please pick the opening stock date.");
 
-export async function importPricelistStock(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
+async function importPricelistStockUnlabelled(_prevState: ImportState | undefined, formData: FormData): Promise<ImportState> {
   await requireHead();
 
   const stockDateRaw = stockDateSchema.safeParse(formData.get("stockAsOfDate"));
@@ -148,4 +149,9 @@ export async function importPricelistStock(_prevState: ImportState | undefined, 
       skippedFileRows,
     },
   };
+}
+
+// Its changes go into the change history marked as "Price list & stock upload".
+export async function importPricelistStock(...args: Parameters<typeof importPricelistStockUnlabelled>): ReturnType<typeof importPricelistStockUnlabelled> {
+  return withChangeReason("Price list & stock upload", () => importPricelistStockUnlabelled(...args));
 }

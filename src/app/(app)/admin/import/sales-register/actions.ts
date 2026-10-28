@@ -1,5 +1,6 @@
 "use server";
 
+import { withChangeReason } from "@/lib/change-log";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -67,7 +68,7 @@ export type ImportSummary = {
 
 export type ImportState = { error?: string; summary?: ImportSummary };
 
-export async function importSalesRegister(
+async function importSalesRegisterUnlabelled(
   _prevState: ImportState | undefined,
   formData: FormData
 ): Promise<ImportState> {
@@ -599,4 +600,9 @@ export async function importSalesRegister(
       unrecognisedCompanies: [...new Set(result.deals.filter((d) => d.entity && !billingCompanyOf(d.entity)).map((d) => d.entity!))].slice(0, 20),
     },
   };
+}
+
+// Its changes go into the change history marked as "Sales Register upload".
+export async function importSalesRegister(...args: Parameters<typeof importSalesRegisterUnlabelled>): ReturnType<typeof importSalesRegisterUnlabelled> {
+  return withChangeReason("Sales Register upload", () => importSalesRegisterUnlabelled(...args));
 }
