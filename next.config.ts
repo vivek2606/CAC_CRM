@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // The app shows pages in its own tabs (iframes) - allowed for this site
@@ -26,4 +27,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Error alerts (docs/ERROR-ALERTS.md). Readable stack traces in Sentry need
+// SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT at build time; without
+// them errors are still reported.
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  telemetry: false,
+});

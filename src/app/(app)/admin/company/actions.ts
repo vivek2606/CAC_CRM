@@ -22,3 +22,10 @@ export async function saveCompanySettingsAction(_prev: CompanySettingsState | un
   revalidatePath("/admin/company");
   return { saved: true };
 }
+
+// "Send a test error" (Error alerts): fails on purpose so the Head can see
+// the alert arrive.
+export async function sendTestErrorAlert(): Promise<void> {
+  await requireHead();
+  throw new Error("Test error alert - sent on purpose from Company Details by the Head of Sales.");
+}

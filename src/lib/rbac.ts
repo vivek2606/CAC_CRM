@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -14,7 +15,10 @@ export type SessionUser = {
 export async function requireUser(): Promise<SessionUser> {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  return session.user as SessionUser;
+  const user = session.user as SessionUser;
+  // Error alerts on the server say who hit the error.
+  Sentry.setUser({ id: user.id, username: user.name ?? undefined, role: user.role });
+  return user;
 }
 
 /**

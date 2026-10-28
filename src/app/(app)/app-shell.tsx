@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, RefreshCw, X } from "lucide-react";
@@ -64,6 +65,10 @@ function useEmbedded() {
 }
 
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
+  // Error alerts say who hit the error.
+  useEffect(() => {
+    Sentry.setUser({ id: user.id, username: user.name ?? undefined, role: user.role });
+  }, [user.id, user.name, user.role]);
   const [open, setOpen] = useState(false);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [active, setActive] = useState<string>("main");
