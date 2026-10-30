@@ -622,6 +622,32 @@ export function QuotationBuilder({
   // Sales commission built into the rate: price-list rate (excl. VAT) / (1 - commission).
   const commission = Math.min(50, Math.max(0, num(d.commissionPct ?? "")));
   const quoteRate = (rate: number) => round2((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
+  // Change the commission: every rate filled (product or custom, typed by
+  // hand or suggested, supply and installation) is re-priced by
+  // (1 - old) / (1 - new) - turning on 10% divides it by 0.9, 5% by 0.95,
+  // and a hand-made change to a rate is kept. Rates from our cost + margin
+  // follow their cost and margin instead.
+  const setCommission = (value: string) => {
+    const next = Math.min(50, Math.max(0, num(value)));
+    const f = (1 - commission / 100) / (1 - next / 100);
+    const scale = (v: string | undefined) => (v != null && v.trim() !== "" ? String(round2(num(v) * f)) : v);
+    update({
+      commissionPct: value,
+      rows: d.rows.map((r) => {
+        if (r.kind !== "item" || f === 1) return r;
+        // A modular outdoor's modules are product rates too.
+        if (r.modules?.length) {
+          const modules = r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) }));
+          return { ...r, modules, unitPrice: String(round2(modules.reduce((t, m) => t + num(m.rate), 0))), ...(has(r.costInstall) ? {} : { installRate: scale(r.installRate) }) };
+        }
+        return {
+          ...r,
+          ...(has(r.costRate) ? {} : { unitPrice: scale(r.unitPrice) ?? r.unitPrice }),
+          ...(has(r.costInstall) ? {} : { installRate: scale(r.installRate) }),
+        };
+      }),
+    });
+  };
   // Margin (not markup): the rate is cost / (1 - margin), so the margin is
   // that share of our price. Rounded up to the naira, so it's never short.
   const defaultMargin = clampMargin(num(d.marginPct ?? ""));
@@ -1049,33 +1075,26 @@ export function QuotationBuilder({
                 </button>
               ))}
             </div>
-            <label className="inline-flex items-center gap-2 text-xs text-slate-600" title="Product rates become the price-list rate (excl. VAT) / (1 - commission). Not printed on the document.">
-              Sales commission %
+            <div
+              className="inline-flex items-center gap-2 text-xs text-slate-600"
+              title="Every rate filled - product, custom or typed by hand, supply and installation - is divided by (1 - commission): 10% divides by 0.9, 5% by 0.95. Not printed on the document."
+            >
+              Sales commission
+              {[5, 10].map((p) => (
+                <label key={p} className="inline-flex cursor-pointer items-center gap-1">
+                  <input type="checkbox" checked={commission === p} onChange={(e) => setCommission(e.target.checked ? String(p) : "")} className="h-4 w-4 rounded border-slate-300" />
+                  {p}%
+                </label>
+              ))}
               <input
                 inputMode="decimal"
                 value={d.commissionPct ?? ""}
                 placeholder="0"
-                onChange={(e) => {
-                  // Re-price the product lines: rate x (1 - old) / (1 - new), so
-                  // a rate already changed by hand keeps its change.
-                  const next = Math.min(50, Math.max(0, num(e.target.value)));
-                  const f = (1 - commission / 100) / (1 - next / 100);
-                  update({
-                    commissionPct: e.target.value,
-                    rows: d.rows.map((r) => {
-                      if (r.kind !== "item" || f === 1) return r;
-                      // A modular outdoor's modules are product rates too.
-                      if (r.modules?.length) {
-                        const modules = r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) }));
-                        return { ...r, modules, unitPrice: String(round2(modules.reduce((t, m) => t + num(m.rate), 0))) };
-                      }
-                      return !r.custom && !has(r.costRate) && r.unitPrice.trim() !== "" ? { ...r, unitPrice: String(round2(num(r.unitPrice) * f)) } : r;
-                    }),
-                  });
-                }}
-                className="w-16 rounded-md border border-slate-200 bg-white px-2 py-1 text-right text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setCommission(e.target.value)}
+                className="w-14 rounded-md border border-slate-200 bg-white px-2 py-1 text-right text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-            </label>
+              %
+            </div>
             <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600">
               <input
                 type="checkbox"
