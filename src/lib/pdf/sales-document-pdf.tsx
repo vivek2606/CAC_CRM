@@ -145,6 +145,17 @@ function RateCells({ doc }: { doc: SalesDocument }) {
 // fill: stretch the item table down to the totals with empty ruled rows -
 // only for a one-page document; a longer one gets no blank table on its
 // later pages (see renderSalesDocumentPdf).
+// The total rounded to the naira: what was added / taken off, when anything.
+function roundOffRow(doc: SalesDocument, first: boolean) {
+  if (!doc.roundOff) return null;
+  return (
+    <View style={[s.totalRow, first ? { borderTopWidth: 0.75 } : {}]}>
+      <Text style={s.totalLabel}>Round off</Text>
+      <Text style={s.totalValue}>{`${doc.roundOff > 0 ? "+" : "-"}${money(Math.abs(doc.roundOff))}`}</Text>
+    </View>
+  );
+}
+
 export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fill?: boolean }) {
   const c = doc.company;
   const contact = [c.phone, c.email, c.website].filter(Boolean).join("  |  ");
@@ -284,10 +295,13 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                 <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
               </View>
             ) : doc.vatInclusive ? (
-              <View style={[s.totalRow, { borderTopWidth: 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
+              <>
+              {roundOffRow(doc, true)}
+              <View style={[s.totalRow, { borderTopWidth: doc.roundOff ? 0 : 0.75, backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
                 <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total inclusive of VAT (@{doc.vatRatePct}%) (NGN)</Text>
                 <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>
               </View>
+              </>
             ) : (
               <>
                 <View style={[s.totalRow, { borderTopWidth: 0.75 }]}>
@@ -298,6 +312,7 @@ export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fil
                   <Text style={s.totalLabel}>VAT @ {doc.vatRatePct}%</Text>
                   <Text style={s.totalValue}>{money(doc.vat)}</Text>
                 </View>
+                {roundOffRow(doc, false)}
                 <View style={[s.totalRow, { backgroundColor: "#e8eff9", borderBottomWidth: 0.75 }]}>
                   <Text style={[s.totalLabel, s.strong, { fontSize: 10 }]}>Total incl. VAT (NGN)</Text>
                   <Text style={[s.totalValue, s.strong, { fontSize: 10 }]}>{money(doc.total)}</Text>

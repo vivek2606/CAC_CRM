@@ -37,6 +37,20 @@ describeDb("quotation totals", () => {
     // 333.333 -> 333.33 a unit; 3 units = 999.99.
     expect(doc.subtotal).toBe(999.99);
   });
+  it("rounds the final bill (incl. VAT) to the nearest naira, showing the round off", async () => {
+    // 999.99 + VAT 75.00 = 1,074.99 -> 1,075 (+0.01).
+    const up = await buildDocument(input([item({ qty: 3, unitPrice: 333.333 })]));
+    expect(up.vat).toBe(75);
+    expect(up.total).toBe(1075);
+    expect(up.roundOff).toBe(0.01);
+    expect(up.totalInWords).toBe("One Thousand and Seventy-Five Naira Only");
+    // VAT-inclusive 1,234.40 -> 1,234 (-0.40).
+    const down = await buildDocument(input([item({ qty: 1, unitPrice: 1234.4 })], { vatMode: "inclusive" }));
+    expect(down.total).toBe(1234);
+    expect(down.roundOff).toBe(-0.4);
+    // Already whole: no round off.
+    expect((await buildDocument(input([item({ qty: 1, unitPrice: 1000 })]))).roundOff).toBe(0);
+  });
   it("refuses negative quantities and rates (returns go through deals, not quotations)", () => {
     expect(() => input([item({ qty: -1, unitPrice: 100_000 })])).toThrow();
     expect(() => input([item({ qty: 1, unitPrice: -5 })])).toThrow();

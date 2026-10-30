@@ -732,7 +732,10 @@ export function QuotationBuilder({
     </p>
   );
   const vat = inclusive ? 0 : Math.round(subtotal * vatRatePct) / 100;
-  const total = Math.round((subtotal + vat) * 100) / 100;
+  // The final bill rounded to the naira (as on the PDF / Excel).
+  const exactTotal = Math.round((subtotal + vat) * 100) / 100;
+  const total = Math.round(exactTotal);
+  const roundOff = Math.round((total - (subtotal + vat)) * 100) / 100;
 
   const payload = (ref: string): DocumentInput => ({
     type: d.type,
@@ -1523,6 +1526,15 @@ export function QuotationBuilder({
                   <span className="tabular-nums">{naira(vat)}</span>
                 </div>
               </>
+            )}
+            {roundOff !== 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span>Round off</span>
+                <span className="tabular-nums">
+                  {roundOff > 0 ? "+" : "-"}
+                  {naira(Math.abs(roundOff))}
+                </span>
+              </div>
             )}
             <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold text-slate-900">
               <span>{inclusive ? `Total inclusive of VAT (@${vatRatePct}%)` : "Total incl. VAT"}</span>

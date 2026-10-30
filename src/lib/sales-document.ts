@@ -123,6 +123,9 @@ export type SalesDocument = {
   subtotal: number;
   vatRatePct: number;
   vat: number;
+  // The total incl. VAT rounded to the nearest naira, and the amount added
+  // (+) or taken off (-) to get there - printed as "Round off" when not 0.
+  roundOff?: number;
   total: number;
   totalInWords: string;
   terms: string[];
@@ -155,7 +158,8 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
   const subtotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.amount : 0), 0));
   const installTotal = round2(rows.reduce((s, r) => s + (r.kind === "item" ? r.qty * r.installRate : 0), 0));
   const vat = vatInclusive ? 0 : round2((subtotal * settings.vatRatePct) / 100);
-  const total = round2(subtotal + vat);
+  const total = Math.round(round2(subtotal + vat));
+  const roundOff = round2(total - (subtotal + vat));
   return {
     type: input.type,
     heading: DOCUMENT_TYPES[input.type],
@@ -177,6 +181,7 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
     subtotal,
     vatRatePct: settings.vatRatePct,
     vat,
+    roundOff,
     total,
     totalInWords: nairaInWords(total),
     terms: input.terms.map((t) => t.trim()).filter(Boolean),

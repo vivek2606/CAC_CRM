@@ -10,6 +10,8 @@ const MONEY = "#,##0.00";
 const ACCENT = "FF1E4F9C"; // Sakuragi logo blue
 const muted = { color: { argb: "FF64748B" } };
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayBuffer> {
   const c = doc.company;
   const wb = new ExcelJS.Workbook();
@@ -141,13 +143,19 @@ export async function buildSalesDocumentXlsx(doc: SalesDocument): Promise<ArrayB
   let grand: ExcelJS.Cell;
   if (doc.vatInclusive) {
     // Rates already include VAT - just the total, no separate VAT line.
-    grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `SUM(${A}${first}:${A}${last})`, result: doc.total }, true);
+    if (doc.roundOff) {
+      total("Total of the items", { formula: `SUM(${A}${first}:${A}${last})`, result: round2(doc.total - doc.roundOff) });
+      const sumRow = r;
+      total("Round off", { formula: `ROUND(${A}${sumRow},0)-${A}${sumRow}`, result: doc.roundOff });
+      grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `ROUND(${A}${sumRow},0)`, result: doc.total }, true);
+    } else grand = total(`Total inclusive of VAT (@${doc.vatRatePct}%) (NGN)`, { formula: `SUM(${A}${first}:${A}${last})`, result: doc.total }, true);
   } else {
     total("Subtotal (excl. VAT)", { formula: `SUM(${A}${first}:${A}${last})`, result: doc.subtotal });
     const subRow = r;
     total(`VAT @ ${doc.vatRatePct}%`, { formula: `ROUND(${A}${subRow}*${doc.vatRatePct / 100},2)`, result: doc.vat });
     const vatRow = r;
-    grand = total("Total incl. VAT (NGN)", { formula: `${A}${subRow}+${A}${vatRow}`, result: doc.total }, true);
+    if (doc.roundOff) total("Round off", { formula: `ROUND(${A}${subRow}+${A}${vatRow},0)-(${A}${subRow}+${A}${vatRow})`, result: doc.roundOff });
+    grand = total("Total incl. VAT (NGN)", { formula: `ROUND(${A}${subRow}+${A}${vatRow},0)`, result: doc.total }, true);
   }
   grand.border = { top: { style: "medium" } };
   ws.getCell(r, L - 1).border = { top: { style: "medium" } };
