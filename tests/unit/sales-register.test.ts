@@ -64,3 +64,20 @@ describe("Sales Register totals", () => {
     expect(t.invoices).toBe(3);
   });
 });
+
+describe("Branch sales people", () => {
+  it("show as Others from 2026, under their own name before", () => {
+    const branch = { name: "Musa Bello", title: "Branch Sales" };
+    const rows = buildRegisterRows(
+      [line({ qty: 1, value: 100, owner: branch }), line({ qty: 1, value: 100, owner: branch, docDate: d("2025-12-31") }), line({ qty: 1, value: 100 })],
+      [],
+      [],
+      new Map(),
+    );
+    expect(rows.map((r) => [r.salesPerson, r.salesPersonName])).toEqual([
+      ["Others", "Musa Bello"],
+      ["Musa Bello", undefined],
+      ["Rep", undefined],
+    ]);
+  });
+});

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { BRANCH_SALES_WHERE } from "@/lib/branch-sales";
+import { BRANCH_SALES_WHERE, OTHERS_FROM } from "@/lib/branch-sales";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { buildRegisterRows } from "@/lib/sales-register";
 import { getStudioViews } from "@/lib/studio-views";
@@ -56,6 +56,8 @@ export default async function SalesRegisterPage({
   // "Others": the upcountry branch sales people, together.
   const others = all && params.rep === "others";
   const ownerWhere = repId ? { ownerId: repId } : others ? { owner: BRANCH_SALES_WHERE } : {};
+  // Others starts in 2026 (branch sales people's earlier sales are under their own names).
+  const listFrom = others && from < OTHERS_FROM ? OTHERS_FROM : from;
   const category = params.category || null;
   // Billing company: Sakuragi / Somotex, or "none" for lines without one.
   const company = params.company === "Sakuragi" || params.company === "Somotex" || params.company === "none" ? params.company : null;
@@ -70,7 +72,7 @@ export default async function SalesRegisterPage({
     category === "Project & Service" || category === "No products listed"
       ? Promise.resolve([])
       : prisma.saleLineItem.findMany({
-          where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...lineCompanyWhere, ...(category ? { product: { category } } : {}) },
+          where: { docDate: { gte: listFrom, lt: end }, ...ownerWhere, ...lineCompanyWhere, ...(category ? { product: { category } } : {}) },
           orderBy: [{ docDate: "desc" }],
           take: MAX_ROWS,
           select: {
@@ -87,7 +89,7 @@ export default async function SalesRegisterPage({
     category && category !== "Project & Service"
       ? Promise.resolve([])
       : prisma.projectBilling.findMany({
-          where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...dealCompanyWhere },
+          where: { docDate: { gte: listFrom, lt: end }, ...ownerWhere, ...dealCompanyWhere },
           orderBy: [{ docDate: "desc" }],
           take: MAX_ROWS,
           select: { id: true, docDate: true, value: true, txnNo: true, docKey: true, sourceKey: true, custName: true, itemCode: true, itemName: true, billingCompany: true, owner: { select: { name: true, title: true } } },
@@ -101,7 +103,7 @@ export default async function SalesRegisterPage({
     category && category !== "No products listed"
       ? []
       : await prisma.deal.findMany({
-          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
+          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: listFrom, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
           take: MAX_ROWS,
           select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true, title: true } }, account: { select: { name: true, code: true } } },
         });
@@ -168,7 +170,7 @@ export default async function SalesRegisterPage({
   const orphanLines =
     user.role === "HEAD"
       ? await prisma.saleLineItem.aggregate({
-          where: { dealId: null, docDate: { gte: from, lt: end }, ...ownerWhere },
+          where: { dealId: null, docDate: { gte: listFrom, lt: end }, ...ownerWhere },
           _count: true,
           _sum: { value: true },
         })
@@ -192,7 +194,7 @@ export default async function SalesRegisterPage({
                     {p.name}
                   </option>
                 ))}
-                <option value="others">Others (upcountry branches)</option>
+                <option value="others">Others (upcountry branches, from 2026)</option>
               </select>
               <Link href="/reports/sales-register/branch-sales" className="mt-1 block text-xs text-indigo-600 hover:text-indigo-500">
                 Branch sales people &amp; their sales →

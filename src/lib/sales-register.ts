@@ -1,5 +1,5 @@
 import type { RegisterRow } from "@/app/(app)/reports/sales-register/register-table";
-import { isBranchSales, OTHERS } from "@/lib/branch-sales";
+import { inOthers, OTHERS } from "@/lib/branch-sales";
 
 // The Sales Register's lines and totals - built here (not in the page) so
 // the money in them is covered by tests (tests/sales-register.test.ts).
@@ -52,10 +52,10 @@ export type RegisterBilling = {
   owner: { name: string; title?: string | null };
 };
 
-// Upcountry branch sales people show together as "Others" (their own name
-// alongside, in the table).
-const who = (o: { name: string; title?: string | null }) =>
-  isBranchSales(o.title) ? { salesPerson: OTHERS, salesPersonName: o.name } : { salesPerson: o.name };
+// Upcountry branch sales people show together as "Others" from 2026 (their
+// own name alongside, in the table); earlier sales under their own name.
+const who = (o: { name: string; title?: string | null }, date: Date) =>
+  inOthers(o.title, date) ? { salesPerson: OTHERS, salesPersonName: o.name } : { salesPerson: o.name };
 
 // Every line: products sold (Sales Register import and deals won in the
 // CRM), won deals with no products (one line at the deal's value), and
@@ -66,7 +66,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: l.id,
       accountName: l.deal?.account?.name ?? l.deal?.title.split(" — ")[0] ?? "—",
       accountCode: l.deal?.account?.code ?? "",
-      ...who(l.owner),
+      ...who(l.owner, l.docDate),
       productCode: l.product.code,
       product: l.product.model,
       category: l.product.category,
@@ -84,7 +84,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: d.id,
       accountName: d.account?.name ?? d.title,
       accountCode: d.account?.code ?? "",
-      ...who(d.owner),
+      ...who(d.owner, d.closedAt!),
       productCode: "",
       product: d.title,
       category: "No products listed",
@@ -101,7 +101,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: b.id,
       accountName: b.custName,
       accountCode: codeByName.get(b.custName) ?? "",
-      ...who(b.owner),
+      ...who(b.owner, b.docDate),
       productCode: b.itemCode,
       product: b.itemName,
       category: "Project & Service",
