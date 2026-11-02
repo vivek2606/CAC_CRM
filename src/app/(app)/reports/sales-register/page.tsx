@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { BRANCH_SALES_WHERE } from "@/lib/branch-sales";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { buildRegisterRows } from "@/lib/sales-register";
 import { getStudioViews } from "@/lib/studio-views";
@@ -52,7 +53,9 @@ export default async function SalesRegisterPage({
       })
     : [];
   const repId = all ? (people.some((p) => p.id === params.rep) ? params.rep! : null) : user.id;
-  const ownerWhere = repId ? { ownerId: repId } : {};
+  // "Others": the upcountry branch sales people, together.
+  const others = all && params.rep === "others";
+  const ownerWhere = repId ? { ownerId: repId } : others ? { owner: BRANCH_SALES_WHERE } : {};
   const category = params.category || null;
   // Billing company: Sakuragi / Somotex, or "none" for lines without one.
   const company = params.company === "Sakuragi" || params.company === "Somotex" || params.company === "none" ? params.company : null;
@@ -76,7 +79,7 @@ export default async function SalesRegisterPage({
             qty: true,
             value: true,
             sourceKey: true,
-            owner: { select: { name: true } },
+            owner: { select: { name: true, title: true } },
             product: { select: { code: true, model: true, category: true } },
             deal: { select: { id: true, sourceTxnNo: true, invoiceNo: true, title: true, billingCompany: true, account: { select: { name: true, code: true } } } },
           },
@@ -87,7 +90,7 @@ export default async function SalesRegisterPage({
           where: { docDate: { gte: from, lt: end }, ...ownerWhere, ...dealCompanyWhere },
           orderBy: [{ docDate: "desc" }],
           take: MAX_ROWS,
-          select: { id: true, docDate: true, value: true, txnNo: true, docKey: true, sourceKey: true, custName: true, itemCode: true, itemName: true, billingCompany: true, owner: { select: { name: true } } },
+          select: { id: true, docDate: true, value: true, txnNo: true, docKey: true, sourceKey: true, custName: true, itemCode: true, itemName: true, billingCompany: true, owner: { select: { name: true, title: true } } },
         }),
     prisma.product.findMany({ distinct: ["category"], select: { category: true }, orderBy: { category: "asc" } }),
   ]);
@@ -100,7 +103,7 @@ export default async function SalesRegisterPage({
       : await prisma.deal.findMany({
           where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
           take: MAX_ROWS,
-          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true } }, account: { select: { name: true, code: true } } },
+          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true, title: true } }, account: { select: { name: true, code: true } } },
         });
 
   // Monthly targets for the months the period touches (whole months), for
@@ -108,7 +111,7 @@ export default async function SalesRegisterPage({
   const targetRows = await prisma.target.findMany({
     where: {
       month: { gte: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1)), lt: end },
-      ...(repId ? { userId: repId } : {}),
+      ...(repId ? { userId: repId } : others ? { userId: { in: [] } } : {}),
     },
     select: { month: true, targetValue: true, user: { select: { name: true } } },
   });
@@ -145,7 +148,7 @@ export default async function SalesRegisterPage({
       billingCompany: true,
       accountId: true,
       _count: { select: { items: true } },
-      owner: { select: { name: true } },
+      owner: { select: { name: true, title: true } },
       account: { select: { name: true } },
     },
   });
@@ -182,14 +185,18 @@ export default async function SalesRegisterPage({
           {all && (
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Sales person</label>
-              <select name="rep" defaultValue={repId ?? ""} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <select name="rep" defaultValue={others ? "others" : (repId ?? "")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
                 <option value="">Everyone</option>
                 {people.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
+                <option value="others">Others (upcountry branches)</option>
               </select>
+              <Link href="/reports/sales-register/branch-sales" className="mt-1 block text-xs text-indigo-600 hover:text-indigo-500">
+                Branch sales people &amp; their sales →
+              </Link>
             </div>
           )}
           <div>

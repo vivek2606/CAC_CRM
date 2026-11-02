@@ -16,6 +16,8 @@ export type RegisterRow = {
   accountName: string;
   accountCode: string;
   salesPerson: string;
+  // Under "Others": the branch sales person's own name.
+  salesPersonName?: string;
   productCode: string;
   product: string;
   category: string;
@@ -34,7 +36,7 @@ export type RegisterRow = {
   accountLinked?: boolean;
 };
 
-type Key = Exclude<keyof RegisterRow, "id" | "dealId" | "billingId" | "accountLinked">;
+type Key = Exclude<keyof RegisterRow, "id" | "dealId" | "billingId" | "accountLinked" | "salesPersonName">;
 const COLUMNS: { key: Key; label: string; numeric?: boolean; width?: string }[] = [
   { key: "accountName", label: "Account name", width: "max-w-[140px]" },
   { key: "accountCode", label: "Account code" },
@@ -249,6 +251,10 @@ export function SalesRegisterTable({
                           dealId={r.billingId ? undefined : (r.dealId ?? undefined)}
                           company={r.company === "Not recorded" ? null : r.company}
                         />
+                      ) : c.key === "salesPerson" && r.salesPersonName ? (
+                        <span title={r.salesPersonName}>
+                          {r.salesPerson} <span className="text-[11px] text-slate-400">· {r.salesPersonName}</span>
+                        </span>
                       ) : (
                         display(r, c.key)
                       )}

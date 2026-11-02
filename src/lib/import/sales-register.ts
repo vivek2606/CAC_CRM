@@ -1,4 +1,5 @@
 import { lookupRosterEntry, normalizeSalesmanName } from "./roster";
+import { BRANCH_SALES } from "@/lib/branch-sales";
 import { computeCapacityKw } from "@/lib/capacity";
 
 export type RawSalesRow = {
@@ -120,7 +121,7 @@ export function docKeyFor(row: Pick<RawSalesRow, "txnCode" | "txnNo">): string {
   return row.txnCode ? `${row.txnCode}/${row.txnNo}` : String(row.txnNo);
 }
 
-function placeholderEmail(name: string): string {
+export function placeholderEmail(name: string): string {
   const slug = normalizeSalesmanName(name)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ".")
@@ -269,7 +270,8 @@ export function transformSalesRegister(inputRows: RawSalesRow[], knownAccounts: 
         name: row.salesman.trim().replace(/\s+/g, " "),
         email: placeholderEmail(row.salesman),
         isActive: false,
-        title: roster ? `Former ${roster.division} Staff` : "Historical Record",
+        // Not on the roster: an upcountry branch sales person (shown as "Others").
+        title: roster ? `Former ${roster.division} Staff` : BRANCH_SALES,
       });
     }
   }

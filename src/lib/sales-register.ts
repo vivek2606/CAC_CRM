@@ -1,4 +1,5 @@
 import type { RegisterRow } from "@/app/(app)/reports/sales-register/register-table";
+import { isBranchSales, OTHERS } from "@/lib/branch-sales";
 
 // The Sales Register's lines and totals - built here (not in the page) so
 // the money in them is covered by tests (tests/sales-register.test.ts).
@@ -24,7 +25,7 @@ export type RegisterLine = {
   qty: number;
   value: number;
   sourceKey: string;
-  owner: { name: string };
+  owner: { name: string; title?: string | null };
   product: { code: string; model: string; category: string };
   deal: { id: string; sourceTxnNo: number | null; invoiceNo: string | null; title: string; billingCompany: string | null; account: Account } | null;
 };
@@ -35,7 +36,7 @@ export type RegisterBareDeal = {
   closedAt: Date | null;
   invoiceNo: string | null;
   billingCompany: string | null;
-  owner: { name: string };
+  owner: { name: string; title?: string | null };
   account: Account;
 };
 export type RegisterBilling = {
@@ -48,8 +49,13 @@ export type RegisterBilling = {
   itemCode: string;
   itemName: string;
   billingCompany: string | null;
-  owner: { name: string };
+  owner: { name: string; title?: string | null };
 };
+
+// Upcountry branch sales people show together as "Others" (their own name
+// alongside, in the table).
+const who = (o: { name: string; title?: string | null }) =>
+  isBranchSales(o.title) ? { salesPerson: OTHERS, salesPersonName: o.name } : { salesPerson: o.name };
 
 // Every line: products sold (Sales Register import and deals won in the
 // CRM), won deals with no products (one line at the deal's value), and
@@ -60,7 +66,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: l.id,
       accountName: l.deal?.account?.name ?? l.deal?.title.split(" — ")[0] ?? "—",
       accountCode: l.deal?.account?.code ?? "",
-      salesPerson: l.owner.name,
+      ...who(l.owner),
       productCode: l.product.code,
       product: l.product.model,
       category: l.product.category,
@@ -78,7 +84,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: d.id,
       accountName: d.account?.name ?? d.title,
       accountCode: d.account?.code ?? "",
-      salesPerson: d.owner.name,
+      ...who(d.owner),
       productCode: "",
       product: d.title,
       category: "No products listed",
@@ -95,7 +101,7 @@ export function buildRegisterRows(lines: RegisterLine[], bareDeals: RegisterBare
       id: b.id,
       accountName: b.custName,
       accountCode: codeByName.get(b.custName) ?? "",
-      salesPerson: b.owner.name,
+      ...who(b.owner),
       productCode: b.itemCode,
       product: b.itemName,
       category: "Project & Service",
