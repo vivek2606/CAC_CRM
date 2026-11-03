@@ -216,6 +216,8 @@ export const END_USE_SEGMENTS: EndUseSegment[] = [
   "INDUSTRIAL",
   "GOVERNMENT_INSTITUTIONAL",
   "REAL_ESTATE_DEVELOPER",
+  "EDUCATIONAL_INSTITUTION",
+  "RELIGIOUS_INSTITUTION",
 ];
 
 export const END_USE_SEGMENT_LABELS: Record<EndUseSegment, string> = {
@@ -227,6 +229,8 @@ export const END_USE_SEGMENT_LABELS: Record<EndUseSegment, string> = {
   INDUSTRIAL: "Industrial",
   GOVERNMENT_INSTITUTIONAL: "Government / Institutional",
   REAL_ESTATE_DEVELOPER: "Real Estate Developer",
+  EDUCATIONAL_INSTITUTION: "Educational Institution",
+  RELIGIOUS_INSTITUTION: "Religious Institution",
 };
 
 // Full 8-step validated categorical order used for LEAD_SOURCE_COLORS.
@@ -239,6 +243,8 @@ export const END_USE_SEGMENT_COLORS: Record<EndUseSegment, string> = {
   INDUSTRIAL: "#16a34a",
   GOVERNMENT_INSTITUTIONAL: "#7c3aed",
   REAL_ESTATE_DEVELOPER: "#ef4444",
+  EDUCATIONAL_INSTITUTION: "#0ea5e9",
+  RELIGIOUS_INSTITUTION: "#a16207",
 };
 
 export const ACCOUNT_TYPES: AccountType[] = [
@@ -312,6 +318,9 @@ export const CONTACT_ROLE_COLORS: Record<ContactRole, { bg: string; text: string
   USER: { bg: "bg-sky-100", text: "text-sky-700" },
   OTHER: { bg: "bg-slate-200", text: "text-slate-600" },
 };
+
+// A new deal's winning probability unless the sales person sets another.
+export const DEFAULT_WIN_PROBABILITY = 50;
 
 export const STAGE_DEFAULT_PROBABILITY: Record<DealStage, number> = {
   QUALIFICATION: 20,

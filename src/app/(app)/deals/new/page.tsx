@@ -76,7 +76,7 @@ export default async function NewDealPage() {
             }))}
             products={productOptions}
             defaultValues={{
-              ownerId: isBackOffice(user) ? owners[0]?.id : user.id,
+              ownerId: isBackOffice(user) ? undefined : user.id,
               expectedCloseDate: smartCloseDate,
             }}
             submitLabel="Create Deal"

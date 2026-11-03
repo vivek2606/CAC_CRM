@@ -88,6 +88,7 @@ export default async function EditDealPage({
               title: deal.title,
               customerName: deal.customerName,
               customerPhone: deal.customerPhone,
+              customerEmail: deal.customerEmail,
               stage: deal.stage,
               value: deal.value,
               probability: deal.probability,

@@ -150,15 +150,22 @@ function LeadFormFields({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
-          <input
-            name="company"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        {/* Company is typed only when no account is linked - a linked account
+            is the company (its name is carried over). */}
+        {accountId ? (
+          <input type="hidden" name="company" value={company} />
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+            <input
+              name="company"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="If there's no account for it yet"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Estimated value (₦)</label>
           <input

@@ -1,6 +1,7 @@
 "use server";
 
 import { QUOTE_TEMPLATES, refPrefixFor, type QuoteTemplate } from "@/lib/quote-templates";
+import { createLeadForDeal } from "@/lib/auto-lead";
 
 import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -191,14 +192,19 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
   if (ownerProblem) return { error: ownerProblem };
   const name = title.trim() || q.customerName || ref;
   const accountId = await quoteAccountId(q.data);
-  const { STAGE_DEFAULT_PROBABILITY } = await import("@/lib/constants");
+  const { DEFAULT_WIN_PROBABILITY } = await import("@/lib/constants");
+  // The customer's phone: a line of the quotation's "To" that is a number.
+  const toLines = String((q.data as { to?: string } | null)?.to ?? "").split("\n").map((l) => l.trim());
+  const phone = toLines.slice(1).find((l) => /^[+\d][\d\s\-()/]{8,}$/.test(l) && l.replace(/\D/g, "").length >= 10) ?? null;
   const deal = await prisma.deal.create({
     data: {
       title: name.slice(0, 200),
       stage: "PROPOSAL",
       stageChangedAt: new Date(),
-      probability: STAGE_DEFAULT_PROBABILITY.PROPOSAL,
+      probability: DEFAULT_WIN_PROBABILITY,
       customerName: q.customerName || null,
+      customerPhone: phone,
+      paymentTerms: "FULL_ADVANCE",
       ownerId: dealOwner,
       accountId,
     },
@@ -213,6 +219,8 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
     const vat = 1 + (await getCompanySettings()).vatRatePct / 100;
     await prisma.deal.update({ where: { id: deal.id }, data: { value: Math.round((q.total / vat) * 100) / 100 } });
   }
+  // Its lead, made automatically (2 days before the deal).
+  await createLeadForDeal(deal.id, user.id, `from quotation ${ref}`);
   revalidatePath("/quotations/saved");
   revalidatePath("/deals");
   return { dealId: deal.id, quoteId: q.id };

@@ -5,6 +5,7 @@ import { Plus, Trash2, Upload } from "lucide-react";
 import {
   OPEN_DEAL_STAGES,
   DEAL_STAGE_LABELS,
+  DEFAULT_WIN_PROBABILITY,
   EQUIPMENT_TYPES,
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENTS,
@@ -62,6 +63,7 @@ function DealFormFields({
     title?: string;
     customerName?: string | null;
     customerPhone?: string | null;
+    customerEmail?: string | null;
     stage?: DealStage;
     value?: number;
     probability?: number;
@@ -102,18 +104,19 @@ function DealFormFields({
   const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
   const [customerName, setCustomerName] = useState(defaultValues?.customerName ?? "");
   const [customerPhone, setCustomerPhone] = useState(defaultValues?.customerPhone ?? "");
-  const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
   const today = new Date().toISOString().slice(0, 10);
+  // A new deal (not editing one): customer name and contact no. are needed
+  // from everyone, and the open-deal details start from their defaults.
+  const creating = !dealId;
+  const closed = defaultValues?.stage === "WON" || defaultValues?.stage === "LOST";
 
   const completenessFields = [
     { label: "Account", filled: !!accountId },
-    { label: "Contact", filled: !!contactId },
     { label: "Equipment type", filled: !!defaultValues?.equipmentType },
     { label: "Segment", filled: !!defaultValues?.endUseSegment },
     { label: "Competing brand", filled: !!defaultValues?.competitorBrand },
     { label: "Payment terms", filled: !!defaultValues?.paymentTerms },
     { label: "Expected close date", filled: !!defaultValues?.expectedCloseDate },
-    { label: "Expected delivery date", filled: !!defaultValues?.expectedDeliveryDate },
   ];
 
   // Picking a contact - directly, or automatically because it's the
@@ -126,10 +129,6 @@ function DealFormFields({
       setCustomerName(contact.label);
       if (contact.phone) setCustomerPhone(contact.phone);
     }
-  }
-
-  function handleContactSelect(opt: Option | null) {
-    applyContact(opt ? (contacts.find((c) => c.id === opt.id) ?? null) : null);
   }
 
   // Picking an account that already has a contact on file auto-selects
@@ -298,10 +297,10 @@ function DealFormFields({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead && !creating ? "" : " *"}</label>
           <input
             name="customerName"
-            required={!isHead}
+            required={!isHead || creating}
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
@@ -310,10 +309,10 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone{isHead ? "" : " *"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no.{isHead && !creating ? "" : " *"}</label>
           <input
             name="customerPhone"
-            required={!isHead}
+            required={!isHead || creating}
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -321,7 +320,12 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">{defaultValues?.leadDate ? "Converted to deal on" : "Lead date"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer email</label>
+          <input name="customerEmail" type="email" defaultValue={defaultValues?.customerEmail ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">{defaultValues?.leadDate ? "Converted to deal on" : "Deal date"}</label>
           <input
             name="createdAt"
             type="date"
@@ -332,14 +336,14 @@ function DealFormFields({
           <p className="mt-1 text-xs text-slate-400">
             {defaultValues?.leadDate
               ? `When the lead (entered ${defaultValues.leadDate.split("-").reverse().join("/")}) became a deal.`
-              : "When the enquiry first came in - defaults to today, backdate it if you're entering the deal later."}
+              : "Defaults to today - backdate it if you're entering the deal later. Its lead is made automatically, dated 2 days before."}
             {defaultValues?.latestCreatedAt ? " It can't be after the deal closed." : ""} Counts from this date in the reports (sales cycle,
             monthly figures).
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Deal value (₦) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tentative deal value (₦) *</label>
           <input
             name="value"
             type="number"
@@ -359,7 +363,7 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Stage</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Stage *</label>
           {defaultValues?.stage === "WON" || defaultValues?.stage === "LOST" ? (
             <>
               <input type="hidden" name="stage" value={defaultValues.stage} />
@@ -386,13 +390,14 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Expected close date</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Expected closure date</label>
           <input
             name="expectedCloseDate"
             type="date"
             defaultValue={defaultValues?.expectedCloseDate ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+          <p className="mt-1 text-xs text-slate-400">Becomes the won date when the deal is marked Won.</p>
         </div>
 
         {defaultValues?.stage === "WON" && (
@@ -406,21 +411,12 @@ function DealFormFields({
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Expected delivery date</label>
-          <input
-            name="expectedDeliveryDate"
-            type="date"
-            defaultValue={defaultValues?.expectedDeliveryDate ?? ""}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Payment terms</label>
           <select
             name="paymentTerms"
-            defaultValue={defaultValues?.paymentTerms ?? ""}
+            defaultValue={defaultValues?.paymentTerms ?? (creating ? "FULL_ADVANCE" : "")}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">Unspecified</option>
@@ -433,25 +429,27 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Probability (%)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Winning probability (%) *</label>
           <input
             name="probability"
             type="number"
             min={0}
             max={100}
-            defaultValue={defaultValues?.probability}
+            required
+            defaultValue={defaultValues?.probability ?? (creating ? DEFAULT_WIN_PROBABILITY : undefined)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type{closed ? "" : " *"}</label>
           <select
             name="equipmentType"
+            required={!closed}
             defaultValue={defaultValues?.equipmentType ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">Unspecified</option>
+            <option value="">{closed ? "Unspecified" : "Pick..."}</option>
             {EQUIPMENT_TYPES.map((e) => (
               <option key={e} value={e}>
                 {EQUIPMENT_TYPE_LABELS[e]}
@@ -623,25 +621,20 @@ function DealFormFields({
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Contact</label>
-          <SearchableSelect
-            name="contactId"
-            options={visibleContacts}
-            value={contactId}
-            onSelect={handleContactSelect}
-            placeholder="Type to search contacts..."
-          />
-        </div>
 
+        {/* The account's contact comes with the account (the customer's name
+            and contact no. above are the deal's own). */}
+        <input type="hidden" name="contactId" value={contactId} />
         {isHead && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Owner</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Owner *</label>
             <select
               name="ownerId"
-              defaultValue={defaultValues?.ownerId}
+              required
+              defaultValue={defaultValues?.ownerId ?? ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
+              <option value="">Pick the sales person...</option>
               {owners.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
@@ -691,6 +684,7 @@ export function DealForm({ draftKey, defaultValues, initialItems, ...props }: De
       billingCompany: v.billingCompany ?? defaultValues?.billingCompany,
       customerName: v.customerName,
       customerPhone: v.customerPhone,
+      customerEmail: v.customerEmail,
       createdAt: v.createdAt || defaultValues?.createdAt,
       value: draftNumber(v.value) ?? undefined,
       stage: draftOrNull<DealStage>(v.stage) ?? defaultValues?.stage,

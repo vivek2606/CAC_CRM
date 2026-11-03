@@ -52,6 +52,8 @@ enum EndUseSegment {
   INDUSTRIAL
   GOVERNMENT_INSTITUTIONAL
   REAL_ESTATE_DEVELOPER
+  EDUCATIONAL_INSTITUTION
+  RELIGIOUS_INSTITUTION
 }
 
 enum DealStage {
@@ -343,6 +345,7 @@ model Deal {
   // here for the same reason as Lead.customerName/phone.
   customerName  String?
   customerPhone String?
+  customerEmail String?
   // Closing-stage fields: how the customer will pay, and when the unit
   // needs to actually ship/install - distinct from expectedCloseDate
   // (that's when the sale is won, not when it's delivered). Deal-only,

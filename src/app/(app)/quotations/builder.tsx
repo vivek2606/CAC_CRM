@@ -1,6 +1,7 @@
 "use client";
 
 import { SendQuoteButton } from "./send-quote-button";
+import { LinkAccountDialog } from "../deals/link-account-dialog";
 import { QUOTE_TEMPLATES, TEMPLATE_LABEL, TEMPLATE_TITLE, templateTerms, type QuoteTemplate } from "@/lib/quote-templates";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
@@ -228,6 +229,9 @@ export function QuotationBuilder({
   const linkedDealId = fromDeal?.dealId || fromQuote?.dealId || createdDealId;
   // Downloaded without a deal: prompt to create one and link it.
   const [unlinkedRef, setUnlinkedRef] = useState<string | null>(null);
+  // The deal made from the quotation has no account yet: ask for it.
+  const [askAccount, setAskAccount] = useState(false);
+  const [accountLinked, setAccountLinked] = useState(false);
   const [dealTitle, setDealTitle] = useState("");
   // Who the deal goes to (Head / Coordinator): the quote's sales person when
   // that's a sales person; the Head defaults to themself, the Coordinator
@@ -864,9 +868,21 @@ export function QuotationBuilder({
         setDraftNote(null);
       }
       if (!linkedDealId) {
-        setUnlinkedRef(ref);
-        if (dealOwners) setDealOwner((cur) => cur || (dealOwners.some((o) => o.id === d.ownerId) ? d.ownerId! : isHead ? myId : ""));
-        setDealTitle((t) => t || [d.to.split("\n")[0]?.trim(), d.title.trim()].filter(Boolean).join(" - ").slice(0, 200));
+        // An equipment quotation not on a deal yet: its lead and deal are made
+        // straight away (Quotation stage) under its sales person. When that
+        // can't be worked out (the Coordinator's own quote), ask.
+        const title = [d.to.split("\n")[0]?.trim(), d.title.trim()].filter(Boolean).join(" - ").slice(0, 200);
+        const owner = dealOwners ? (dealOwners.some((o) => o.id === d.ownerId) ? d.ownerId! : isHead ? myId : "") : "";
+        const made = template === "equipment" && (!dealOwners || owner) ? await createDealForQuote(ref, title, owner || undefined) : null;
+        if (made?.dealId) {
+          setCreatedDealId(made.dealId);
+          if (!d.accountId) setAskAccount(true);
+        } else {
+          setUnlinkedRef(ref);
+          if (made?.error) setLinkError(made.error);
+          if (dealOwners) setDealOwner((cur) => cur || owner);
+          setDealTitle((t) => t || title);
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the file.");
@@ -1765,11 +1781,34 @@ export function QuotationBuilder({
       )}
       {createdDealId && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Deal created and the quotation linked to it.{" "}
+          Lead and deal created (Quotation stage) and the quotation linked to them
+          {accountLinked ? ", with the customer's account" : ""}.{" "}
           <Link href={`/deals/${createdDealId}`} className="font-medium underline">
             Open the deal
           </Link>
+          {!accountLinked && !askAccount && !d.accountId && (
+            <>
+              {" · "}
+              <button type="button" onClick={() => setAskAccount(true)} className="font-medium underline">
+                Link the account
+              </button>
+            </>
+          )}
         </div>
+      )}
+      {askAccount && createdDealId && (
+        <LinkAccountDialog
+          dealId={createdDealId}
+          accounts={customerAccounts.map((a) => ({ id: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
+          initialName={d.to.split("\n")[0]?.trim() ?? ""}
+          title="Link the new deal to the customer's account"
+          hint="The quotation's lead and deal are made. Pick the customer's account, or create it if it isn't there - you can also do it later from the deal."
+          onLinked={() => {
+            setAskAccount(false);
+            setAccountLinked(true);
+          }}
+          onCancel={() => setAskAccount(false)}
+        />
       )}
 
       {/* Downloads */}

@@ -21,6 +21,7 @@ import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
 import { binDeal } from "@/lib/recycle-bin";
 import { syncSaleLineItemsForDeal } from "@/lib/sale-line-sync";
 import { unbilled, type Unbilled } from "@/lib/unbilled";
+import { createLeadForDeal } from "@/lib/auto-lead";
 
 // Change log: a note on the deal, by whoever made the change, for changes
 // to a won deal's invoice, company, account and products (shown on the
@@ -76,6 +77,7 @@ const dealSchema = z.object({
   // the Head and Sales Coordinator.
   customerName: z.string().trim().optional().default(""),
   customerPhone: z.string().trim().optional().default(""),
+  customerEmail: z.string().trim().email("Check the customer's email address.").optional().or(z.literal("")),
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]),
   // Can be below 0 when the products include a sales return.
   value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100),
@@ -83,7 +85,7 @@ const dealSchema = z.object({
   expectedCloseDate: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
-  ownerId: z.string().min(1),
+  ownerId: z.string().min(1, "Pick the owner (sales person) of the deal."),
   equipmentType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
@@ -108,11 +110,10 @@ function toPaymentTerms(value: string | undefined): PaymentTerms | null {
   return value && value.trim() !== "" ? (value as PaymentTerms) : null;
 }
 
-// Backs both the "Date" entry field (backdating when a deal is logged) and
-// the Mark Won/Lost close-date override - falls back to "now" if missing
-// or unparseable, matching the previous unconditional `new Date()` behavior.
-function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
-  if (isBackOffice(user)) return;
+// A deal created directly needs the customer's name and contact no. from
+// everyone; when editing, the Head and the Sales Coordinator may leave them.
+function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string, creating = false) {
+  if (isBackOffice(user) && !creating) return;
   if (!name) throw new Error("Customer name is required");
   if (!phone) throw new Error("Customer phone is required");
 }
@@ -192,7 +193,9 @@ export async function createDeal(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
-  requireContact(user, parsed.customerName, parsed.customerPhone);
+  requireContact(user, parsed.customerName, parsed.customerPhone, true);
+  if (!parsed.equipmentType) throw new Error("Pick the equipment type.");
+  if (parsed.probability == null) throw new Error("Enter the winning probability.");
   const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
   const ownerProblem = await dealOwnerProblem(ownerId);
   if (ownerProblem) throw new Error(ownerProblem);
@@ -203,6 +206,7 @@ export async function createDeal(formData: FormData) {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
       customerPhone: toNullable(parsed.customerPhone),
+      customerEmail: toNullable(parsed.customerEmail),
       stage: parsed.stage,
       stageChangedAt: new Date(),
       value: parsed.value,
@@ -214,7 +218,7 @@ export async function createDeal(formData: FormData) {
       equipmentType: toEquipmentType(parsed.equipmentType),
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
-      paymentTerms: toPaymentTerms(parsed.paymentTerms),
+      paymentTerms: toPaymentTerms(parsed.paymentTerms) ?? "FULL_ADVANCE",
       expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
       items: lineItems.length > 0 ? { createMany: { data: lineItems } } : undefined,
       tags: parseTagsInput(formData.get("tags")),
@@ -222,6 +226,8 @@ export async function createDeal(formData: FormData) {
     },
   });
   await syncDealValueFromItems(deal.id);
+  // Every deal has its lead: made for it, 2 days before the deal's date.
+  await createLeadForDeal(deal.id, user.id, "created directly");
   {
     const owner = (await userNames([ownerId])).get(ownerId);
     await audit("deal", deal.id, user.id, "created", `For ${owner ?? "-"} - ${DEAL_STAGE_LABELS[parsed.stage]}, ${fmtMoney(parsed.value)}${lineItems.length ? `, ${lineItems.length} product${lineItems.length === 1 ? "" : "s"}` : ""}.`);
@@ -275,13 +281,14 @@ export async function updateDeal(dealId: string, formData: FormData) {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
       customerPhone: toNullable(parsed.customerPhone),
+      ...(formData.has("customerEmail") ? { customerEmail: toNullable(parsed.customerEmail) } : {}),
       stage,
       ...(stage !== existing.stage ? { stageChangedAt: new Date() } : {}),
       value: parsed.value,
       probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[stage],
       expectedCloseDate: parsed.expectedCloseDate ? new Date(parsed.expectedCloseDate) : null,
       accountId: toNullable(parsed.accountId),
-      contactId: toNullable(parsed.contactId),
+      ...(formData.has("contactId") ? { contactId: toNullable(parsed.contactId) } : {}),
       ownerId,
       closedAt: isClosed ? existing.closedAt : null,
       // A won deal's billing company: corrected here by the Head / Coordinator.
@@ -299,7 +306,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
       paymentTerms: toPaymentTerms(parsed.paymentTerms),
-      expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null,
+      ...(formData.has("expectedDeliveryDate") ? { expectedDeliveryDate: parsed.expectedDeliveryDate ? new Date(parsed.expectedDeliveryDate) : null } : {}),
       tags: parseTagsInput(formData.get("tags")),
       createdAt: parseDateInput(parsed.createdAt),
     },
@@ -461,6 +468,8 @@ async function setDealStage(
       ...(stage !== existing.stage ? { stageChangedAt: new Date() } : {}),
       probability: STAGE_DEFAULT_PROBABILITY[stage],
       closedAt: isClosed ? parseDateInput(closedAtOverride) : null,
+      // Won: the expected closure date becomes the date it was won.
+      ...(stage === "WON" ? { expectedCloseDate: parseDateInput(closedAtOverride) } : {}),
       lostReasonCategory: stage === "LOST" ? (lostReasonCategory ?? existing.lostReasonCategory ?? "OTHER") : null,
       lostReason: stage === "LOST" ? (lostReasonNote ?? null) : null,
       lostToBrand: stage === "LOST" ? lostToBrand?.trim().slice(0, 80) || null : null,
@@ -948,7 +957,13 @@ async function createBalanceOrder(
 async function recordWonInvoice(dealId: string, closedAt: string, invoiceNo: string) {
   await prisma.deal.update({
     where: { id: dealId },
-    data: { stage: "WON", probability: STAGE_DEFAULT_PROBABILITY.WON, closedAt: parseDateInput(closedAt), invoiceNo: invoiceNo.trim().slice(0, 60) },
+    data: {
+      stage: "WON",
+      probability: STAGE_DEFAULT_PROBABILITY.WON,
+      closedAt: parseDateInput(closedAt),
+      expectedCloseDate: parseDateInput(closedAt),
+      invoiceNo: invoiceNo.trim().slice(0, 60),
+    },
   });
   await keepConversionBeforeClose(dealId);
   await syncSaleLineItemsForDeal(dealId);
