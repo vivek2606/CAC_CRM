@@ -4,6 +4,7 @@ import { PageHeader, Card, StatCard, EmptyState } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { PENDING_STATUSES, STATUS_LABEL, STATUS_TONE, TAT_HOURS, fmtHours, hoursBetween, lagosDateTime, serviceMetrics, type ComplaintStatus } from "@/lib/service";
 import { amcStatus } from "@/lib/amc";
+import { claimableWhere } from "@/lib/warranty-claims";
 import { FileText, LifeBuoy, Plus, ShieldCheck } from "lucide-react";
 
 // The Service Manager's dashboard: complaints (this month's performance and
@@ -17,7 +18,8 @@ export async function ServiceDashboard({ name }: { name: string }) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 3600000);
   const in14 = new Date(now.getTime() + 14 * DAY);
   const in30 = new Date(now.getTime() + 30 * DAY);
-  const [month, pending, contracts, visits, ending] = await Promise.all([
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  const [month, pending, contracts, visits, ending, credited, toClaim] = await Promise.all([
     prisma.serviceComplaint.findMany({
       where: { registeredAt: { gte: monthStart } },
       select: {
@@ -44,6 +46,8 @@ export async function ServiceDashboard({ name }: { name: string }) {
       take: 10,
       select: { id: true, customerName: true, model: true, qty: true, warrantyUntil: true },
     }),
+    prisma.warrantyClaim.aggregate({ where: { status: "CREDITED", creditedAt: { gte: yearStart } }, _sum: { creditedAmount: true } }),
+    prisma.serviceComplaint.count({ where: { ...claimableWhere, warrantyClaim: null } }),
   ]);
   const m = serviceMetrics(month, now);
   const over48 = pending.filter((c) => (hoursBetween(c.registeredAt, now) ?? 0) > TAT_HOURS).length;
@@ -97,7 +101,16 @@ export async function ServiceDashboard({ name }: { name: string }) {
           <StatCard
             label={`Billed out of warranty (${monthName})`}
             value={formatCurrency(m.billed)}
-            sub={`${formatCurrency(m.warrantyPartsCost)} spares free in warranty`}
+            sub={
+              <>
+                {formatCurrency(m.warrantyPartsCost)} spares free in warranty · {formatCurrency(credited._sum.creditedAmount ?? 0)} recovered from Midea this year
+                {toClaim > 0 && (
+                  <Link href="/service/claims" className="ml-1 font-medium text-amber-700">
+                    · {toClaim} to claim
+                  </Link>
+                )}
+              </>
+            }
             accent="slate"
           />
         </div>

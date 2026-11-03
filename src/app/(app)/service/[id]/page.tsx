@@ -6,6 +6,8 @@ import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { STATUS_LABEL, STATUS_TONE, fmtHours, hoursBetween, lagosDateTime, toLagosInput, type ComplaintStatus, isSerialNA } from "@/lib/service";
 import { ComplaintActions, PartsEditor } from "./complaint-actions";
+import { RaiseClaimButton } from "../claims/claim-buttons";
+import { CLAIM_STATUS_LABEL, type ClaimStatus } from "@/lib/warranty-claims";
 
 const dmy = (d: Date | null) => (d ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : "-");
 
@@ -14,7 +16,12 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const c = await prisma.serviceComplaint.findUnique({
     where: { id },
-    include: { parts: { orderBy: { createdAt: "asc" } }, registeredBy: { select: { name: true } }, deal: { select: { id: true, title: true } } },
+    include: {
+      parts: { orderBy: { createdAt: "asc" } },
+      registeredBy: { select: { name: true } },
+      deal: { select: { id: true, title: true } },
+      warrantyClaim: { select: { id: true, ref: true, status: true } },
+    },
   });
   if (!c) notFound();
   const [technicians, partNames, history] = await Promise.all([
@@ -142,6 +149,26 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
               {c.inWarranty ? " (free to the customer - in warranty)" : ""} · Chargeable: {formatCurrency(partsTotal(true, "price"))}
             </p>
           </div>
+          {c.inWarranty && !underAmc && c.parts.some((p) => !p.chargeable && p.kind === "SPARE") && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+              {c.warrantyClaim ? (
+                <>
+                  Warranty claim{" "}
+                  <Link href={`/service/claims/${c.warrantyClaim.id}`} className="font-medium underline">
+                    {c.warrantyClaim.ref}
+                  </Link>{" "}
+                  - {CLAIM_STATUS_LABEL[c.warrantyClaim.status as ClaimStatus] ?? c.warrantyClaim.status}
+                </>
+              ) : (
+                <>
+                  Spares given free in warranty - claim them back from the manufacturer.
+                  <span className="ml-auto">
+                    <RaiseClaimButton complaintId={c.id} label="Raise warranty claim" />
+                  </span>
+                </>
+              )}
+            </div>
+          )}
           <PartsEditor complaintId={c.id} inWarranty={!sparesCharged} parts={c.parts} names={partNames.map((p) => p.name)} />
           {sparesCharged && (
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">

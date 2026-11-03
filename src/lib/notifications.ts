@@ -6,6 +6,7 @@ import { getAvailableStockByProduct, getLatestPriceByProduct } from "@/lib/prici
 import { getIncentiveApproval } from "@/lib/incentive-approval";
 import { canUseService } from "@/lib/service-access";
 import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
+import { claimableWhere } from "@/lib/warranty-claims";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -346,6 +347,42 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
         count: toClose.length,
         href: "/service?status=RESOLVED",
         items: toClose.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `Resolved ${fmt(c.resolvedAt!)}`, href: `/service/${c.id}` })),
+      });
+    // Warranty claims: resolved complaints with spares given free a week ago
+    // and no claim; claims sent 30+ days ago with no decision; approved ones
+    // not credited after 30 days.
+    const month = new Date(now.getTime() - 30 * day);
+    const [unclaimed, claimsWaiting] = await Promise.all([
+      prisma.serviceComplaint.findMany({
+        where: { ...claimableWhere, warrantyClaim: null, resolvedAt: { lt: new Date(now.getTime() - 7 * day) } },
+        select: { id: true, ref: true, customerName: true },
+        take: 200,
+      }),
+      prisma.warrantyClaim.findMany({
+        where: { OR: [{ status: "SUBMITTED", submittedAt: { lt: month } }, { status: "APPROVED", decidedAt: { lt: month } }] },
+        select: { id: true, ref: true, status: true, submittedAt: true, decidedAt: true, complaint: { select: { customerName: true } } },
+        take: 200,
+      }),
+    ]);
+    if (unclaimed.length)
+      groups.push({
+        key: "claimsToRaise",
+        label: "Spares given free - raise the warranty claim",
+        count: unclaimed.length,
+        href: "/service/claims",
+        items: unclaimed.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, href: `/service/${c.id}` })),
+      });
+    if (claimsWaiting.length)
+      groups.push({
+        key: "claimsWaiting",
+        label: "Warranty claims to chase with the manufacturer",
+        count: claimsWaiting.length,
+        href: "/service/claims",
+        items: claimsWaiting.slice(0, SHOW).map((c) => ({
+          label: `${c.ref} - ${c.complaint.customerName}`,
+          sub: c.status === "SUBMITTED" ? `No decision since ${fmt(c.submittedAt!)}` : `Approved ${fmt(c.decidedAt!)}, not credited`,
+          href: `/service/claims/${c.id}`,
+        })),
       });
     const [visits, renewals, ending] = await Promise.all([
       prisma.amcVisit.findMany({

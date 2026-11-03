@@ -177,6 +177,7 @@ model User {
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
   complaintsRegistered ServiceComplaint[] @relation("ComplaintRegisteredBy")
   amcContractsCreated AmcContract[] @relation("AmcCreatedBy")
+  warrantyClaimsCreated WarrantyClaim[] @relation("ClaimCreatedBy")
   quotations    Quotation[] @relation("QuotationCreator")
   serviceInvoices ServiceInvoice[] @relation("ServiceInvoiceCreator")
   ownedQuotations Quotation[] @relation("QuotationOwner")
@@ -922,6 +923,7 @@ model ServiceComplaint {
   updatedAt      DateTime  @updatedAt
 
   parts          ServiceComplaintPart[]
+  warrantyClaim  WarrantyClaim?
 
   @@index([status])
   @@index([registeredAt])
@@ -1030,4 +1032,47 @@ model AmcVisit {
 
   @@index([contractId])
   @@index([dueDate])
+}
+
+// Warranty claims to the manufacturer (Midea): the spares replaced free on
+// an in-warranty complaint, claimed back - one claim per complaint, from
+// draft to submitted, approved / rejected and credited.
+model WarrantyClaim {
+  id             String    @id @default(cuid())
+  ref            String    @unique // WC/2026/0001
+  complaintId    String    @unique
+  complaint      ServiceComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  manufacturer   String    @default("Midea")
+  status         String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CREDITED
+  claimAmount    Float     @default(0) // the lines' total, at our cost
+  claimNo        String?   // the manufacturer's reference
+  submittedAt    DateTime?
+  decidedAt      DateTime?
+  approvedAmount Float?
+  creditedAmount Float?
+  creditedAt     DateTime?
+  creditNoteNo   String?
+  partsReturned  Boolean   @default(false) // faulty parts sent back
+  partsReturnedAt DateTime?
+  reason         String?   // why rejected
+  notes          String?
+  createdById    String
+  createdBy      User      @relation("ClaimCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lines          WarrantyClaimLine[]
+
+  @@index([status])
+}
+
+model WarrantyClaimLine {
+  id        String  @id @default(cuid())
+  claimId   String
+  claim     WarrantyClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  name      String
+  qty       Float
+  unitCost  Float   @default(0)
+  partId    String? // the complaint's spare it came from
+
+  @@index([claimId])
 }

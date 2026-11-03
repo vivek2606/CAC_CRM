@@ -1,8 +1,8 @@
 import Link from "next/link";
 
-type Tab = "complaints" | "units" | "amc";
+type Tab = "complaints" | "units" | "amc" | "claims";
 
-// Service: complaints, the installed base and AMC contracts.
+// Service: complaints, the installed base, AMC contracts and warranty claims.
 export function ServiceTabs({ active }: { active: Tab }) {
   const tab = (key: Tab, href: string, label: string) => (
     <Link
@@ -17,6 +17,7 @@ export function ServiceTabs({ active }: { active: Tab }) {
       {tab("complaints", "/service", "Complaints")}
       {tab("units", "/service/units", "Installed units & warranty")}
       {tab("amc", "/service/amc", "AMC contracts")}
+      {tab("claims", "/service/claims", "Warranty claims")}
     </div>
   );
 }
