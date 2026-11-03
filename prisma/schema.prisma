@@ -176,6 +176,7 @@ model User {
   inTransitOrders InTransitOrder[] @relation("InTransitCreator")
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
   complaintsRegistered ServiceComplaint[] @relation("ComplaintRegisteredBy")
+  amcContractsCreated AmcContract[] @relation("AmcCreatedBy")
   quotations    Quotation[] @relation("QuotationCreator")
   serviceInvoices ServiceInvoice[] @relation("ServiceInvoiceCreator")
   ownedQuotations Quotation[] @relation("QuotationOwner")
@@ -235,6 +236,8 @@ model Account {
   leads       Lead[]
   deals       Deal[]
   complaints  ServiceComplaint[]
+  installedUnits InstalledUnit[]
+  amcContracts AmcContract[]
   activities  Activity[]
 }
 
@@ -426,6 +429,7 @@ model Deal {
   quotations    Quotation[]
   pendingOrders PendingOrder[]
   complaints    ServiceComplaint[]
+  installedUnits InstalledUnit[]
 
   @@index([sourceTxnNo])
   @@index([orderDealId])
@@ -568,6 +572,7 @@ model Product {
   stockReceipts    StockReceipt[]
   pendingOrders    PendingOrder[]
   complaints       ServiceComplaint[]
+  installedUnits   InstalledUnit[]
   inTransitOrders  InTransitOrder[]
 }
 
@@ -939,4 +944,90 @@ model ServiceComplaintPart {
   createdAt   DateTime @default(now())
 
   @@index([complaintId])
+}
+
+// The installed base: units we sold (one row per sale line - model, qty),
+// built from the Sales Register / won deals, with what service needs added:
+// serial nos., site, installation date. Warranty runs from the invoice
+// date (the sale's months, else 12) - the list of warranties ending is where
+// AMCs are sold.
+model InstalledUnit {
+  id             String    @id @default(cuid())
+  // The sale line it came from (SaleLineItem.sourceKey); none if added by hand.
+  saleKey        String?   @unique
+  customerName   String
+  accountId      String?
+  account        Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  dealId         String?
+  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  invoiceNo      String?
+  invoiceDate    DateTime?
+  billingCompany String?
+  productId      String?
+  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  model          String
+  category       String?
+  qty            Int       @default(1)
+  serialNos      String[]  @default([])
+  siteAddress    String?
+  phone          String?
+  installedAt    DateTime?
+  warrantyMonths Int       @default(12)
+  warrantyUntil  DateTime?
+  notes          String?
+  amcId          String?
+  amc            AmcContract? @relation(fields: [amcId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([warrantyUntil])
+  @@index([accountId])
+  @@index([amcId])
+}
+
+// Annual maintenance (AMC / PPM) contracts: the units covered, the period,
+// value and planned visits. Complaints on covered units are free like in
+// warranty (spares too when comprehensive).
+model AmcContract {
+  id            String    @id @default(cuid())
+  ref           String    @unique // AMC/2026/0001
+  customerName  String
+  accountId     String?
+  account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactName   String?
+  phone         String?
+  siteAddress   String?
+  startDate     DateTime
+  endDate       DateTime
+  value         Float     @default(0) // excl. VAT, for the period
+  visitsPerYear Int       @default(4)
+  // Comprehensive: spares covered too; else labour / servicing only.
+  comprehensive Boolean   @default(false)
+  billingCompany String?
+  invoiceNo     String?
+  cancelled     Boolean   @default(false)
+  notes         String?
+  renewedFromId String?
+  createdById   String
+  createdBy     User      @relation("AmcCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  units         InstalledUnit[]
+  visits        AmcVisit[]
+
+  @@index([endDate])
+}
+
+model AmcVisit {
+  id          String    @id @default(cuid())
+  contractId  String
+  contract    AmcContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  dueDate     DateTime
+  doneAt      DateTime?
+  technician  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([contractId])
+  @@index([dueDate])
 }

@@ -4,6 +4,8 @@ import { isBackOffice, type SessionUser } from "@/lib/rbac";
 import { computeDealDiscount } from "@/lib/discount";
 import { getAvailableStockByProduct, getLatestPriceByProduct } from "@/lib/pricing";
 import { getIncentiveApproval } from "@/lib/incentive-approval";
+import { canUseService } from "@/lib/service-access";
+import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -294,6 +296,60 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       // The Coordinator's main job list: first in her bell and morning push.
       if (user.role === "COORDINATOR") groups.unshift(group);
       else groups.push(group);
+    }
+  }
+
+  // Service (Head, Coordinator, Service Manager): AMC visits overdue or due
+  // this week, AMC renewals in the next 30 days, and warranties ending in 30
+  // days with no AMC - the AMCs to offer.
+  if (await canUseService(user)) {
+    const week = new Date(now.getTime() + 7 * day);
+    const [visits, renewals, ending] = await Promise.all([
+      prisma.amcVisit.findMany({
+        where: { doneAt: null, dueDate: { lte: week }, contract: { cancelled: false, endDate: { gte: new Date(now.getTime() - day) } } },
+        orderBy: { dueDate: "asc" },
+        select: { dueDate: true, contract: { select: { id: true, ref: true, customerName: true } } },
+        take: 200,
+      }),
+      prisma.amcContract.findMany({
+        where: { cancelled: false, endDate: { gte: now, lte: new Date(now.getTime() + RENEWAL_NOTICE_DAYS * day) }, NOT: { id: { in: (await prisma.amcContract.findMany({ where: { renewedFromId: { not: null } }, select: { renewedFromId: true } })).map((r) => r.renewedFromId!) } } },
+        orderBy: { endDate: "asc" },
+        select: { id: true, ref: true, customerName: true, endDate: true, value: true },
+      }),
+      prisma.installedUnit.findMany({
+        where: { amcId: null, warrantyUntil: { gte: now, lte: new Date(now.getTime() + 30 * day) } },
+        orderBy: { warrantyUntil: "asc" },
+        select: { id: true, customerName: true, model: true, qty: true, warrantyUntil: true },
+        take: 200,
+      }),
+    ]);
+    if (visits.length) {
+      const overdue = visits.filter((v) => v.dueDate < now).length;
+      groups.push({
+        key: "amcVisits",
+        label: `AMC service visits due${overdue ? ` (${overdue} overdue)` : ""}`,
+        count: visits.length,
+        href: "/service/amc",
+        items: visits.slice(0, SHOW).map((v) => ({ label: `${v.contract.ref} - ${v.contract.customerName}`, sub: `Due ${fmt(v.dueDate)}`, href: `/service/amc/${v.contract.id}` })),
+      });
+    }
+    if (renewals.length) {
+      groups.push({
+        key: "amcRenewals",
+        label: "AMCs to renew (ending in 30 days)",
+        count: renewals.length,
+        href: "/service/amc?status=RENEWAL_DUE",
+        items: renewals.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `Ends ${fmt(c.endDate)}`, href: `/service/amc/${c.id}` })),
+      });
+    }
+    if (ending.length) {
+      groups.push({
+        key: "warrantyEnding",
+        label: "Warranties ending in 30 days - offer an AMC",
+        count: ending.length,
+        href: "/service/units?w=ending",
+        items: ending.slice(0, SHOW).map((u) => ({ label: u.customerName, sub: `${u.qty} × ${u.model} · warranty ends ${fmt(u.warrantyUntil!)}`, href: `/service/amc/new?unit=${u.id}` })),
+      });
     }
   }
 

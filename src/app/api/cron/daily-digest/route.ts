@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getNotifications } from "@/lib/notifications";
+import { syncInstalledUnits } from "@/lib/installed-base";
 import { sendPush, subscribedUserIds } from "@/lib/push";
 
 // Morning reminder push (Vercel Cron, see vercel.json): everyone with
@@ -8,6 +9,9 @@ import { sendPush, subscribedUserIds } from "@/lib/push";
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
+
+  // Every morning: units sold yesterday join the installed base.
+  await syncInstalledUnits().catch((e) => console.error("installed units", e));
 
   const ids = await subscribedUserIds();
   const users = await prisma.user.findMany({

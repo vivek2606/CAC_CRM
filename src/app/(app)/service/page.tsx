@@ -20,6 +20,7 @@ import {
   type ComplaintStatus,
 } from "@/lib/service";
 import { Plus } from "lucide-react";
+import { ServiceTabs } from "./service-tabs";
 
 // Service & Complaints (Head, Sales Coordinator, Service Manager): the
 // complaints registered in a period and how service performed on them.
@@ -162,6 +163,7 @@ export default async function ServicePage({
         }
       />
       <div className="p-6 space-y-5">
+        <ServiceTabs active="complaints" />
         <form className="flex flex-wrap items-end gap-3" action="/service">
           <label className="text-xs font-medium text-slate-500">
             <span className="mb-1 block">Registered from</span>

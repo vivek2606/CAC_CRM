@@ -119,6 +119,7 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
           <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
             ✓ {sale.customer} · invoice {sale.invoiceNo} {sale.company && `(${sale.company})`} dated {dmy(sale.invoiceDate)}
             {sale.warrantyMonths !== STANDARD_WARRANTY_MONTHS && ` · special warranty: ${sale.warrantyMonths} months`}
+            {sale.amc && ` · covered by AMC ${sale.amc.ref} until ${dmy(sale.amc.until)}${sale.amc.comprehensive ? " (comprehensive)" : " (labour only)"}`}
           </p>
         )}
       </section>
@@ -216,7 +217,7 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
             <>
               Warranty {v.warrantyMonths} months from the invoice date, until <b>{dmy(w.until)}</b> -{" "}
               <b className={w.inWarranty ? "text-emerald-700" : "text-amber-700"}>{w.inWarranty ? "IN WARRANTY" : "OUT OF WARRANTY"}</b>
-              {w.inWarranty ? " (spares free of cost)" : " (spares and service charged - invoice the customer)"}.
+              {w.inWarranty ? " (spares free of cost)" : sale?.amc ? ` - but covered by AMC ${sale.amc.ref}, so treated as covered${sale.amc.comprehensive ? "" : " (labour only - spares charged)"}` : " (spares and service charged - invoice the customer)"}.
             </>
           ) : (
             <>No invoice date - out of warranty unless overridden below.</>

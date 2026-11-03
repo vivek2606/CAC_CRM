@@ -30,6 +30,10 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
       : Promise.resolve([]),
   ]);
   const status = c.status as ComplaintStatus;
+  // Covered by an AMC (out of warranty): free labour; spares too only when
+  // the AMC is comprehensive.
+  const underAmc = !!c.warrantyNote?.startsWith("Covered by AMC");
+  const sparesCharged = !c.inWarranty || (underAmc && c.warrantyNote!.includes("labour only"));
   const partsTotal = (chargeable: boolean, by: "cost" | "price") =>
     c.parts.filter((p) => p.chargeable === chargeable).reduce((s, p) => s + p.qty * (by === "cost" ? p.unitCost : p.unitPrice), 0);
   const billable = c.inWarranty ? partsTotal(true, "price") : c.serviceCharge + partsTotal(true, "price");
@@ -47,7 +51,7 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_TONE[status] ?? ""}`}>{STATUS_LABEL[status] ?? c.status}</span>
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${c.inWarranty ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-            {c.inWarranty ? "In warranty - spares free" : "Out of warranty - chargeable"}
+            {underAmc ? (sparesCharged ? "Covered by AMC - labour free, spares charged" : "Covered by AMC - spares free") : c.inWarranty ? "In warranty - spares free" : "Out of warranty - chargeable"}
           </span>
           {c.priority === "URGENT" && <span className="rounded-full bg-rose-600 px-3 py-1 text-sm font-semibold text-white">Urgent</span>}
         </div>
@@ -123,7 +127,7 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
             rootCause={c.rootCause ?? ""}
             resolution={c.resolution ?? ""}
             feedback={c.feedback}
-            inWarranty={c.inWarranty}
+            inWarranty={!sparesCharged}
             serviceCharge={c.serviceCharge}
             chargeInvoiceNo={c.chargeInvoiceNo ?? ""}
           />
@@ -137,8 +141,8 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
               {c.inWarranty ? " (free to the customer - in warranty)" : ""} · Chargeable: {formatCurrency(partsTotal(true, "price"))}
             </p>
           </div>
-          <PartsEditor complaintId={c.id} inWarranty={c.inWarranty} parts={c.parts} names={partNames.map((p) => p.name)} />
-          {!c.inWarranty && (
+          <PartsEditor complaintId={c.id} inWarranty={!sparesCharged} parts={c.parts} names={partNames.map((p) => p.name)} />
+          {sparesCharged && (
             <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
               <span>
                 To invoice the customer: service charge {formatCurrency(c.serviceCharge)} + spares {formatCurrency(partsTotal(true, "price"))} ={" "}

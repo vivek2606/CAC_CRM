@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
+import { applyDealWarranty } from "@/lib/installed-base";
+import { amcFor } from "@/lib/amc";
 import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus } from "@/lib/service";
 
 type Result = { error?: string };
@@ -20,6 +22,8 @@ export type SaleMatch = {
   company: string;
   warrantyMonths: number;
   products: { productId: string; model: string; qty: number }[];
+  // An AMC covering the sale's units today.
+  amc: { ref: string; until: string; comprehensive: boolean } | null;
 };
 export async function findSaleByInvoice(q: string): Promise<SaleMatch[]> {
   await requireService();
@@ -48,9 +52,13 @@ export async function findSaleByInvoice(q: string): Promise<SaleMatch[]> {
       lineItems: { select: { productId: true, qty: true, product: { select: { model: true } } } },
     },
   });
-  return deals.map((d) => {
+  const now = new Date();
+  const amcs = await Promise.all(deals.map((d) => amcFor({ dealId: d.id }, now)));
+  return deals.map((d, i) => {
     const lines = d.items.length ? d.items : d.lineItems;
+    const amc = amcs[i];
     return {
+      amc: amc ? { ref: amc.ref, until: amc.endDate.toISOString().slice(0, 10), comprehensive: amc.comprehensive } : null,
       dealId: d.id,
       invoiceNo: d.invoiceNo ?? String(d.sourceTxnNo ?? ""),
       invoiceDate: d.closedAt ? d.closedAt.toISOString().slice(0, 10) : "",
@@ -106,7 +114,12 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
   const invoiceDate = /^\d{4}-\d{2}-\d{2}$/.test(input.invoiceDate) ? new Date(`${input.invoiceDate}T00:00:00Z`) : null;
   const months = Math.min(120, Math.max(0, Math.round(input.warrantyMonths || STANDARD_WARRANTY_MONTHS)));
   if (input.warrantyOverride && !clean(input.warrantyNote)) return { error: "Say why the warranty is overridden (e.g. extended warranty agreed)." };
-  const inWarranty = input.warrantyOverride ? input.warrantyOverride === "in" : isInWarranty(invoiceDate, months, registeredAt);
+  // Out of warranty but under an AMC: covered all the same (spares too
+  // only when the AMC is comprehensive).
+  const amc = await amcFor({ dealId: input.dealId || null, serialNo: input.serialNo }, registeredAt);
+  const byWarranty = isInWarranty(invoiceDate, months, registeredAt);
+  const inWarranty = input.warrantyOverride ? input.warrantyOverride === "in" : byWarranty || !!amc;
+  const amcNote = !input.warrantyOverride && !byWarranty && amc ? `Covered by AMC ${amc.ref}${amc.comprehensive ? " (comprehensive)" : " (labour only - spares charged)"}` : "";
   const technician = clean(input.technician, 120);
   const deal = input.dealId ? await prisma.deal.findUnique({ where: { id: input.dealId }, select: { id: true } }) : null;
   const account = input.accountId ? await prisma.account.findUnique({ where: { id: input.accountId }, select: { id: true } }) : null;
@@ -133,7 +146,7 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
           warrantyMonths: months,
           warrantyUntil: invoiceDate ? warrantyUntil(invoiceDate, months) : null,
           inWarranty,
-          warrantyNote: clean(input.warrantyNote) || null,
+          warrantyNote: clean(input.warrantyNote) || amcNote || null,
           nature,
           description: clean(input.description, 2000) || null,
           priority: input.priority === "URGENT" ? "URGENT" : "NORMAL",
@@ -257,6 +270,7 @@ export async function setDealWarranty(dealId: string, months: number | null): Pr
   const m = months == null ? null : Math.round(months);
   if (m != null && (m < 0 || m > 120)) return { error: "Enter the warranty in months (0-120)." };
   await prisma.deal.update({ where: { id: dealId }, data: { warrantyMonths: m === STANDARD_WARRANTY_MONTHS ? null : m } });
+  await applyDealWarranty(dealId, m ?? STANDARD_WARRANTY_MONTHS);
   revalidatePath(`/deals/${dealId}`);
   return {};
 }

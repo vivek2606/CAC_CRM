@@ -30,9 +30,9 @@ import { isIssuedQuoteRef } from "@/lib/document-format";
 
 const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string; draft?: string; complaint?: string }> }) {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string; draft?: string; complaint?: string; amc?: string }> }) {
   const user = await requireUser();
-  const { deal: dealId, quote: quoteParam, revise, draft, complaint: complaintId } = await searchParams;
+  const { deal: dealId, quote: quoteParam, revise, draft, complaint: complaintId, amc: amcId } = await searchParams;
   // A saved draft opens like a saved quotation, still without its number.
   const quoteId = quoteParam ?? draft;
   const [settings, products, prices, stock, inTransit, tentative, me] = await Promise.all([
@@ -131,6 +131,37 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           qty: i.qty,
           unitPrice: i.unitPrice,
         })),
+      };
+    }
+  }
+
+  // An AMC contract: a servicing quotation for it - the contract value, the
+  // visits and the units covered.
+  if (!fromDeal && amcId && (await canUseService(user))) {
+    const c = await prisma.amcContract.findUnique({ where: { id: amcId }, include: { units: { select: { qty: true, model: true } } } });
+    if (c) {
+      const d = (x: Date) => x.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+      const units = c.units.map((u) => `${u.qty} x ${u.model}`).join(", ");
+      fromDeal = {
+        dealId: "",
+        template: "service",
+        companyKey: c.billingCompany === "Somotex" ? SOMOTEX_KEY : "SAKURAGI",
+        ownerId: "",
+        accountId: c.accountId,
+        to: [c.customerName, c.siteAddress, c.phone].filter((x): x is string => !!x).join("\n"),
+        attention: c.contactName ?? "",
+        title: "ANNUAL MAINTENANCE CONTRACT (AMC) FOR AIR-CONDITIONING UNITS",
+        terms: templateTerms("service", defaultTermsLines(settings), settings.quoteValidityDays),
+        rows: [
+          {
+            productId: null,
+            description: `Annual maintenance contract ${c.ref} - ${c.visitsPerYear} service visits a year, ${c.comprehensive ? "comprehensive (spares included)" : "labour / servicing only (spares charged extra)"}, ${d(c.startDate)} to ${d(c.endDate)}${units ? `. Units: ${units}` : ""}`,
+            detail: "",
+            unit: "Lot",
+            qty: 1,
+            unitPrice: c.value,
+          },
+        ],
       };
     }
   }
