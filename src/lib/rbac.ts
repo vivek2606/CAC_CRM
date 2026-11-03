@@ -9,6 +9,8 @@ export type SessionUser = {
   email?: string | null;
   role: "HEAD" | "SALES_MANAGER" | "COORDINATOR";
   avatarColor: string;
+  // Set by the app layout: may use Service & Complaints (see service-access.ts).
+  service?: boolean;
 };
 
 /** Requires a logged-in user, redirects to /login otherwise. Use in server components/pages. */

@@ -32,6 +32,9 @@ import { getWonPlan } from "@/lib/won-plan";
 import { ReopenDealButton } from "../reopen-deal-button";
 import { SavedQuotesTable, savedQuoteSelect } from "../../quotations/saved-quotes-table";
 import { Pencil, FileText, ShieldCheck } from "lucide-react";
+import { canUseService } from "@/lib/service-access";
+import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
+import { WarrantyTerms } from "../../service/warranty-terms";
 
 export default async function DealDetailPage({
   params,
@@ -264,6 +267,13 @@ export default async function DealDetailPage({
             </span>{" "}
             {sp.wonError ?? wonPlan?.error} Once that&apos;s sorted, press Mark Won - the invoices are already filled in.
           </div>
+        )}
+        {deal.stage === "WON" && deal.closedAt && (await canUseService(user)) && (
+          <WarrantyTerms
+            dealId={deal.id}
+            months={deal.warrantyMonths}
+            until={warrantyUntil(deal.closedAt, deal.warrantyMonths ?? STANDARD_WARRANTY_MONTHS).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
+          />
         )}
         {deal.stage === "WON" && !deal.invoiceNo && deal.sourceTxnNo == null && deal.closedAt && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">

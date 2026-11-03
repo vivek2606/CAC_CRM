@@ -25,7 +25,7 @@ import {
   Receipt,
   Landmark,
   TableProperties,
-  FileText, HeartPulse, Trash2, History } from "lucide-react";
+  FileText, HeartPulse, Trash2, History, LifeBuoy } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
 import { SakuragiMark } from "@/components/sakuragi-logo";
@@ -73,7 +73,9 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   purple: { text: "text-purple-500", bar: "bg-purple-500" },
 };
 
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor }[] = [
+// service: only for those with service access (the Head, the Sales
+// Coordinator and the Service Manager).
+const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; service?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
   { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky" },
   { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
@@ -83,6 +85,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
   { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
   { href: "/reports/sales-register", label: "Sales Register", icon: TableProperties, color: "teal" },
+  { href: "/service", label: "Service & Complaints", icon: LifeBuoy, color: "cyan", service: true },
 ];
 
 // Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
@@ -219,7 +222,7 @@ export function Sidebar({
       </div>
 
       <nav className={`flex-1 overflow-y-auto py-4 px-3 ${collapsed ? "lg:px-2" : ""} space-y-1`}>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.service || user.service).map((item) => {
           const active = item.href === activeHref;
           const Icon = item.icon;
           const colors = NAV_COLOR_CLASSES[item.color];
