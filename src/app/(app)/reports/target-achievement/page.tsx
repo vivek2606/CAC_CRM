@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireBackOffice } from "@/lib/rbac";
+import { TeamTabs } from "../team-tabs";
+import { getStudioViews } from "@/lib/studio-views";
 import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { getTargetAchievement, rangeFrom, periodLabel, achievementPct, type TARow } from "@/lib/target-achievement";
@@ -37,8 +39,9 @@ function Row({ x, team = false }: { x: TARow; team?: boolean }) {
 }
 
 export default async function TargetAchievementPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireBackOffice();
+  const user = await requireBackOffice();
   const params = await searchParams;
+  const tabs = await getStudioViews("team", user.id);
   const { from, to, months } = rangeFrom(params);
   const r = await getTargetAchievement(from, to, months);
   const qs = `from=${monthInput(from)}&to=${monthInput(to)}`;
@@ -78,6 +81,7 @@ export default async function TargetAchievementPage({ searchParams }: { searchPa
           </div>
         }
       />
+      <TeamTabs tabs={tabs} active="target" />
       <div className="p-6 space-y-5">
         <Card className="p-5">
           <h2 className="mb-1 text-sm font-semibold text-slate-900">Summary - {periodLabel(r)}</h2>

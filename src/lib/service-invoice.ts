@@ -54,19 +54,24 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
   const total = round2(entered);
   const vat = round2(total - subtotal);
   const received = round2(input.received);
+  // Somotex (its VAT reg. no., TIN and Zenith account) or Sakuragi (from
+  // Company Details); both at the Sakuragi address.
+  const sakuragi = pickCompany(settings, "SAKURAGI");
+  const co = input.companyKey === "SAKURAGI" ? sakuragi : { ...SOMOTEX, addressLines: sakuragi.addressLines };
+  const somotex = co.key === SOMOTEX.key;
   return {
     type: "proforma", // "Bill to" on the document
     heading: "PROJECT & SERVICE INVOICE",
     ref: input.ref,
     date: new Date(`${input.date}T00:00:00Z`),
     // Same address as Sakuragi (from Company Details).
-    company: { ...SOMOTEX, addressLines: pickCompany(settings, "SAKURAGI").addressLines },
+    company: co,
     to: input.to.split("\n").map((l) => l.trim()).filter(Boolean),
     attention: input.attention,
     title: input.title,
     validUntil: null,
-    tin: SOMOTEX.tin,
-    bank: { bankName: SOMOTEX.bankName, branch: SOMOTEX_BANK_BRANCH, accountName: SOMOTEX.accountName, accountNumber: SOMOTEX.accountNumber },
+    tin: co.tin,
+    bank: { bankName: co.bankName, ...(somotex ? { branch: SOMOTEX_BANK_BRANCH } : {}), accountName: co.accountName, accountNumber: co.accountNumber },
     signatory: { name: input.signatoryName, designation: input.signatoryDesignation, phone: input.signatoryPhone },
     rows,
     vatInclusive: false,
@@ -80,13 +85,13 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
     totalInWords: nairaInWords(total),
     terms: input.terms.map((t) => t.trim()).filter(Boolean),
     subtotalLabel: "Basic amount (excl. VAT)",
-    regLines: [`VAT Reg. No. ${SOMOTEX_VAT_REG_NO}`, `TIN ${SOMOTEX.tin}`],
+    regLines: somotex ? [`VAT Reg. No. ${SOMOTEX_VAT_REG_NO}`, `TIN ${SOMOTEX.tin}`] : co.tin ? [`TIN ${co.tin}`] : [],
     noVat: !input.withVat,
     payment: { received, balance: round2(total - received) },
     signBlocks: [
       { title: "Prepared by", lines: [input.signatoryName, input.signatoryDesignation, input.signatoryPhone].filter(Boolean) },
       { title: "Checked by", lines: [input.checkedBy].filter(Boolean) },
-      { title: `For ${SOMOTEX.name}`, lines: ["Authorised Signatory"] },
+      { title: `For ${co.name}`, lines: ["Authorised Signatory"] },
     ],
   };
 }

@@ -2,16 +2,18 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { getQuoteFollowUps } from "@/lib/quote-followups";
+import { canUseService } from "@/lib/service-access";
 
-type Tab = "new" | "saved" | "followups" | "report" | "approvals";
+type Tab = "new" | "saved" | "followups" | "report" | "approvals" | "invoice";
 
 // New quotation (the builder) / Saved quotations / Follow-ups due /
 // Quote-to-win report / (Head) discount approvals, with how many are waiting.
 export async function QuotationTabs({ active }: { active: Tab }) {
   const user = await requireUser();
-  const [waiting, followUps] = await Promise.all([
+  const [waiting, followUps, invoices] = await Promise.all([
     user.role === "HEAD" ? prisma.quotation.count({ where: { discountStatus: "pending" } }) : null,
     getQuoteFollowUps(isBackOffice(user) ? null : [user.id], { prices: false }),
+    canUseService(user),
   ]);
   const tab = (key: Tab, href: string, label: string, badge?: number) => (
     <Link
@@ -29,6 +31,7 @@ export async function QuotationTabs({ active }: { active: Tab }) {
       {tab("followups", "/quotations/follow-ups", "Follow-ups", followUps.length)}
       {tab("report", "/quotations/report", "Report")}
       {waiting != null && tab("approvals", "/quotations/approvals", "Approvals", waiting)}
+      {invoices && tab("invoice", "/project-billing/invoice", "Invoice (balance payment)")}
     </div>
   );
 }

@@ -11,7 +11,6 @@ import {
   KanbanSquare,
   Building2,
   BarChart3,
-  Crosshair,
   Package,
   Upload,
   Users,
@@ -21,7 +20,6 @@ import {
   Boxes,
   ClipboardList,
   BadgePercent,
-  Wrench,
   Receipt,
   Landmark,
   TableProperties,
@@ -91,12 +89,10 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; co
 // Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
 const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; headOnly?: boolean }[] = [
   { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
-  { href: "/reports/target-achievement", label: "Target vs Achievement", icon: Crosshair, color: "violet" },
   { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red" },
   { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink" },
   { href: "/admin/change-history", label: "Change History", icon: History, color: "sky", headOnly: true },
   { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal" },
-  { href: "/service-billings", label: "Service Billings", icon: Wrench, color: "orange", headOnly: true },
   { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
   { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
   { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
@@ -123,7 +119,9 @@ export function sectionFor(pathname: string, role: SessionUser["role"]): { href:
         ? "/incentives"
         : under("/deals/closed")
           ? "/reports/sales-register"
-          : path;
+          : under("/service-billings")
+            ? "/project-billing"
+            : path;
   const items = role === "HEAD" || role === "COORDINATOR" ? [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS] : NAV_ITEMS;
   return (
     items

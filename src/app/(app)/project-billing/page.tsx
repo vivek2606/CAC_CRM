@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
+import { BillingTabs } from "@/components/billing-tabs";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ExportCsvButton } from "@/components/export-csv-button";
@@ -28,7 +29,7 @@ export default async function ProjectBillingPage({
 }: {
   searchParams: Promise<{ month?: string; owner?: string }>;
 }) {
-  await requireBackOffice();
+  const user = await requireBackOffice();
   const params = await searchParams;
   const month = parseMonth(params.month);
   const owners = await prisma.user.findMany({
@@ -67,11 +68,12 @@ export default async function ProjectBillingPage({
         description="Amounts excl. VAT. Under a sales person it is project billing and counts toward their target and incentive; under the Service Manager it is service billing"
         action={
           <Link href="/project-billing/invoice" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500">
-            Prepare invoice (Somotex)
+            Prepare invoice (balance payment)
           </Link>
         }
       />
       <div className="p-6 space-y-6">
+        <BillingTabs active="billing" isHead={user.role === "HEAD"} />
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Add billing</h2>
           <AddBillingForm

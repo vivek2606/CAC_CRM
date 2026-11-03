@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { LayoutDashboard, Plus } from "lucide-react";
+import { Crosshair, LayoutDashboard, Plus } from "lucide-react";
 import type { StudioView } from "@/components/chart-studio/studio";
 
-// Team Reports' tabs: the standard Overview, then the user's own chart /
-// table tabs, then "New tab".
+// Team Reports' tabs: the standard Overview, Target vs Achievement, then
+// the user's own chart / table tabs, then "New tab".
 export function TeamTabs({ tabs, active }: { tabs: StudioView[]; active: string }) {
   const tab = (href: string, on: boolean, children: React.ReactNode) => (
     <Link
@@ -21,6 +21,14 @@ export function TeamTabs({ tabs, active }: { tabs: StudioView[]; active: string 
         <>
           <LayoutDashboard className="h-4 w-4" />
           Overview
+        </>,
+      )}
+      {tab(
+        "/reports/target-achievement",
+        active === "target",
+        <>
+          <Crosshair className="h-4 w-4" />
+          Target vs Achievement
         </>,
       )}
       {tabs.map((t) => (

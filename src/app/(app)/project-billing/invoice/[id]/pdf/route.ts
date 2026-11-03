@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { requireService } from "@/lib/service-access";
 import { renderSalesDocumentPdf } from "@/lib/pdf/sales-document-pdf";
 import { buildServiceInvoice, serviceInvoiceFilename, serviceInvoiceInputSchema } from "@/lib/service-invoice";
 import { isServiceInvoiceDraft } from "@/lib/service-invoice-schema";
 
 // Download a saved service / project invoice again, as saved.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireBackOffice();
+  await requireService();
   const { id } = await params;
   const row = await prisma.serviceInvoice.findUnique({ where: { id } });
   if (!row) return new Response("Not found", { status: 404 });

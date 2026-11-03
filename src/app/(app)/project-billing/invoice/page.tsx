@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { isBackOffice } from "@/lib/rbac";
+import { requireService } from "@/lib/service-access";
+import { QuotationTabs } from "../../quotations/quotation-tabs";
+import { BillingTabs } from "@/components/billing-tabs";
+import { INVOICE_COMPANY_NAME } from "@/lib/service-invoice-schema";
 import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getCompanySettings } from "@/lib/company-profile";
@@ -9,11 +13,13 @@ import { SERVICE_INVOICE_DRAFT_PREFIX } from "@/lib/service-invoice-schema";
 import { InvoiceBuilder, type InvoicePrefill } from "./invoice-builder";
 import { DiscardInvoiceDraftButton } from "./discard-draft-button";
 
-// Service & project invoices under Somotex Nigeria Limited: prepare one
-// (free-text lines, with or without VAT, payment received and balance),
-// and the ones saved so far - download again, or open to change.
+// Service & project invoices, issued by Somotex or Sakuragi - the invoice
+// that claims the balance payment: prepare one (free-text lines, with or
+// without VAT, payment received and balance), and the ones saved so far -
+// download again, or open to change. Head, Sales Coordinator and the
+// Service Manager; also reached from the Quotations tabs.
 export default async function ServiceInvoicePage({ searchParams }: { searchParams: Promise<{ id?: string; copy?: string; draft?: string }> }) {
-  const user = await requireBackOffice();
+  const user = await requireService();
   const { id, copy, draft } = await searchParams;
   const isDraft = { ref: { startsWith: SERVICE_INVOICE_DRAFT_PREFIX } };
   const [settings, me, saved, drafts] = await Promise.all([
@@ -41,7 +47,7 @@ export default async function ServiceInvoicePage({ searchParams }: { searchParam
     saved.map(async (r) => {
       const parsed = serviceInvoiceInputSchema.safeParse(r.data);
       const doc = parsed.success ? await buildServiceInvoice(parsed.data) : null;
-      return { ...r, type: parsed.success ? parsed.data.billingType : "-", received: doc?.payment?.received ?? 0, balance: doc?.payment?.balance ?? r.total, date: parsed.success ? parsed.data.date : null };
+      return { ...r, type: parsed.success ? `${parsed.data.billingType} · ${INVOICE_COMPANY_NAME[parsed.data.companyKey].split(" ")[0]}` : "-", received: doc?.payment?.received ?? 0, balance: doc?.payment?.balance ?? r.total, date: parsed.success ? parsed.data.date : null };
     }),
   );
   const link = "text-indigo-600 hover:text-indigo-500 font-medium";
@@ -50,14 +56,17 @@ export default async function ServiceInvoicePage({ searchParams }: { searchParam
     <div>
       <PageHeader
         title="Service & Project Invoice"
-        description={`Issued under ${SOMOTEX.name} - VAT Reg. No. ${SOMOTEX_VAT_REG_NO}, TIN ${SOMOTEX.tin}, ${SOMOTEX.bankName} (${SOMOTEX_BANK_BRANCH}) ${SOMOTEX.accountNumber}`}
+        description={`Claims the balance payment (payment received and balance due) - issued by Somotex (VAT Reg. No. ${SOMOTEX_VAT_REG_NO}, TIN ${SOMOTEX.tin}, ${SOMOTEX.bankName} ${SOMOTEX_BANK_BRANCH} ${SOMOTEX.accountNumber}) or Sakuragi`}
         action={
-          <Link href="/project-billing" className="text-sm text-indigo-600 hover:text-indigo-700">
-            ← Project &amp; Service Billing
-          </Link>
+          isBackOffice(user) ? (
+            <Link href="/project-billing" className="text-sm text-indigo-600 hover:text-indigo-700">
+              ← Project &amp; Service Billing
+            </Link>
+          ) : undefined
         }
       />
       <div className="p-6 space-y-6">
+        {isBackOffice(user) ? <BillingTabs active="invoice" isHead={user.role === "HEAD"} /> : <QuotationTabs active="invoice" />}
         <InvoiceBuilder
           key={`${openId ?? "new"}-${copy ? "copy" : ""}`}
           prefill={prefill}

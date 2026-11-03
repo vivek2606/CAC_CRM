@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileDown, Heading, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui";
-import { BILLING_TYPES, type ServiceInvoiceInput } from "@/lib/service-invoice-schema";
+import { BILLING_TYPES, INVOICE_COMPANIES, INVOICE_COMPANY_NAME, type ServiceInvoiceInput } from "@/lib/service-invoice-schema";
 import { saveServiceInvoiceDraft, discardServiceInvoiceDraft } from "./actions";
 
 export type InvoicePrefill = ServiceInvoiceInput;
@@ -23,7 +23,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const naira = (n: number) => `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const blankItem = (): Row => ({ uid: uid(), kind: "item", description: "", unit: "Lot", qty: "1", rate: "" });
 
-// The Somotex service / project invoice form: every line is typed in (no
+// The service / project invoice form (Somotex or Sakuragi): every line is typed in (no
 // product list), VAT on or off, and the payment received so far - the
 // balance is worked out. Downloading saves it (a new one gets its number).
 export function InvoiceBuilder({
@@ -45,6 +45,7 @@ export function InvoiceBuilder({
   const [ref, setRef] = useState(prefill?.ref ?? "");
   const [date, setDate] = useState(prefill?.date ?? today);
   const [billingType, setBillingType] = useState<(typeof BILLING_TYPES)[number]>(prefill?.billingType ?? "Service");
+  const [companyKey, setCompanyKey] = useState<(typeof INVOICE_COMPANIES)[number]>(prefill?.companyKey ?? "SOMOTEX");
   const [to, setTo] = useState(prefill?.to ?? "");
   const [attention, setAttention] = useState(prefill?.attention ?? "");
   const [title, setTitle] = useState(prefill?.title ?? "");
@@ -135,6 +136,7 @@ export function InvoiceBuilder({
       ref,
       date,
       billingType,
+      companyKey,
       to,
       attention,
       title,
@@ -164,7 +166,7 @@ export function InvoiceBuilder({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div>
           <span className={label}>Invoice no.</span>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">{ref || "Given on download"}</p>
@@ -172,6 +174,16 @@ export function InvoiceBuilder({
         <label>
           <span className={label}>Invoice date *</span>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} />
+        </label>
+        <label>
+          <span className={label}>Issued by *</span>
+          <select value={companyKey} onChange={(e) => setCompanyKey(e.target.value as (typeof INVOICE_COMPANIES)[number])} className={input}>
+            {INVOICE_COMPANIES.map((c) => (
+              <option key={c} value={c}>
+                {INVOICE_COMPANY_NAME[c]}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           <span className={label}>Billing type *</span>
@@ -331,7 +343,7 @@ export function InvoiceBuilder({
             <span className={label}>Checked by</span>
             <input value={checkedBy} onChange={(e) => setCheckedBy(e.target.value)} placeholder="Name (optional - or leave for a signature)" className={input} />
           </label>
-          <p className="text-xs text-slate-500">The foot of the invoice has Prepared by, Checked by and For Somotex Nigeria Limited (Authorised Signatory).</p>
+          <p className="text-xs text-slate-500">The foot of the invoice has Prepared by, Checked by and For {INVOICE_COMPANY_NAME[companyKey]} (Authorised Signatory).</p>
         </div>
       </div>
 

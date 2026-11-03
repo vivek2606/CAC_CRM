@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { requireService } from "@/lib/service-access";
 import { renderSalesDocumentPdf } from "@/lib/pdf/sales-document-pdf";
 import { buildServiceInvoice, nextServiceInvoiceRef, serviceInvoiceFilename, serviceInvoiceInputSchema } from "@/lib/service-invoice";
 import { SERVICE_INVOICE_DRAFT_PREFIX, isServiceInvoiceDraft } from "@/lib/service-invoice-schema";
@@ -8,7 +8,7 @@ import { SERVICE_INVOICE_DRAFT_PREFIX, isServiceInvoiceDraft } from "@/lib/servi
 // Builds the Somotex service / project invoice from the form and saves it:
 // a new one gets its number now; a saved one (its ref) is updated in place.
 export async function POST(request: Request) {
-  const user = await requireBackOffice();
+  const user = await requireService();
   let body: unknown;
   try {
     body = await request.json();

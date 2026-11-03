@@ -4,14 +4,14 @@ import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireBackOffice } from "@/lib/rbac";
+import { requireService } from "@/lib/service-access";
 import { SERVICE_INVOICE_DRAFT_PREFIX, isServiceInvoiceDraft, serviceInvoiceInputSchema } from "@/lib/service-invoice-schema";
 
 // Saves the invoice being prepared as a draft - nothing is checked beyond the
 // form's shape, and no number is taken. An invoice already issued keeps its
 // number in the draft, so downloading the draft updates it.
 export async function saveServiceInvoiceDraft(input: unknown, draftId: string | null): Promise<{ draftId?: string; error?: string }> {
-  const user = await requireBackOffice();
+  const user = await requireService();
   const parsed = serviceInvoiceInputSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the invoice." };
   const data = parsed.data;
@@ -35,7 +35,7 @@ export async function saveServiceInvoiceDraft(input: unknown, draftId: string | 
 
 // Throws away a draft (never an issued invoice).
 export async function discardServiceInvoiceDraft(id: string): Promise<{ error?: string }> {
-  await requireBackOffice();
+  await requireService();
   const { count } = await prisma.serviceInvoice.deleteMany({ where: { id, ref: { startsWith: SERVICE_INVOICE_DRAFT_PREFIX } } });
   if (!count) return { error: "Draft not found." };
   revalidatePath("/project-billing/invoice");

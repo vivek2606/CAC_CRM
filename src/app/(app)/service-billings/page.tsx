@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
+import { BillingTabs } from "@/components/billing-tabs";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { formatCurrency, formatCompactCurrency, formatDate } from "@/lib/format";
 import { ExportCsvButton } from "@/components/export-csv-button";
@@ -86,6 +87,7 @@ export default async function ServiceBillingsPage({
     <div>
       <PageHeader title="Service Billings" description={`${who} - ${rangeLabel}`} />
       <div className="p-6 space-y-4">
+        <BillingTabs active="service" isHead />
         <form className="flex flex-wrap items-end gap-3" action="/service-billings">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">From</label>

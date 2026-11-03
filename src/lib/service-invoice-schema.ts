@@ -4,6 +4,11 @@ import { z } from "zod";
 // apart so the browser form can use it without the server code.
 
 export const BILLING_TYPES = ["Service", "Project"] as const;
+export const INVOICE_COMPANIES = ["SOMOTEX", "SAKURAGI"] as const;
+export const INVOICE_COMPANY_NAME: Record<(typeof INVOICE_COMPANIES)[number], string> = {
+  SOMOTEX: "Somotex Nigeria Limited",
+  SAKURAGI: "Sakuragi Industries Nigeria Limited",
+};
 
 const rowSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("section"), label: z.string().trim().max(200) }),
@@ -21,6 +26,8 @@ export const serviceInvoiceInputSchema = z.object({
   ref: z.string().trim().max(80).default(""),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the invoice date."),
   billingType: z.enum(BILLING_TYPES),
+  // Issued by Somotex (as before) or Sakuragi.
+  companyKey: z.enum(INVOICE_COMPANIES).default("SOMOTEX"),
   to: z.string().trim().max(1000), // first line = customer name
   attention: z.string().trim().max(200).default(""),
   title: z.string().trim().max(300).default(""),
