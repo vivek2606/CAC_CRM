@@ -2,7 +2,8 @@
 
 import { useActionState, useTransition } from "react";
 import { Card } from "@/components/ui";
-import { createUser, setUserRole, type CreateUserState } from "./actions";
+import { createUser, setUserRole, type CreateUserState, setUserTitle } from "./actions";
+import { DESIGNATIONS } from "@/lib/team-titles";
 
 const inputClass = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm";
 
@@ -28,7 +29,13 @@ export function AddLoginForm() {
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Job title</label>
-          <input name="title" className={inputClass} placeholder="Sales Coordinator" />
+          <select name="title" defaultValue="Sales Coordinator" className={inputClass}>
+            {DESIGNATIONS.filter((t) => t !== "Head of Sales").map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Access</label>
@@ -54,6 +61,30 @@ export function AddLoginForm() {
         </div>
       )}
     </Card>
+  );
+}
+
+// The designation shown for someone; access (below it) stays as it is.
+export function DesignationSelect({ userId, title }: { userId: string; title: string | null }) {
+  const [isPending, startTransition] = useTransition();
+  const options = title && !DESIGNATIONS.includes(title) ? [title, ...DESIGNATIONS] : DESIGNATIONS;
+  return (
+    <select
+      defaultValue={title ?? ""}
+      disabled={isPending}
+      onChange={(e) => {
+        const next = e.target.value;
+        startTransition(() => setUserTitle(userId, next));
+      }}
+      className="rounded border border-slate-200 px-1.5 py-0.5 text-sm text-slate-700 disabled:opacity-60"
+    >
+      {!title && <option value="">Designation...</option>}
+      {options.map((t) => (
+        <option key={t} value={t} disabled={!DESIGNATIONS.includes(t)}>
+          {t}
+        </option>
+      ))}
+    </select>
   );
 }
 

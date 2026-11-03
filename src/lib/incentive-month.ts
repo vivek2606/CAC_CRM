@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import {
   calculateSalesIncentive,
@@ -20,7 +21,7 @@ export async function computeMonthIncentives(month: Date): Promise<{
   const nextMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
   const [settings, reps] = await Promise.all([
     getIncentiveSettings(),
-    prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   const repIds = reps.map((r) => r.id);
   const [targets, sales, projects] = await Promise.all([

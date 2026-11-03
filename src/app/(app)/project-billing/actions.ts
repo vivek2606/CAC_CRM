@@ -1,5 +1,7 @@
 "use server";
 
+import { SALES_TITLE_IN } from "@/lib/team-titles";
+
 import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -20,7 +22,7 @@ const firstOfMonth = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTC
 // Sales persons and the Service Manager - who project/service billing can be under.
 async function billingOwners() {
   return prisma.user.findMany({
-    where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
+    where: { isActive: true, OR: [{ title: SALES_TITLE_IN }, { title: "Service Manager" }] },
     select: { id: true, name: true, title: true },
   });
 }

@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { getProjectBillings } from "@/lib/project-billing";
 
@@ -31,7 +32,7 @@ export function rangeFrom(params: { from?: string | null; to?: string | null }, 
 
 export async function getTargetAchievement(from: Date, to: Date, months: Date[]): Promise<TargetAchievement> {
   const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth() + 1, 1));
-  const people = await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const people = await prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const ids = people.map((p) => p.id);
   const [targets, won, projects] = await Promise.all([
     prisma.target.findMany({ where: { userId: { in: ids }, month: { gte: from, lt: end } }, select: { userId: true, month: true, targetValue: true } }),

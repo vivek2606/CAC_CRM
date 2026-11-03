@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import Link from "next/link";
 import { getMonthlyPipeline } from "@/lib/monthly-pipeline";
 import { PipelineThisMonth } from "@/components/monthly-pipeline-table";
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
 
   // Targets and sales: the sales team (Head / Coordinator) or yourself.
   const reps = team
-    ? await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+    ? await prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, orderBy: { name: "asc" }, select: { id: true, name: true } })
     : [{ id: user.id, name: user.name ?? "Me" }];
   const repIds = reps.map((r) => r.id);
 

@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 
 // Year-to-date sales vs. target, shared by the Dashboard and Targets page so
@@ -48,7 +49,7 @@ export async function getYtdSummary(scope: YtdScope, throughMonth: Date): Promis
   } else {
     const [serviceUsers, coreReps] = await Promise.all([
       prisma.user.findMany({ where: { isActive: true, title: "Service Manager" }, select: { id: true } }),
-      prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, select: { id: true } }),
+      prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, select: { id: true } }),
     ]);
     ownerFilter = { notIn: serviceUsers.map((u) => u.id) };
     targetUserIds = coreReps.map((u) => u.id);

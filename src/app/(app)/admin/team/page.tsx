@@ -2,7 +2,7 @@ import { requireHead } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Avatar } from "@/components/ui";
 import { ResetPasswordButton } from "./reset-password-button";
-import { AddLoginForm, RoleSelect } from "./add-login-form";
+import { AddLoginForm, DesignationSelect, RoleSelect } from "./add-login-form";
 
 function roleLabel(role: string): string {
   return role === "HEAD" ? "Head of Sales" : role === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager";
@@ -29,7 +29,7 @@ export default async function TeamPage() {
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Designation &amp; access</th>
                   <th className="px-4 py-3 font-medium">Password</th>
                 </tr>
               </thead>
@@ -44,7 +44,7 @@ export default async function TeamPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      <div>{u.title ?? roleLabel(u.role)}</div>
+                      <div>{u.role === "HEAD" ? u.title ?? roleLabel(u.role) : <DesignationSelect userId={u.id} title={u.title} />}</div>
                       {u.role === "HEAD" || u.id === head.id ? (
                         <div className="text-xs text-slate-400">Access: {roleLabel(u.role)}</div>
                       ) : (

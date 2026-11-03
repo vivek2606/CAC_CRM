@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
@@ -33,7 +34,7 @@ export default async function ProjectBillingPage({
   const params = await searchParams;
   const month = parseMonth(params.month);
   const owners = await prisma.user.findMany({
-    where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
+    where: { isActive: true, OR: [{ title: SALES_TITLE_IN }, { title: "Service Manager" }] },
     orderBy: { name: "asc" },
     select: { id: true, name: true, title: true },
   });

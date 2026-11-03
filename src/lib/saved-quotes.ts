@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canAccessOwner, isBackOffice, type SessionUser } from "@/lib/rbac";
@@ -29,7 +30,7 @@ export function canSeeQuotation(user: SessionUser, q: { ownerId: string; created
 // picker: the sales and service managers, the Head and the Coordinator.
 export async function quoteSalesPeople(): Promise<{ id: string; name: string }[]> {
   return prisma.user.findMany({
-    where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }, { role: "HEAD" }, { role: "COORDINATOR" }] },
+    where: { isActive: true, OR: [{ title: SALES_TITLE_IN }, { title: "Service Manager" }, { role: "HEAD" }, { role: "COORDINATOR" }] },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });

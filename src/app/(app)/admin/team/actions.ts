@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { requireHead } from "@/lib/rbac";
+import { DESIGNATIONS } from "@/lib/team-titles";
 
 function randomPassword(): string {
   return crypto.randomBytes(6).toString("base64url");
@@ -98,5 +99,18 @@ export async function setUserRole(userId: string, role: string) {
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
   if (!target || target.role === "HEAD") throw new Error("Not allowed.");
   await prisma.user.update({ where: { id: userId }, data: { role: parsed.data } });
+  revalidatePath("/admin/team");
+}
+
+// The designation shown for someone (Sales Manager, Senior Sales Manager,
+// Service Manager...). Their access (role) doesn't change - but the Service
+// Manager gets Service & Complaints, and sales designations count in the
+// sales team's targets and reports.
+export async function setUserTitle(userId: string, title: string) {
+  await requireHead();
+  if (!DESIGNATIONS.includes(title)) throw new Error("Unknown designation.");
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!target) throw new Error("Not found.");
+  await prisma.user.update({ where: { id: userId }, data: { title } });
   revalidatePath("/admin/team");
 }

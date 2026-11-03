@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
@@ -55,7 +56,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     getPendingShortfalls(availableStock, inTransitByProduct),
     isHead
       ? prisma.user.findMany({
-          where: { isActive: true, title: "Sales Manager" },
+          where: { isActive: true, title: SALES_TITLE_IN },
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         })

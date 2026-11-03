@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
@@ -90,7 +91,7 @@ export default async function ClosedDealsPage({
     // same roster the Kanban page's own owner filter offers.
     isBackOffice(user)
       ? prisma.user.findMany({
-          where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
+          where: { isActive: true, OR: [{ title: SALES_TITLE_IN }, { title: "Service Manager" }] },
           orderBy: { name: "asc" },
           select: { id: true, name: true },
         })

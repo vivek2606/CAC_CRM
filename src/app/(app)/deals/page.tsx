@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton } from "@/components/ui";
@@ -29,7 +30,7 @@ export default async function DealsPage({
   // not the full historical SALES_MANAGER-role roster.
   const owners = isBackOffice(user)
     ? await prisma.user.findMany({
-        where: { isActive: true, OR: [{ title: "Sales Manager" }, { title: "Service Manager" }] },
+        where: { isActive: true, OR: [{ title: SALES_TITLE_IN }, { title: "Service Manager" }] },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       })

@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import {
   ACCOUNT_TYPE_LABELS,
@@ -96,7 +97,7 @@ export async function getTeamStudioData(now = new Date()): Promise<TeamStudioDat
     // Project billing under the sales persons' names counts as achieved (as
     // on the Overview: active Sales Managers).
     prisma.projectBilling.findMany({
-      where: { docDate: { gte: since }, owner: { isActive: true, title: "Sales Manager" } },
+      where: { docDate: { gte: since }, owner: { isActive: true, title: SALES_TITLE_IN } },
       select: { docDate: true, value: true, custName: true, billingCompany: true, owner: { select: { name: true } } },
     }),
   ]);

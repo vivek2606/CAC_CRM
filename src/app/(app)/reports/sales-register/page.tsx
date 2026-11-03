@@ -1,3 +1,4 @@
+import { SALES_TITLES } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { BRANCH_SALES_WHERE, OTHERS_FROM } from "@/lib/branch-sales";
 import { requireUser, isBackOffice } from "@/lib/rbac";
@@ -47,7 +48,7 @@ export default async function SalesRegisterPage({
 
   const people = all
     ? await prisma.user.findMany({
-        where: { OR: [{ isActive: true, title: { in: ["Sales Manager", "Service Manager"] } }] },
+        where: { OR: [{ isActive: true, title: { in: [...SALES_TITLES, "Service Manager"] } }] },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       })

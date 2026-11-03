@@ -1,5 +1,7 @@
 "use server";
 
+import { SALES_TITLE_IN } from "@/lib/team-titles";
+
 import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { parseTargetsBuffer } from "@/lib/import/parse-targets";
@@ -47,7 +49,7 @@ export async function importTargets(
 
   // Match each row's rep name against the active sales team by normalized name.
   const reps = await prisma.user.findMany({
-    where: { isActive: true, title: "Sales Manager" },
+    where: { isActive: true, title: SALES_TITLE_IN },
     select: { id: true, name: true },
   });
   const userIdByNormalizedName = new Map(reps.map((r) => [normalizeSalesmanName(r.name), r.id]));

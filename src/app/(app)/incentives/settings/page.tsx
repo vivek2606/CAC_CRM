@@ -1,3 +1,4 @@
+import { isSalesTitle } from "@/lib/team-titles";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireHead } from "@/lib/rbac";
@@ -11,7 +12,7 @@ export default async function IncentiveSettingsPage() {
     getIncentiveSettings(),
     prisma.user.findMany({ where: { isActive: true, role: { not: "HEAD" } }, orderBy: { name: "asc" }, select: { id: true, name: true, title: true } }),
   ]);
-  const salesPeople = users.filter((u) => u.title === "Sales Manager").map(({ id, name }) => ({ id, name }));
+  const salesPeople = users.filter((u) => isSalesTitle(u.title)).map(({ id, name }) => ({ id, name }));
   // Salary support entries set up by name (e.g. the default) are shown
   // against the matching login, and saved with it.
   const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");

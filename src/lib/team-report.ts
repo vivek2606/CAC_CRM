@@ -1,3 +1,4 @@
+import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { getProjectBillings } from "@/lib/project-billing";
 import type { DealStage, LostReason } from "@prisma/client";
@@ -71,7 +72,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const staleBefore = new Date(now.getTime() - STALE_DAYS * DAY);
 
-  const people = await prisma.user.findMany({ where: { isActive: true, title: "Sales Manager" }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const people = await prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const ids = people.map((p) => p.id);
 
   const [deals, leads, activities, targets, projects, accounts, thisMonthTargets] = await Promise.all([

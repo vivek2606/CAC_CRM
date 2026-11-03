@@ -1,3 +1,4 @@
+import { isSalesTitle } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { CLOSED_LEAD_STATUSES } from "@/lib/constants";
 
@@ -47,7 +48,7 @@ export async function getLeadStats(ownerIds: string[], now = new Date()): Promis
 
   // Active sales managers, plus anyone else who has leads in these figures.
   const withLeads = new Set([...recent, ...active, ...window90].map((l) => l.ownerId));
-  const people = users.filter((u) => withLeads.has(u.id) || (u.isActive && u.title === "Sales Manager"));
+  const people = users.filter((u) => withLeads.has(u.id) || (u.isActive && isSalesTitle(u.title)));
   const byPerson: LeadStatsRow[] = people.map((u) => {
     const mineActive = active.filter((l) => l.ownerId === u.id);
     const mine90 = window90.filter((l) => l.ownerId === u.id);

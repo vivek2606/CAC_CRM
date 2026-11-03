@@ -282,7 +282,7 @@ export function Sidebar({
           <div className={`min-w-0 ${label}`}>
             <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
             <p className="text-xs text-slate-500 truncate">
-              {roleLabel(user.role)}
+              {user.title || roleLabel(user.role)}
             </p>
           </div>
         </div>
