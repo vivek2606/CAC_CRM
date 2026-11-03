@@ -1,7 +1,7 @@
 "use server";
 
 import { audit, auditDiff, fmtDate, fmtMoney, userNames } from "@/lib/audit";
-import { dealOwnerProblem } from "@/lib/deal-owner";
+import { backOfficeDefaultOwner, dealOwnerProblem } from "@/lib/deal-owner";
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -21,26 +21,31 @@ const leadSchema = z.object({
   // Not on the new-lead form: a new lead is New. Winning probability, budget
   // confirmed and end-use segment belong to the deal stage, not the lead form.
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]).optional(),
-  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"], { message: "Pick the source of the lead." }),
+  // Required from sales people (checked in requireLeadDetails); the Head and
+  // the Sales Coordinator may leave them.
+  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]).optional().or(z.literal("")),
   equipmentType: z.string().optional(),
   competitorBrand: z.string().optional(),
-  expectedPurchaseTimeframe: z.string().min(1, "Pick the expected purchase timeframe."),
+  expectedPurchaseTimeframe: z.string().optional(),
   value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100).optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().optional().default(""),
   notes: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
-  ownerId: z.string().min(1, "Pick the sales person the lead is assigned to."),
+  ownerId: z.string().optional(),
   createdAt: z.string().optional(),
 });
 
-// The contact no. is needed on every lead; the customer's name too, except
-// when the Head or the Sales Coordinator enter it.
-function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
-  if (!phone) throw new Error("Customer contact no. is required");
+// A sales person's lead needs the customer's name and contact no., the
+// expected purchase timeframe and the source; the Head and the Sales
+// Coordinator may leave any of them.
+function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string, d?: { source?: string; expectedPurchaseTimeframe?: string }) {
   if (isBackOffice(user)) return;
   if (!name) throw new Error("Customer name is required");
+  if (!phone) throw new Error("Customer contact no. is required");
+  if (d && !d.expectedPurchaseTimeframe) throw new Error("Pick the expected purchase timeframe.");
+  if (d && !d.source) throw new Error("Pick the source of the lead.");
 }
 
 function toNullable(value: string | undefined) {
@@ -68,9 +73,9 @@ export async function createLead(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
-  requireContact(user, parsed.customerName, parsed.phone);
+  requireContact(user, parsed.customerName, parsed.phone, parsed);
 
-  const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
+  const ownerId = isBackOffice(user) ? parsed.ownerId || (await backOfficeDefaultOwner(user)) : user.id;
 
   const lead = await prisma.lead.create({
     data: {
@@ -78,7 +83,7 @@ export async function createLead(formData: FormData) {
       customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
       status: parsed.status ?? "NEW",
-      source: parsed.source,
+      source: parsed.source || "DIRECT",
       equipmentType: toEquipmentType(parsed.equipmentType),
       competitorBrand: toNullable(parsed.competitorBrand),
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
@@ -111,8 +116,8 @@ export async function updateLead(leadId: string, formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
   const parsed = leadSchema.parse(raw);
-  requireContact(user, parsed.customerName, parsed.phone);
-  const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
+  requireContact(user, parsed.customerName, parsed.phone, parsed);
+  const ownerId = isBackOffice(user) ? parsed.ownerId || existing.ownerId : existing.ownerId;
 
   await prisma.lead.update({
     where: { id: leadId },
@@ -121,7 +126,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
       ...(parsed.status ? { status: parsed.status } : {}),
-      source: parsed.source,
+      source: parsed.source || "DIRECT",
       equipmentType: toEquipmentType(parsed.equipmentType),
       competitorBrand: toNullable(parsed.competitorBrand),
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),

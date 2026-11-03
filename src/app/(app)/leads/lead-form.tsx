@@ -131,10 +131,10 @@ function LeadFormFields({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no. *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no.{isHead ? "" : " *"}</label>
           <input
             name="phone"
-            required
+            required={!isHead}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -199,10 +199,10 @@ function LeadFormFields({
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Expected purchase timeframe *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Expected purchase timeframe{isHead ? "" : " *"}</label>
           <select
             name="expectedPurchaseTimeframe"
-            required
+            required={!isHead}
             defaultValue={defaultValues?.expectedPurchaseTimeframe ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
@@ -215,11 +215,11 @@ function LeadFormFields({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Source *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Source{isHead ? "" : " *"}</label>
           <select
             name="source"
             defaultValue={defaultValues?.source ?? ""}
-            required
+            required={!isHead}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">Pick...</option>
@@ -266,9 +266,9 @@ function LeadFormFields({
         </div>
         {isHead && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Assigned to *</label>
-            <select name="ownerId" required defaultValue={defaultValues?.ownerId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="">Pick the sales person...</option>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assigned to</label>
+            <select name="ownerId" defaultValue={defaultValues?.ownerId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">Head of Sales (if left blank)</option>
               {owners.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}

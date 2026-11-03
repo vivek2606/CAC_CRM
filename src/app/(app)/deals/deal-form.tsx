@@ -105,8 +105,8 @@ function DealFormFields({
   const [customerName, setCustomerName] = useState(defaultValues?.customerName ?? "");
   const [customerPhone, setCustomerPhone] = useState(defaultValues?.customerPhone ?? "");
   const today = new Date().toISOString().slice(0, 10);
-  // A new deal (not editing one): customer name and contact no. are needed
-  // from everyone, and the open-deal details start from their defaults.
+  // A new deal (not editing one): the open-deal details start from their
+  // defaults. For the Head and the Sales Coordinator only the title is required.
   const creating = !dealId;
   const closed = defaultValues?.stage === "WON" || defaultValues?.stage === "LOST";
 
@@ -297,10 +297,10 @@ function DealFormFields({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead && !creating ? "" : " *"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
           <input
             name="customerName"
-            required={!isHead || creating}
+            required={!isHead}
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             placeholder="e.g. Adaeze Okafor"
@@ -309,10 +309,10 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no.{isHead && !creating ? "" : " *"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no.{isHead ? "" : " *"}</label>
           <input
             name="customerPhone"
-            required={!isHead || creating}
+            required={!isHead}
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -343,13 +343,13 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Tentative deal value (₦) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tentative deal value (₦){isHead ? "" : " *"}</label>
           <input
             name="value"
             type="number"
             min={validItems.length > 0 ? undefined : 0}
             step="0.01"
-            required
+            required={!isHead}
             value={productsTotal != null && !products ? String(productsTotal) : value}
             onChange={(e) => setValue(e.target.value)}
             readOnly={(productsTotal != null && !products) || validItems.length > 0}
@@ -429,23 +429,23 @@ function DealFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Winning probability (%) *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Winning probability (%){isHead ? "" : " *"}</label>
           <input
             name="probability"
             type="number"
             min={0}
             max={100}
-            required
+            required={!isHead}
             defaultValue={defaultValues?.probability ?? (creating ? DEFAULT_WIN_PROBABILITY : undefined)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type{closed ? "" : " *"}</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type{closed || isHead ? "" : " *"}</label>
           <select
             name="equipmentType"
-            required={!closed}
+            required={!closed && !isHead}
             defaultValue={defaultValues?.equipmentType ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
@@ -627,14 +627,14 @@ function DealFormFields({
         <input type="hidden" name="contactId" value={contactId} />
         {isHead && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Owner *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Owner</label>
             <select
               name="ownerId"
-              required
+              required={!isHead}
               defaultValue={defaultValues?.ownerId ?? ""}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">Pick the sales person...</option>
+              <option value="">Head of Sales (if left blank)</option>
               {owners.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}

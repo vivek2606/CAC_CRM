@@ -3,7 +3,7 @@
 import { audit, fmtMoney, userNames } from "@/lib/audit";
 import { withChangeReason } from "@/lib/change-log";
 import { keepConversionBeforeClose } from "@/lib/conversion-date";
-import { dealOwnerProblem } from "@/lib/deal-owner";
+import { backOfficeDefaultOwner, dealOwnerProblem } from "@/lib/deal-owner";
 import { resolveAccountInput, type AccountInput } from "@/lib/account-link";
 import { z } from "zod";
 import { redirect, unstable_rethrow } from "next/navigation";
@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
-import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
+import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS, DEFAULT_WIN_PROBABILITY } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
@@ -81,11 +81,12 @@ const dealSchema = z.object({
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"]),
   // Can be below 0 when the products include a sales return.
   value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100),
-  probability: z.coerce.number().min(0).max(100).optional(),
+  // Left blank: the default (not 0).
+  probability: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().min(0).max(100).optional()),
   expectedCloseDate: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
-  ownerId: z.string().min(1, "Pick the owner (sales person) of the deal."),
+  ownerId: z.string().optional(),
   equipmentType: z.string().optional(),
   endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
@@ -110,10 +111,10 @@ function toPaymentTerms(value: string | undefined): PaymentTerms | null {
   return value && value.trim() !== "" ? (value as PaymentTerms) : null;
 }
 
-// A deal created directly needs the customer's name and contact no. from
-// everyone; when editing, the Head and the Sales Coordinator may leave them.
-function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string, creating = false) {
-  if (isBackOffice(user) && !creating) return;
+// A sales person's deal needs the customer's name and contact no.; the
+// Head and the Sales Coordinator may leave them.
+function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
+  if (isBackOffice(user)) return;
   if (!name) throw new Error("Customer name is required");
   if (!phone) throw new Error("Customer phone is required");
 }
@@ -193,10 +194,9 @@ export async function createDeal(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
-  requireContact(user, parsed.customerName, parsed.customerPhone, true);
-  if (!parsed.equipmentType) throw new Error("Pick the equipment type.");
-  if (parsed.probability == null) throw new Error("Enter the winning probability.");
-  const ownerId = isBackOffice(user) ? parsed.ownerId : user.id;
+  requireContact(user, parsed.customerName, parsed.customerPhone);
+  if (!isBackOffice(user) && !parsed.equipmentType) throw new Error("Pick the equipment type.");
+  const ownerId = isBackOffice(user) ? parsed.ownerId || (await backOfficeDefaultOwner(user)) : user.id;
   const ownerProblem = await dealOwnerProblem(ownerId);
   if (ownerProblem) throw new Error(ownerProblem);
   const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
@@ -210,7 +210,7 @@ export async function createDeal(formData: FormData) {
       stage: parsed.stage,
       stageChangedAt: new Date(),
       value: parsed.value,
-      probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[parsed.stage],
+      probability: parsed.probability ?? DEFAULT_WIN_PROBABILITY,
       expectedCloseDate: parsed.expectedCloseDate ? new Date(parsed.expectedCloseDate) : null,
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
@@ -247,7 +247,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = dealSchema.parse(raw);
   requireContact(user, parsed.customerName, parsed.customerPhone);
-  const ownerId = isBackOffice(user) ? parsed.ownerId : existing.ownerId;
+  const ownerId = isBackOffice(user) ? parsed.ownerId || existing.ownerId : existing.ownerId;
   if (ownerId !== existing.ownerId) {
     const ownerProblem = await dealOwnerProblem(ownerId);
     if (ownerProblem) throw new Error(ownerProblem);
