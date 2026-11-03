@@ -18,6 +18,8 @@ import { canSeeQuotation, quoteSalesPeople, DRAFT_TYPE } from "@/lib/saved-quote
 import { dealOwnerOptions } from "@/lib/deal-owner";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
+import { SOMOTEX_KEY, TEMPLATE_TITLE, somotexProfile, templateTerms } from "@/lib/quote-templates";
+import { canUseService } from "@/lib/service-access";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 
 // Quotation / proforma invoice / BOQ builder: pick models, quantities and
@@ -28,9 +30,9 @@ import { isIssuedQuoteRef } from "@/lib/document-format";
 
 const dateFmt = (d: Date) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string; draft?: string }> }) {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ deal?: string; quote?: string; revise?: string; draft?: string; complaint?: string }> }) {
   const user = await requireUser();
-  const { deal: dealId, quote: quoteParam, revise, draft } = await searchParams;
+  const { deal: dealId, quote: quoteParam, revise, draft, complaint: complaintId } = await searchParams;
   // A saved draft opens like a saved quotation, still without its number.
   const quoteId = quoteParam ?? draft;
   const [settings, products, prices, stock, inTransit, tentative, me] = await Promise.all([
@@ -133,6 +135,32 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     }
   }
 
+  // An out-of-warranty complaint: a service quotation for its service
+  // charge and the spares used, under the company the unit was billed by.
+  if (!fromDeal && complaintId && (await canUseService(user))) {
+    const c = await prisma.serviceComplaint.findUnique({ where: { id: complaintId }, include: { parts: { where: { chargeable: true }, orderBy: { createdAt: "asc" } } } });
+    if (c) {
+      const unit = [c.model, c.serialNo ? `S/N ${c.serialNo}` : null].filter(Boolean).join(", ");
+      fromDeal = {
+        dealId: "",
+        template: "service",
+        companyKey: c.billingCompany === "Somotex" ? SOMOTEX_KEY : "SAKURAGI",
+        ownerId: "",
+        accountId: c.accountId,
+        to: [c.customerName, c.siteAddress, c.phone].filter((x): x is string => !!x).join("\n"),
+        attention: c.contactName ?? "",
+        title: TEMPLATE_TITLE.service,
+        terms: templateTerms("service", defaultTermsLines(settings), settings.quoteValidityDays),
+        rows: [
+          ...(c.serviceCharge > 0
+            ? [{ productId: null, description: `Servicing / repair${unit ? ` of ${unit}` : ""} - ${c.nature} (complaint ${c.ref})`, detail: "", unit: "Job", qty: 1, unitPrice: c.serviceCharge }]
+            : []),
+          ...c.parts.map((p) => ({ productId: null, description: p.name, detail: "", unit: p.unit, qty: p.qty, unitPrice: p.unitPrice })),
+        ],
+      };
+    }
+  }
+
   let fromQuote: QuotePrefill | null = null;
   if (quoteId) {
     const q = await prisma.quotation.findUnique({ where: { id: quoteId }, include: { deal: { select: { id: true, title: true, ownerId: true } } } });
@@ -198,7 +226,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         <QuotationBuilder
           key={fromQuote ? `${quoteId}-${revise ?? ""}` : (dealId ?? "new")}
           options={options}
-          companies={settings.companies.map((c) => ({
+          companies={[...settings.companies, somotexProfile(settings, "")].map((c) => ({
             key: c.key,
             name: c.name,
             refPrefix: c.refPrefix,

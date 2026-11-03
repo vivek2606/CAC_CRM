@@ -51,6 +51,18 @@ describeDb("quotation totals", () => {
     // Already whole: no round off.
     expect((await buildDocument(input([item({ qty: 1, unitPrice: 1000 })]))).roundOff).toBe(0);
   });
+  it("servicing and spare parts quotations: Sakuragi or Somotex, with their own heading", async () => {
+    const svc = await buildDocument(input([item({ unitPrice: 50_000 })], { template: "service", companyKey: "SOMOTEX" }));
+    expect(svc.company.name).toBe("Somotex Nigeria Limited");
+    expect(svc.heading).toBe("SERVICE QUOTATION");
+    const spares = await buildDocument(input([item({ unitPrice: 5_000 })], { template: "spares", type: "proforma" }));
+    expect(spares.company.name).toMatch(/Sakuragi/);
+    expect(spares.heading).toBe("PROFORMA INVOICE - SPARE PARTS");
+    // Equipment stays with Sakuragi whatever is asked.
+    const equip = await buildDocument(input([item({ unitPrice: 5_000 })], { companyKey: "SOMOTEX" }));
+    expect(equip.company.name).toMatch(/Sakuragi/);
+    expect(equip.heading).toBe("QUOTATION");
+  });
   it("refuses negative quantities and rates (returns go through deals, not quotations)", () => {
     expect(() => input([item({ qty: -1, unitPrice: 100_000 })])).toThrow();
     expect(() => input([item({ qty: 1, unitPrice: -5 })])).toThrow();

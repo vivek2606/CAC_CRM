@@ -5,7 +5,8 @@ import { QUOTE_REF_PREFIX, nameInitials } from "@/lib/document-format";
 // SNIL/CAC/LAG/<initials>/<year>/<running no.>. The running number is a
 // per-year counter kept in AppSetting and incremented in one SQL statement,
 // so two people downloading at the same moment can't get the same number.
-export async function nextQuoteRef(userName: string, now = new Date()): Promise<string> {
+// prefix: SNIL/CAC/LAG unless a servicing / spare parts quotation (refPrefixFor).
+export async function nextQuoteRef(userName: string, now = new Date(), prefix = QUOTE_REF_PREFIX): Promise<string> {
   const year = now.getUTCFullYear();
   const key = `quote-ref-seq:${year}`;
   const rows = await prisma.$queryRaw<{ n: number }[]>`
@@ -16,5 +17,5 @@ export async function nextQuoteRef(userName: string, now = new Date()): Promise<
     RETURNING (("value") #>> '{}')::int AS n
   `;
   const n = Number(rows[0]?.n ?? 1);
-  return `${QUOTE_REF_PREFIX}/${nameInitials(userName)}/${year}/${String(n).padStart(4, "0")}`;
+  return `${prefix}/${nameInitials(userName)}/${year}/${String(n).padStart(4, "0")}`;
 }

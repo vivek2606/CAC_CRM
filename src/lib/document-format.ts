@@ -90,5 +90,6 @@ export function nameInitials(name: string): string {
 // Whether a reference was issued by nextQuoteRef (drafts from before this
 // change carry the old date-based reference and get a new number).
 export function isIssuedQuoteRef(ref: string): boolean {
-  return /^SNIL\/CAC\/LAG\/[A-Z]{1,3}\/\d{4}\/\d{4,}$/.test(ref.trim());
+  // Servicing / spare parts: SNIL/SVC/LAG/... or SOM/SVC/LAG/... (quote-templates.ts).
+  return /^(SNIL\/CAC|SNIL\/SVC|SOM\/SVC)\/LAG\/[A-Z]{1,3}\/\d{4}\/\d{4,}$/.test(ref.trim());
 }

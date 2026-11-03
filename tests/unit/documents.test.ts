@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isIssuedQuoteRef, nairaInWords, nameInitials, serialNumbers, isAvailabilityNote } from "@/lib/document-format";
 import { netOf } from "@/lib/sales-document";
+import { refPrefixFor } from "@/lib/quote-templates";
 import { computeDealDiscount } from "@/lib/discount";
 import { coveredByApproval, type ExcessLine } from "@/lib/quote-discount";
 import { invoiceKey, invoiceTypeOf } from "@/lib/invoice-key";
@@ -126,5 +127,16 @@ describe("quote change history", () => {
       "Line added: Labour - 1 × ₦7",
       "Line removed: Pipes - 1 × ₦5",
     ]);
+  });
+});
+
+describe("servicing / spare parts references", () => {
+  it("carry the company and SVC", () => {
+    expect(refPrefixFor("equipment", "SOMOTEX")).toBe("SNIL/CAC/LAG");
+    expect(refPrefixFor("service", "SOMOTEX")).toBe("SOM/SVC/LAG");
+    expect(refPrefixFor("spares", "SAKURAGI")).toBe("SNIL/SVC/LAG");
+    expect(isIssuedQuoteRef("SOM/SVC/LAG/SK/2026/0012")).toBe(true);
+    expect(isIssuedQuoteRef("SNIL/SVC/LAG/SK/2026/0012")).toBe(true);
+    expect(isIssuedQuoteRef("SOM/CAC/LAG/SK/2026/0012")).toBe(false);
   });
 });

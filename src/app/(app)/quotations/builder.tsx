@@ -1,6 +1,7 @@
 "use client";
 
 import { SendQuoteButton } from "./send-quote-button";
+import { QUOTE_TEMPLATES, TEMPLATE_LABEL, TEMPLATE_TITLE, templateTerms, type QuoteTemplate } from "@/lib/quote-templates";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, GripVertical, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
@@ -44,6 +45,9 @@ export type CompanyOption = {
 };
 export type DealPrefill = {
   dealId: string;
+  // A complaint's service quotation: the template and issuing company.
+  template?: QuoteTemplate;
+  companyKey?: string;
   ownerId: string;
   accountId: string | null;
   to: string;
@@ -96,6 +100,8 @@ type Row =
 
 type Draft = {
   type: DocumentType;
+  // Equipment / servicing / spare parts (optional: older drafts are equipment).
+  template?: QuoteTemplate;
   // The sales person the quote is for - picked by the Head / Coordinator.
   ownerId?: string;
   companyKey: string;
@@ -219,7 +225,7 @@ export function QuotationBuilder({
   const [draftId, setDraftId] = useState<string | null>(fromQuote?.draftId ?? null);
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
-  const linkedDealId = fromDeal?.dealId ?? fromQuote?.dealId ?? createdDealId;
+  const linkedDealId = fromDeal?.dealId || fromQuote?.dealId || createdDealId;
   // Downloaded without a deal: prompt to create one and link it.
   const [unlinkedRef, setUnlinkedRef] = useState<string | null>(null);
   const [dealTitle, setDealTitle] = useState("");
@@ -236,6 +242,7 @@ export function QuotationBuilder({
     const byModel = new Map(options.map((o) => [o.model.trim().toLowerCase(), o.id]));
     return {
       type: x.type,
+      template: x.template,
       ownerId: q.ownerId,
       companyKey: companyFor(x.companyKey).key,
       ref: q.ref,
@@ -288,10 +295,12 @@ export function QuotationBuilder({
     if (fromQuote) return fromSaved(fromQuote);
     const co = companyFor(defaultCompany);
     const date = todayIso();
+    const template = fromDeal?.template ?? "equipment";
     return {
       type: "quote",
+      template,
       ownerId: fromDeal?.ownerId ?? "",
-      companyKey: co.key,
+      companyKey: fromDeal?.companyKey ? companyFor(fromDeal.companyKey).key : co.key,
       // A unique reference is issued on the first download (see download()).
       ref: "",
       date,
@@ -302,7 +311,7 @@ export function QuotationBuilder({
       rows: fromDeal
         ? fromDeal.rows.map((r, i) => ({ uid: `d${i}`, kind: "item" as const, custom: !r.productId, ...r, qty: String(r.qty), unitPrice: String(r.unitPrice) }))
         : [],
-      terms: [...(fromDeal?.terms ?? defaultTerms)],
+      terms: [...(fromDeal?.terms ?? templateTerms(template, defaultTerms, validityDays))],
       validityDays: String(validityDays),
       vatMode: "separate",
       showAvailability: true,
@@ -344,6 +353,22 @@ export function QuotationBuilder({
     setDirty(true);
     setD((cur) => {
       return { ...cur, ...patch };
+    });
+  };
+  const template: QuoteTemplate = d.template ?? "equipment";
+  // Switching the template: its title and terms replace ones not changed
+  // from the old template's; equipment goes out under Sakuragi only.
+  const setTemplate = (t: QuoteTemplate) => {
+    if (t === template) return;
+    const vd = Math.max(1, Math.round(num(d.validityDays)) || validityDays);
+    const sameTerms = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+    update({
+      template: t,
+      ...(d.title.trim() === "" || d.title === TEMPLATE_TITLE[template] ? { title: TEMPLATE_TITLE[t] } : {}),
+      ...(sameTerms(d.terms, templateTerms(template, defaultTerms, vd)) ? { terms: templateTerms(t, defaultTerms, vd) } : {}),
+      ...(t === "equipment"
+        ? { companyKey: companies[0].key, tin: companies[0].tin, bankName: companies[0].bankName, accountName: companies[0].accountName, accountNumber: companies[0].accountNumber }
+        : {}),
     });
   };
   // A reference already issued with another person's initials is replaced
@@ -739,6 +764,7 @@ export function QuotationBuilder({
 
   const payload = (ref: string): DocumentInput => ({
     type: d.type,
+    template,
     companyKey: d.companyKey,
     ref,
     date: d.date,
@@ -807,7 +833,7 @@ export function QuotationBuilder({
       // downloads of the same quote keep it.
       let ref = d.ref;
       if (!isIssuedQuoteRef(ref)) {
-        const issued = await reserveQuoteRef(d.ownerId || null);
+        const issued = await reserveQuoteRef(d.ownerId || null, template, d.companyKey);
         if ("error" in issued) throw new Error(issued.error);
         ref = issued.ref;
         update({ ref });
@@ -963,6 +989,18 @@ export function QuotationBuilder({
               </button>
             ))}
           </div>
+          <div className="inline-flex rounded-lg bg-slate-100 p-1" title="Equipment, servicing or spare parts - each with its own heading, title and terms">
+            {QUOTE_TEMPLATES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTemplate(t)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${template === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                {TEMPLATE_LABEL[t]}
+              </button>
+            ))}
+          </div>
           <button type="button" onClick={startOver} className="ml-auto inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
             <RotateCcw className="h-4 w-4" />
             Start over
@@ -989,7 +1027,24 @@ export function QuotationBuilder({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className={label}>Issued by</label>
-            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 truncate">{companyFor(d.companyKey).name}</p>
+            {template === "equipment" || companies.length < 2 ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 truncate">{companyFor(d.companyKey).name}</p>
+            ) : (
+              <select
+                value={d.companyKey}
+                onChange={(e) => {
+                  const co = companyFor(e.target.value);
+                  update({ companyKey: co.key, tin: co.tin, bankName: co.bankName, accountName: co.accountName, accountNumber: co.accountNumber });
+                }}
+                className={input}
+              >
+                {companies.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className={label}>Ref no.</label>
@@ -1602,7 +1657,7 @@ export function QuotationBuilder({
               <Plus className="h-4 w-4" />
               Add term
             </button>
-            <button type="button" onClick={() => update({ terms: [...defaultTerms] })} className="text-sm text-slate-500 hover:text-slate-800">
+            <button type="button" onClick={() => update({ terms: templateTerms(template, defaultTerms, Math.max(1, Math.round(num(d.validityDays)) || validityDays)) })} className="text-sm text-slate-500 hover:text-slate-800">
               Reset to default terms
             </button>
           </div>

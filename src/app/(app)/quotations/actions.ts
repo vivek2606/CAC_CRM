@@ -1,5 +1,7 @@
 "use server";
 
+import { QUOTE_TEMPLATES, refPrefixFor, type QuoteTemplate } from "@/lib/quote-templates";
+
 import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -18,11 +20,12 @@ import { isIssuedQuoteRef } from "@/lib/document-format";
 // Issues the next unique quotation reference, with the initials of the
 // sales person it's for (the Head / Coordinator pick one; everyone else
 // gets their own).
-export async function reserveQuoteRef(ownerId: string | null): Promise<{ ref: string } | { error: string }> {
+export async function reserveQuoteRef(ownerId: string | null, template: QuoteTemplate = "equipment", companyKey = ""): Promise<{ ref: string } | { error: string }> {
   const user = await requireUser();
   const owner = await resolveQuoteOwner(user, ownerId);
   if (!owner) return { error: "Pick the sales person this quotation is for." };
-  return { ref: await nextQuoteRef(owner.name) };
+  const t = QUOTE_TEMPLATES.includes(template) ? template : "equipment";
+  return { ref: await nextQuoteRef(owner.name, new Date(), refPrefixFor(t, companyKey)) };
 }
 
 async function quoteForLinking(quoteId: string) {

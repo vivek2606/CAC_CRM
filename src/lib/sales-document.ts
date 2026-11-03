@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { QUOTE_TEMPLATES, SOMOTEX_KEY, somotexProfile, templateHeading } from "@/lib/quote-templates";
+import { SOMOTEX_LOGO } from "@/lib/brand/somotex-logo";
 import { getCompanySettings, pickCompany, type CompanyProfile } from "@/lib/company-profile";
 import { nairaInWords, serialNumbers, isAvailabilityNote } from "@/lib/document-format";
 
@@ -45,6 +47,9 @@ const rowSchema = z.discriminatedUnion("kind", [
 
 export const documentInputSchema = z.object({
   type: z.enum(["quote", "proforma", "boq"]),
+  // Equipment (Sakuragi only), servicing or spare parts (Sakuragi or
+  // Somotex) - see quote-templates.ts.
+  template: z.enum(QUOTE_TEMPLATES).default("equipment"),
   companyKey: z.string(),
   ref: z.string().trim().max(80),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date."),
@@ -162,10 +167,11 @@ export async function buildDocument(input: DocumentInput): Promise<SalesDocument
   const roundOff = round2(total - (subtotal + vat));
   return {
     type: input.type,
-    heading: DOCUMENT_TYPES[input.type],
+    heading: templateHeading(input.template, input.type, DOCUMENT_TYPES[input.type]),
     ref: input.ref,
     date: new Date(`${input.date}T00:00:00Z`),
-    company: pickCompany(settings, input.companyKey),
+    company:
+      input.template !== "equipment" && input.companyKey === SOMOTEX_KEY ? somotexProfile(settings, SOMOTEX_LOGO) : pickCompany(settings, input.companyKey),
     to: input.to.split("\n").map((l) => l.trim()).filter(Boolean),
     attention: input.attention,
     title: input.title,
