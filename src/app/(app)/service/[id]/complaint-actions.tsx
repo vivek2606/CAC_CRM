@@ -36,6 +36,7 @@ export function ComplaintActions(p: {
   inWarranty: boolean;
   serviceCharge: number;
   chargeInvoiceNo: string;
+  serialNo: string;
 }) {
   const { error, pending, run } = useRun();
   const [at, setAt] = useState(p.now);
@@ -46,10 +47,12 @@ export function ComplaintActions(p: {
   const [charge, setCharge] = useState(p.serviceCharge ? String(p.serviceCharge) : "");
   const [chargeInv, setChargeInv] = useState(p.chargeInvoiceNo);
   const [wNote, setWNote] = useState("");
+  const [serial, setSerial] = useState(p.serialNo);
   const send = (u: ComplaintUpdate) => run(() => updateComplaint(p.id, { at, ...u }));
   const done = p.status === "RESOLVED" || p.status === "CLOSED" || p.status === "CANCELLED";
   const btn = "rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50";
-  const text = { rootCause, resolution };
+  // Resolving / closing sends the serial no. too (needed by then).
+  const text = { rootCause, resolution, serialNo: serial };
 
   return (
     <div className="space-y-4">
@@ -80,6 +83,24 @@ export function ComplaintActions(p: {
             </button>
           </>
         )}
+      </div>
+
+      <div className={`flex flex-wrap items-end gap-2 rounded-lg px-3 py-2 ${p.serialNo ? "bg-slate-50" : "bg-amber-50"}`}>
+        <label className="text-xs text-slate-600">
+          <span className="mb-1 block font-medium">Unit serial no. (from the site visit) *</span>
+          <input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="e.g. 34012345678901" className={`${field} w-64`} />
+        </label>
+        <button
+          type="button"
+          disabled={pending || serial.trim() === p.serialNo}
+          onClick={() => send({ serialNo: serial })}
+          className={`${btn} bg-slate-900 text-white hover:bg-slate-700`}
+        >
+          Save serial no.
+        </button>
+        <span className="pb-2 text-xs text-slate-500">
+          {p.serialNo ? "Recorded on the unit too." : "Needed before resolving - for warranty spare claims and Midea troubleshooting."}
+        </span>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

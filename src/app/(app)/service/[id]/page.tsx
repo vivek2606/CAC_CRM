@@ -130,6 +130,7 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
             inWarranty={!sparesCharged}
             serviceCharge={c.serviceCharge}
             chargeInvoiceNo={c.chargeInvoiceNo ?? ""}
+            serialNo={c.serialNo ?? ""}
           />
         </Card>
 

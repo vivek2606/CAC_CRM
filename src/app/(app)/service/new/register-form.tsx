@@ -35,7 +35,6 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
     model: "",
     serialNo: "",
     unitId: "",
-    unitSlot: 0,
     warrantyMonths: STANDARD_WARRANTY_MONTHS,
     warrantyOverride: "",
     warrantyNote: "",
@@ -70,19 +69,16 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
       invoiceDate: s.invoiceDate,
       billingCompany: s.company,
       warrantyMonths: s.warrantyMonths,
-      // The unit: picked below (with its serial no.) - preset when it's the only one.
-      ...(() => {
-        const only = s.units.length === 1 && s.units[0].serials.length === 1 ? s.units[0] : null;
-        return only
-          ? { unitId: only.unitId, unitSlot: 0, productId: only.productId ?? "", model: only.model, serialNo: only.serials[0] }
-          : { unitId: "", unitSlot: 0, productId: "", model: "", serialNo: "" };
-      })(),
+      // The model: picked below - preset when the invoice has only one.
+      ...(s.units.length === 1
+        ? { unitId: s.units[0].unitId, productId: s.units[0].productId ?? "", model: s.units[0].model, serialNo: "" }
+        : { unitId: "", productId: "", model: "", serialNo: "" }),
     });
   };
   const save = () =>
     start(async () => {
       setError("");
-      if (sale?.units.length && !v.unitId) return setError("Pick the unit the complaint is for, with its serial no.");
+      if (sale?.units.length && !v.unitId) return setError("Pick the model the complaint is for.");
       const res = await registerComplaint(v);
       if (res.error) return setError(res.error);
       router.push(`/service/${res.id}`);
@@ -152,39 +148,25 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
         </label>
         {sale && sale.units.length > 0 ? (
           <div className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
-            <span className="mb-1 block">Which unit? Pick it and fill its serial no. * ({sale.units.reduce((t, u) => t + u.serials.length, 0)} units on the invoice)</span>
+            <span className="mb-1 block">Which model on the invoice? *</span>
             <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
-              {sale.units.flatMap((u) =>
-                u.serials.map((sn, i) => {
-                  const picked = v.unitId === u.unitId && v.unitSlot === i;
-                  return (
-                    <label key={`${u.unitId}-${i}`} className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm ${picked ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
-                      <input
-                        type="radio"
-                        checked={picked}
-                        onChange={() => set({ unitId: u.unitId, unitSlot: i, productId: u.productId ?? "", model: u.model, serialNo: sn })}
-                      />
-                      <span className="text-slate-800">
-                        {u.model} · unit {i + 1} of {u.serials.length}
-                      </span>
-                      {picked ? (
-                        <input
-                          value={v.serialNo}
-                          onChange={(e) => set({ serialNo: e.target.value })}
-                          placeholder="Serial no. *"
-                          autoFocus={!sn}
-                          className={`${field} w-56 py-1`}
-                        />
-                      ) : sn ? (
-                        <span className="text-xs text-slate-500">S/N {sn}</span>
-                      ) : (
-                        <span className="text-xs text-amber-700">no serial no. yet</span>
-                      )}
-                    </label>
-                  );
-                }),
-              )}
+              {sale.units.map((u) => {
+                const known = u.serials.filter(Boolean);
+                return (
+                  <label key={u.unitId} className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm ${v.unitId === u.unitId ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                    <input type="radio" checked={v.unitId === u.unitId} onChange={() => set({ unitId: u.unitId, productId: u.productId ?? "", model: u.model })} />
+                    <span className="text-slate-800">
+                      {u.serials.length} × {u.model}
+                    </span>
+                    <span className="text-xs text-slate-500">{known.length ? `serial nos. known: ${known.join(", ")}` : "no serial nos. yet"}</span>
+                  </label>
+                );
+              })}
             </div>
+            <label className="mt-2 block">
+              <span className="mb-1 block">Serial no. (if the customer can tell - otherwise the technician fills it in after the visit)</span>
+              <input value={v.serialNo} onChange={(e) => set({ serialNo: e.target.value })} className={`${field} w-72`} />
+            </label>
           </div>
         ) : (
           <>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
-import { applyDealWarranty, SerialTaken, serialElsewhere, serialSlots, setUnitSerial, syncInstalledUnits } from "@/lib/installed-base";
+import { applyDealWarranty, assignSerial, serialSlots, syncInstalledUnits, unitLineFor } from "@/lib/installed-base";
 import { amcFor } from "@/lib/amc";
 import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus } from "@/lib/service";
 
@@ -104,10 +104,10 @@ export type ComplaintInput = {
   productId: string;
   model: string;
   serialNo: string;
-  // The unit of the sale it's for: its installed-base line and which of its
-  // units (0 = the first) - its serial no. is then required and recorded.
+  // The model of the sale it's for (its installed-base line). The serial
+  // no. is usually only found on the site visit - optional here, recorded
+  // on the unit once known.
   unitId: string;
-  unitSlot: number;
   warrantyMonths: number;
   // Set to override the warranty worked out from the invoice date (with a note).
   warrantyOverride: "" | "in" | "out";
@@ -136,16 +136,9 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
   const inWarranty = input.warrantyOverride ? input.warrantyOverride === "in" : byWarranty || !!amc;
   const amcNote = !input.warrantyOverride && !byWarranty && amc ? `Covered by AMC ${amc.ref}${amc.comprehensive ? " (comprehensive)" : " (labour only - spares charged)"}` : "";
   const technician = clean(input.technician, 120);
-  if (input.unitId) {
-    const sn = clean(input.serialNo, 100);
-    if (!sn) return { error: "Enter the serial no. of the unit the complaint is for." };
-    try {
-      await serialElsewhere(sn, input.unitId, input.unitSlot);
-    } catch (e) {
-      if (e instanceof SerialTaken) return { error: `Serial no. ${sn} is already recorded on ${e.message} - check it.` };
-      throw e;
-    }
-    await setUnitSerial(input.unitId, input.unitSlot, sn);
+  if (input.unitId && clean(input.serialNo, 100)) {
+    const problem = await assignSerial(input.unitId, clean(input.serialNo, 100));
+    if (problem) return { error: problem };
   }
   const deal = input.dealId ? await prisma.deal.findUnique({ where: { id: input.dealId }, select: { id: true } }) : null;
   const account = input.accountId ? await prisma.account.findUnique({ where: { id: input.accountId }, select: { id: true } }) : null;
@@ -204,6 +197,8 @@ export type ComplaintUpdate = {
   warrantyOverride?: "in" | "out";
   warrantyNote?: string;
   addVisit?: boolean;
+  // Found on the site visit - needed for warranty spare claims and Midea.
+  serialNo?: string;
 };
 export async function updateComplaint(id: string, u: ComplaintUpdate): Promise<Result> {
   await requireService();
@@ -212,6 +207,15 @@ export async function updateComplaint(id: string, u: ComplaintUpdate): Promise<R
   const at = (u.at && fromLagosInput(u.at)) || new Date();
   if (at < c.registeredAt) return { error: "That's before the complaint was registered." };
   const data: Parameters<typeof prisma.serviceComplaint.update>[0]["data"] = {};
+  const serial = u.serialNo !== undefined ? clean(u.serialNo, 100) : (c.serialNo ?? "");
+  if (u.serialNo !== undefined && serial !== (c.serialNo ?? "")) {
+    if (serial) {
+      const line = await unitLineFor(c);
+      const problem = line ? await assignSerial(line.id, serial) : null;
+      if (problem) return { error: problem };
+    }
+    data.serialNo = serial || null;
+  }
   if (u.technician !== undefined) {
     data.technician = clean(u.technician, 120) || null;
     if (data.technician && !c.assignedAt) data.assignedAt = at;
@@ -225,6 +229,8 @@ export async function updateComplaint(id: string, u: ComplaintUpdate): Promise<R
   if (u.status) {
     if (!COMPLAINT_STATUSES.includes(u.status)) return { error: "Unknown status." };
     data.status = u.status;
+    if ((u.status === "RESOLVED" || u.status === "CLOSED") && !serial)
+      return { error: "Enter the unit's serial no. (from the site visit) - it's needed for warranty spare claims and Midea." };
     if ((u.status === "RESOLVED" || u.status === "CLOSED") && !c.resolvedAt) {
       if (!clean(u.resolution) && !c.resolution) return { error: "Say what was done to resolve it." };
       data.resolvedAt = at;

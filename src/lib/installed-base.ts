@@ -96,3 +96,34 @@ export async function setUnitSerial(unitId: string, slot: number, serial: string
   while (slots.length && !slots[slots.length - 1]) slots.pop();
   await prisma.installedUnit.update({ where: { id: unitId }, data: { serialNos: slots } });
 }
+
+// The serial no. found on site for a unit of a sale line: recorded in the
+// line's next free place (already there: nothing to do). Returns why it
+// can't be, if it can't.
+export async function assignSerial(unitId: string, serial: string): Promise<string | null> {
+  const sn = serial.trim();
+  if (!sn) return null;
+  const u = await prisma.installedUnit.findUnique({ where: { id: unitId }, select: { qty: true, serialNos: true, model: true } });
+  if (!u) return null;
+  const slots = serialSlots(u);
+  if (slots.includes(sn)) return null;
+  const free = slots.findIndex((x) => !x);
+  try {
+    await serialElsewhere(sn, unitId, -1);
+  } catch (e) {
+    if (e instanceof SerialTaken) return `Serial no. ${sn} is already recorded on ${e.message} - check it.`;
+    throw e;
+  }
+  if (free < 0) return `All ${u.qty} × ${u.model} on this invoice already have serial nos. - check it on Installed units.`;
+  await setUnitSerial(unitId, free, sn);
+  return null;
+}
+
+// The installed-base line a complaint's unit belongs to (its sale + model).
+export async function unitLineFor(c: { dealId: string | null; productId: string | null; model: string | null }) {
+  if (!c.dealId) return null;
+  return prisma.installedUnit.findFirst({
+    where: { dealId: c.dealId, ...(c.productId ? { productId: c.productId } : c.model ? { model: c.model } : {}) },
+    select: { id: true },
+  });
+}
