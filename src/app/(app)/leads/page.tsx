@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton, Card } from "@/components/ui";
@@ -10,6 +11,7 @@ export const maxDuration = 60;
 // Leads & Activities: the leads list on one tab, calls / meetings / tasks
 // on the other.
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  await blockServiceManager();
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
   const tab = (await searchParams).tab === "activities" ? "activities" : "leads";

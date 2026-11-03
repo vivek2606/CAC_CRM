@@ -17,3 +17,16 @@ export async function requireService(): Promise<SessionUser> {
   if (!(await canUseService(user))) redirect("/");
   return user;
 }
+
+// The Service Manager (Sikiru): a service-only view - his own dashboard and
+// notifications, quotations, Service & Complaints; no leads, deals or
+// incentives (his billing is entered by the Head / Coordinator).
+export async function isServiceManager(user: SessionUser): Promise<boolean> {
+  if (user.role !== "SALES_MANAGER") return false;
+  const u = await prisma.user.findUnique({ where: { id: user.id }, select: { title: true } });
+  return u?.title === SERVICE_MANAGER;
+}
+export async function blockServiceManager(): Promise<void> {
+  const user = await requireUser();
+  if (await isServiceManager(user)) redirect("/");
+}

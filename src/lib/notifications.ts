@@ -304,6 +304,49 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   // days with no AMC - the AMCs to offer.
   if (await canUseService(user)) {
     const week = new Date(now.getTime() + 7 * day);
+    // Complaints: open over 48 h, urgent ones not assigned, resolved ones
+    // waiting 3+ days to be closed.
+    const [late, urgent, toClose] = await Promise.all([
+      prisma.serviceComplaint.findMany({
+        where: { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS", "AWAITING_SPARES"] }, registeredAt: { lt: new Date(now.getTime() - 2 * day) } },
+        orderBy: { registeredAt: "asc" },
+        select: { id: true, ref: true, customerName: true, nature: true, registeredAt: true },
+        take: 200,
+      }),
+      prisma.serviceComplaint.findMany({
+        where: { status: "OPEN", priority: "URGENT", technician: null },
+        select: { id: true, ref: true, customerName: true, nature: true },
+      }),
+      prisma.serviceComplaint.findMany({
+        where: { status: "RESOLVED", resolvedAt: { lt: new Date(now.getTime() - 3 * day) } },
+        select: { id: true, ref: true, customerName: true, resolvedAt: true },
+        take: 200,
+      }),
+    ]);
+    if (urgent.length)
+      groups.unshift({
+        key: "complaintUrgent",
+        label: "Urgent complaints not assigned",
+        count: urgent.length,
+        href: "/service",
+        items: urgent.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: c.nature, href: `/service/${c.id}` })),
+      });
+    if (late.length)
+      groups.push({
+        key: "complaintLate",
+        label: "Complaints open over 48 hours",
+        count: late.length,
+        href: "/service",
+        items: late.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `${c.nature} · since ${fmt(c.registeredAt)}`, href: `/service/${c.id}` })),
+      });
+    if (toClose.length)
+      groups.push({
+        key: "complaintClose",
+        label: "Resolved complaints to close (customer to confirm)",
+        count: toClose.length,
+        href: "/service?status=RESOLVED",
+        items: toClose.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `Resolved ${fmt(c.resolvedAt!)}`, href: `/service/${c.id}` })),
+      });
     const [visits, renewals, ending] = await Promise.all([
       prisma.amcVisit.findMany({
         where: { doneAt: null, dueDate: { lte: week }, contract: { cancelled: false, endDate: { gte: new Date(now.getTime() - day) } } },

@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import { SALES_TITLE_IN } from "@/lib/team-titles";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,7 @@ export default async function TargetsPage({
 }: {
   searchParams: Promise<{ month?: string; rep?: string }>;
 }) {
+  await blockServiceManager();
   const user = await requireUser();
   const params = await searchParams;
   const month = parseMonthParam(params.month);

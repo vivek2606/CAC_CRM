@@ -19,7 +19,7 @@ import { dealOwnerOptions } from "@/lib/deal-owner";
 import { QuotationBuilder, type DealPrefill, type ModelOption, type QuotePrefill } from "./builder";
 import { QuotationTabs } from "./quotation-tabs";
 import { SOMOTEX_KEY, TEMPLATE_TITLE, somotexProfile, templateTerms } from "@/lib/quote-templates";
-import { canUseService } from "@/lib/service-access";
+import { canUseService, isServiceManager } from "@/lib/service-access";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 
 // Quotation / proforma invoice / BOQ builder: pick models, quantities and
@@ -274,6 +274,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           fromDeal={fromQuote ? null : fromDeal}
           fromQuote={fromQuote}
           priceChanges={priceChanges}
+          serviceOnly={await isServiceManager(user)}
           salesPeople={salesPeople}
           dealOwners={isBackOffice(user) ? await dealOwnerOptions() : null}
           myId={user.id}

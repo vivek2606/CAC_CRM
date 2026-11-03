@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
@@ -11,6 +12,7 @@ export default async function DealsPage({
 }: {
   searchParams: Promise<{ owner?: string }>;
 }) {
+  await blockServiceManager();
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
   const params = await searchParams;

@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
@@ -32,6 +33,7 @@ function schemeText(settings: IncentiveSettings) {
 }
 
 export default async function IncentivesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  await blockServiceManager();
   const user = await requireUser();
   const isHead = user.role === "HEAD";
   // The Sales Coordinator prepares the month for the Head's approval, so she

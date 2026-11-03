@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
@@ -6,6 +7,7 @@ import { DealForm } from "../deal-form";
 import { createDeal } from "../actions";
 
 export default async function NewDealPage() {
+  await blockServiceManager();
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 

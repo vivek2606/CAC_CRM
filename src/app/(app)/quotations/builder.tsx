@@ -188,6 +188,7 @@ export function QuotationBuilder({
   canExcel,
   customerAccounts = [],
   priceChanges = [],
+  serviceOnly = false,
 }: {
   options: ModelOption[];
   companies: CompanyOption[];
@@ -212,6 +213,9 @@ export function QuotationBuilder({
   // A saved quotation / draft reopened: its products' price changes since
   // its date, and changes coming up (so old rates aren't sent).
   priceChanges?: { description: string; from: number; to: number; on: string; upcoming: boolean }[];
+  // The Service Manager: starts on the Servicing template, and his
+  // quotations don't make leads / deals.
+  serviceOnly?: boolean;
 }) {
   const optionById = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   // The Head may discount anything; for everyone else a no-stock item at
@@ -299,7 +303,7 @@ export function QuotationBuilder({
     if (fromQuote) return fromSaved(fromQuote);
     const co = companyFor(defaultCompany);
     const date = todayIso();
-    const template = fromDeal?.template ?? "equipment";
+    const template = fromDeal?.template ?? (serviceOnly ? "service" : "equipment");
     return {
       type: "quote",
       template,
@@ -311,7 +315,7 @@ export function QuotationBuilder({
       to: fromDeal?.to ?? "",
       accountId: fromDeal?.accountId ?? "",
       attention: fromDeal?.attention ?? "",
-      title: fromDeal?.title ?? "SUPPLY OF AIR-CONDITIONING EQUIPMENT",
+      title: fromDeal?.title ?? TEMPLATE_TITLE[template],
       rows: fromDeal
         ? fromDeal.rows.map((r, i) => ({ uid: `d${i}`, kind: "item" as const, custom: !r.productId, ...r, qty: String(r.qty), unitPrice: String(r.unitPrice) }))
         : [],
@@ -867,7 +871,7 @@ export function QuotationBuilder({
         setDraftId(null);
         setDraftNote(null);
       }
-      if (!linkedDealId) {
+      if (!linkedDealId && !serviceOnly) {
         // An equipment quotation not on a deal yet: its lead and deal are made
         // straight away (Quotation stage) under its sales person. When that
         // can't be worked out (the Coordinator's own quote), ask.

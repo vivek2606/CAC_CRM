@@ -73,11 +73,12 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
 
 // service: only for those with service access (the Head, the Sales
 // Coordinator and the Service Manager).
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; service?: boolean }[] = [
+// sales: not for the Service Manager (no leads, deals or incentives).
+const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; service?: boolean; sales?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
-  { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky" },
-  { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet" },
-  { href: "/incentives", label: "Incentives & Targets", icon: BadgePercent, color: "purple" },
+  { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky", sales: true },
+  { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet", sales: true },
+  { href: "/incentives", label: "Incentives & Targets", icon: BadgePercent, color: "purple", sales: true },
   { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
   { href: "/products", label: "Products", icon: Package, color: "orange" },
   { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
@@ -220,7 +221,7 @@ export function Sidebar({
       </div>
 
       <nav className={`flex-1 overflow-y-auto py-4 px-3 ${collapsed ? "lg:px-2" : ""} space-y-1`}>
-        {NAV_ITEMS.filter((item) => !item.service || user.service).map((item) => {
+        {NAV_ITEMS.filter((item) => (!item.service || user.service) && !(item.sales && user.title === "Service Manager")).map((item) => {
           const active = item.href === activeHref;
           const Icon = item.icon;
           const colors = NAV_COLOR_CLASSES[item.color];

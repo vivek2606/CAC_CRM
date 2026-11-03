@@ -1,3 +1,4 @@
+import { blockServiceManager } from "@/lib/service-access";
 import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
@@ -5,6 +6,7 @@ import { LeadForm } from "../lead-form";
 import { createLead } from "../actions";
 
 export default async function NewLeadPage() {
+  await blockServiceManager();
   const user = await requireUser();
   const ownerIds = await visibleOwnerIds(user);
 

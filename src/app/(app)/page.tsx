@@ -18,6 +18,8 @@ import { getYtdSummary, achievementPct } from "@/lib/ytd";
 import { getProjectBillings } from "@/lib/project-billing";
 import { getLeadStats } from "@/lib/lead-stats";
 import { getMonthSales } from "@/lib/month-sales";
+import { isServiceManager } from "@/lib/service-access";
+import { ServiceDashboard } from "./service-dashboard";
 import { getQuoteFollowUps, followUpItems, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
 import { FollowUpList } from "./quotations/follow-ups/follow-up-list";
 
@@ -31,6 +33,8 @@ const shortMonth = (d: Date) => d.toLocaleDateString("en-US", { month: "short", 
 // Team Reports).
 export default async function DashboardPage() {
   const user = await requireUser();
+  // The Service Manager has his own (service) dashboard.
+  if (await isServiceManager(user)) return <ServiceDashboard name={user.name ?? ""} />;
   const team = isBackOffice(user);
   const ownerIds = await visibleOwnerIds(user);
 
