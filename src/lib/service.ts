@@ -111,7 +111,7 @@ export function serviceMetrics(list: MetricComplaint[], now = new Date()) {
   const ages = pending.map((c) => hoursBetween(c.registeredAt, now)!);
   const rated = list.filter((c) => c.feedback != null);
   // Repeats: the same unit (serial no., else model on the same sale) again within REPEAT_DAYS.
-  const unitKey = (c: MetricComplaint) => (c.serialNo?.trim() ? `s:${c.serialNo.trim().toUpperCase()}` : c.dealId && c.model ? `d:${c.dealId}:${c.model}` : null);
+  const unitKey = (c: MetricComplaint) => (c.serialNo?.trim() && !isSerialNA(c.serialNo) ? `s:${c.serialNo.trim().toUpperCase()}` : c.dealId && c.model ? `d:${c.dealId}:${c.model}` : null);
   const byUnit = new Map<string, Date[]>();
   for (const c of list) {
     const k = unitKey(c);
@@ -152,3 +152,11 @@ export function groupMetrics(list: MetricComplaint[], keyOf: (c: MetricComplaint
   for (const c of list) groups.set(keyOf(c), [...(groups.get(keyOf(c)) ?? []), c]);
   return [...groups.entries()].map(([key, cs]) => ({ key, ...serviceMetrics(cs) })).sort((a, b) => b.total - a.total);
 }
+
+// When the serial no. can't be had: the plate isn't visible, or it was
+// sorted out remotely (no site visit). Recorded on the complaint as
+// "Not available - <reason>" (so it can be resolved / closed), never on a unit.
+export const SERIAL_NA_PREFIX = "Not available";
+export const SERIAL_NA_REASONS = ["serial plate not visible", "resolved remotely (no site visit)"] as const;
+export const isSerialNA = (s: string | null | undefined) => !!s && s.startsWith(SERIAL_NA_PREFIX);
+export const serialNA = (reason: string) => `${SERIAL_NA_PREFIX} - ${reason}`;

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { STATUS_LABEL, type ComplaintStatus } from "@/lib/service";
+import { SERIAL_NA_PREFIX, SERIAL_NA_REASONS, STATUS_LABEL, isSerialNA, serialNA, type ComplaintStatus } from "@/lib/service";
 import { addComplaintPart, removeComplaintPart, updateComplaint, type ComplaintUpdate, type PartInput } from "../actions";
 
 const field = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
@@ -47,7 +47,11 @@ export function ComplaintActions(p: {
   const [charge, setCharge] = useState(p.serviceCharge ? String(p.serviceCharge) : "");
   const [chargeInv, setChargeInv] = useState(p.chargeInvoiceNo);
   const [wNote, setWNote] = useState("");
-  const [serial, setSerial] = useState(p.serialNo);
+  // The serial no., or why it isn't available (plate not visible / sorted
+  // out remotely) - either lets the complaint be resolved.
+  const [naReason, setNaReason] = useState(isSerialNA(p.serialNo) ? p.serialNo.slice(SERIAL_NA_PREFIX.length + 3) : "");
+  const [typed, setTyped] = useState(isSerialNA(p.serialNo) ? "" : p.serialNo);
+  const serial = naReason ? serialNA(naReason) : typed;
   const send = (u: ComplaintUpdate) => run(() => updateComplaint(p.id, { at, ...u }));
   const done = p.status === "RESOLVED" || p.status === "CLOSED" || p.status === "CANCELLED";
   const btn = "rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50";
@@ -88,7 +92,24 @@ export function ComplaintActions(p: {
       <div className={`flex flex-wrap items-end gap-2 rounded-lg px-3 py-2 ${p.serialNo ? "bg-slate-50" : "bg-amber-50"}`}>
         <label className="text-xs text-slate-600">
           <span className="mb-1 block font-medium">Unit serial no. (from the site visit) *</span>
-          <input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="e.g. 34012345678901" className={`${field} w-64`} />
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            disabled={!!naReason}
+            placeholder={naReason ? "Not available" : "e.g. 34012345678901"}
+            className={`${field} w-64 disabled:bg-slate-100`}
+          />
+        </label>
+        <label className="text-xs text-slate-600">
+          <span className="mb-1 block">or not available, because</span>
+          <select value={naReason} onChange={(e) => setNaReason(e.target.value)} className={field}>
+            <option value="">-</option>
+            {SERIAL_NA_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
         </label>
         <button
           type="button"
@@ -99,7 +120,11 @@ export function ComplaintActions(p: {
           Save serial no.
         </button>
         <span className="pb-2 text-xs text-slate-500">
-          {p.serialNo ? "Recorded on the unit too." : "Needed before resolving - for warranty spare claims and Midea troubleshooting."}
+          {isSerialNA(p.serialNo)
+            ? "Not available - recorded with the reason."
+            : p.serialNo
+              ? "Recorded on the unit too."
+              : "Needed before resolving (warranty spare claims, Midea troubleshooting) - or say why it isn't available."}
         </span>
       </div>
 

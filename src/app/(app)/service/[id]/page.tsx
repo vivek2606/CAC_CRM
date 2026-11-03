@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
 import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import { STATUS_LABEL, STATUS_TONE, fmtHours, hoursBetween, lagosDateTime, toLagosInput, type ComplaintStatus } from "@/lib/service";
+import { STATUS_LABEL, STATUS_TONE, fmtHours, hoursBetween, lagosDateTime, toLagosInput, type ComplaintStatus, isSerialNA } from "@/lib/service";
 import { ComplaintActions, PartsEditor } from "./complaint-actions";
 
 const dmy = (d: Date | null) => (d ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : "-");
@@ -21,9 +21,9 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
     prisma.serviceComplaint.findMany({ where: { technician: { not: null } }, distinct: ["technician"], select: { technician: true } }),
     prisma.serviceComplaintPart.findMany({ distinct: ["name"], select: { name: true }, take: 300 }),
     // Earlier complaints on the same unit / sale.
-    c.serialNo || c.dealId
+    (c.serialNo && !isSerialNA(c.serialNo)) || c.dealId
       ? prisma.serviceComplaint.findMany({
-          where: { id: { not: c.id }, OR: [...(c.serialNo ? [{ serialNo: c.serialNo }] : []), ...(c.dealId ? [{ dealId: c.dealId }] : [])] },
+          where: { id: { not: c.id }, OR: [...(c.serialNo && !isSerialNA(c.serialNo) ? [{ serialNo: c.serialNo }] : []), ...(c.dealId ? [{ dealId: c.dealId }] : [])] },
           orderBy: { registeredAt: "desc" },
           select: { id: true, ref: true, registeredAt: true, nature: true, status: true },
         })

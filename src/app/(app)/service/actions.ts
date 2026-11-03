@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
 import { applyDealWarranty, assignSerial, serialSlots, syncInstalledUnits, unitLineFor } from "@/lib/installed-base";
 import { amcFor } from "@/lib/amc";
-import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus } from "@/lib/service";
+import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus, isSerialNA } from "@/lib/service";
 
 type Result = { error?: string };
 const clean = (v: unknown, max = 500) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -136,7 +136,7 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
   const inWarranty = input.warrantyOverride ? input.warrantyOverride === "in" : byWarranty || !!amc;
   const amcNote = !input.warrantyOverride && !byWarranty && amc ? `Covered by AMC ${amc.ref}${amc.comprehensive ? " (comprehensive)" : " (labour only - spares charged)"}` : "";
   const technician = clean(input.technician, 120);
-  if (input.unitId && clean(input.serialNo, 100)) {
+  if (input.unitId && clean(input.serialNo, 100) && !isSerialNA(input.serialNo)) {
     const problem = await assignSerial(input.unitId, clean(input.serialNo, 100));
     if (problem) return { error: problem };
   }
@@ -209,7 +209,7 @@ export async function updateComplaint(id: string, u: ComplaintUpdate): Promise<R
   const data: Parameters<typeof prisma.serviceComplaint.update>[0]["data"] = {};
   const serial = u.serialNo !== undefined ? clean(u.serialNo, 100) : (c.serialNo ?? "");
   if (u.serialNo !== undefined && serial !== (c.serialNo ?? "")) {
-    if (serial) {
+    if (serial && !isSerialNA(serial)) {
       const line = await unitLineFor(c);
       const problem = line ? await assignSerial(line.id, serial) : null;
       if (problem) return { error: problem };
@@ -230,7 +230,7 @@ export async function updateComplaint(id: string, u: ComplaintUpdate): Promise<R
     if (!COMPLAINT_STATUSES.includes(u.status)) return { error: "Unknown status." };
     data.status = u.status;
     if ((u.status === "RESOLVED" || u.status === "CLOSED") && !serial)
-      return { error: "Enter the unit's serial no. (from the site visit) - it's needed for warranty spare claims and Midea." };
+      return { error: "Enter the unit's serial no. (from the site visit) - it's needed for warranty spare claims and Midea - or mark it Not available with the reason." };
     if ((u.status === "RESOLVED" || u.status === "CLOSED") && !c.resolvedAt) {
       if (!clean(u.resolution) && !c.resolution) return { error: "Say what was done to resolve it." };
       data.resolvedAt = at;
