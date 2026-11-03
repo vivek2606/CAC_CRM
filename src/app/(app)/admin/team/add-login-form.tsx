@@ -88,11 +88,11 @@ export function DesignationSelect({ userId, title }: { userId: string; title: st
   );
 }
 
-export function RoleSelect({ userId, role }: { userId: string; role: string }) {
+export function RoleSelect({ userId, role, title }: { userId: string; role: string; title?: string | null }) {
   const [isPending, startTransition] = useTransition();
   return (
     <select
-      defaultValue={role}
+      defaultValue={role === "SALES_MANAGER" && title === "Service Manager" ? "SERVICE" : role}
       disabled={isPending}
       title="Takes effect the next time they sign in"
       onChange={(e) => {
@@ -102,6 +102,7 @@ export function RoleSelect({ userId, role }: { userId: string; role: string }) {
       className="mt-1 rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600 disabled:opacity-60"
     >
       <option value="SALES_MANAGER">Access: Sales Manager</option>
+      <option value="SERVICE">Access: Service Manager (service only)</option>
       <option value="COORDINATOR">Access: Sales Coordinator</option>
     </select>
   );

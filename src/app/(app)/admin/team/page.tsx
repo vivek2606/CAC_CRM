@@ -44,11 +44,11 @@ export default async function TeamPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                     <td className="px-4 py-3 text-slate-500">
-                      <div>{u.role === "HEAD" ? u.title ?? roleLabel(u.role) : <DesignationSelect userId={u.id} title={u.title} />}</div>
+                      <div>{u.role === "HEAD" ? u.title ?? roleLabel(u.role) : <DesignationSelect key={`${u.role}-${u.title}`} userId={u.id} title={u.title} />}</div>
                       {u.role === "HEAD" || u.id === head.id ? (
                         <div className="text-xs text-slate-400">Access: {roleLabel(u.role)}</div>
                       ) : (
-                        <RoleSelect userId={u.id} role={u.role} />
+                        <RoleSelect key={`${u.role}-${u.title}`} userId={u.id} role={u.role} title={u.title} />
                       )}
                     </td>
                     <td className="px-4 py-3">

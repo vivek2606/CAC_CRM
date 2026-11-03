@@ -91,14 +91,26 @@ export async function createUser(
 }
 
 // Switch an existing login between Sales Manager and Sales Coordinator.
+// Access: Sales Manager, Service Manager (a Sales Manager login with the
+// service-only view - its designation is Service Manager) or Sales
+// Coordinator.
 export async function setUserRole(userId: string, role: string) {
   const head = await requireHead();
+  if (role === "SERVICE") {
+    if (userId === head.id) throw new Error("You can't change your own role.");
+    await prisma.user.update({ where: { id: userId }, data: { role: "SALES_MANAGER", title: "Service Manager" } });
+    revalidatePath("/admin/team");
+    return;
+  }
   const parsed = z.enum(ROLES).safeParse(role);
   if (!parsed.success) throw new Error("Unknown role.");
   if (userId === head.id) throw new Error("You can't change your own role.");
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
   if (!target || target.role === "HEAD") throw new Error("Not allowed.");
-  await prisma.user.update({ where: { id: userId }, data: { role: parsed.data } });
+  const current = await prisma.user.findUnique({ where: { id: userId }, select: { title: true } });
+  // Out of the service-only view: back to a sales designation.
+  const title = current?.title === "Service Manager" ? (parsed.data === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager") : undefined;
+  await prisma.user.update({ where: { id: userId }, data: { role: parsed.data, ...(title ? { title } : {}) } });
   revalidatePath("/admin/team");
 }
 
