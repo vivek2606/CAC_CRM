@@ -10,7 +10,7 @@ import { binLead } from "@/lib/recycle-bin";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
-import type { EquipmentType, DealStage, EndUseSegment, Lead, PurchaseTimeframe } from "@prisma/client";
+import type { EquipmentType, DealStage, Lead, PurchaseTimeframe } from "@prisma/client";
 
 const leadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -18,28 +18,29 @@ const leadSchema = z.object({
   // the Head and Sales Coordinator entering on someone's behalf.
   customerName: z.string().trim().optional().default(""),
   company: z.string().optional(),
-  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]),
-  winProbability: z.string().optional(),
-  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"]),
+  // Not on the new-lead form: a new lead is New. Winning probability, budget
+  // confirmed and end-use segment belong to the deal stage, not the lead form.
+  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED", "CONVERTED"]).optional(),
+  source: z.enum(["WEBSITE", "REFERRAL", "COLD_CALL", "CONTRACTOR", "CONSULTANT", "ARCHITECT", "DIRECT", "EVENT"], { message: "Pick the source of the lead." }),
   equipmentType: z.string().optional(),
-  endUseSegment: z.string().optional(),
   competitorBrand: z.string().optional(),
-  budgetConfirmed: z.string().optional(),
-  expectedPurchaseTimeframe: z.string().optional(),
+  expectedPurchaseTimeframe: z.string().min(1, "Pick the expected purchase timeframe."),
   value: z.coerce.number().finite().transform((v) => Math.round(v * 100) / 100).optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().trim().optional().default(""),
   notes: z.string().optional(),
   accountId: z.string().optional(),
   contactId: z.string().optional(),
-  ownerId: z.string().min(1),
+  ownerId: z.string().min(1, "Pick the sales person the lead is assigned to."),
   createdAt: z.string().optional(),
 });
 
+// The contact no. is needed on every lead; the customer's name too, except
+// when the Head or the Sales Coordinator enter it.
 function requireContact(user: Parameters<typeof isBackOffice>[0], name: string, phone: string) {
+  if (!phone) throw new Error("Customer contact no. is required");
   if (isBackOffice(user)) return;
   if (!name) throw new Error("Customer name is required");
-  if (!phone) throw new Error("Customer phone is required");
 }
 
 function toNullable(value: string | undefined) {
@@ -50,24 +51,8 @@ function toEquipmentType(value: string | undefined): EquipmentType | null {
   return value && value.trim() !== "" ? (value as EquipmentType) : null;
 }
 
-function toEndUseSegment(value: string | undefined): EndUseSegment | null {
-  return value && value.trim() !== "" ? (value as EndUseSegment) : null;
-}
-
 function toPurchaseTimeframe(value: string | undefined): PurchaseTimeframe | null {
   return value && value.trim() !== "" ? (value as PurchaseTimeframe) : null;
-}
-
-function toTriStateBoolean(value: string | undefined): boolean | null {
-  if (value === "yes") return true;
-  if (value === "no") return false;
-  return null;
-}
-
-function toWinProbability(value: string | undefined): number | null {
-  if (!value || value.trim() === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
 }
 
 // The "Date" field lets a rep backdate a lead they're only now getting
@@ -92,13 +77,10 @@ export async function createLead(formData: FormData) {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
-      status: parsed.status,
-      winProbability: toWinProbability(parsed.winProbability),
+      status: parsed.status ?? "NEW",
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
-      budgetConfirmed: toTriStateBoolean(parsed.budgetConfirmed),
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
@@ -138,13 +120,10 @@ export async function updateLead(leadId: string, formData: FormData) {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
       company: toNullable(parsed.company),
-      status: parsed.status,
-      winProbability: toWinProbability(parsed.winProbability),
+      ...(parsed.status ? { status: parsed.status } : {}),
       source: parsed.source,
       equipmentType: toEquipmentType(parsed.equipmentType),
-      endUseSegment: toEndUseSegment(parsed.endUseSegment),
       competitorBrand: toNullable(parsed.competitorBrand),
-      budgetConfirmed: toTriStateBoolean(parsed.budgetConfirmed),
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),

@@ -4,13 +4,10 @@ import { useState } from "react";
 import {
   LEAD_STATUSES,
   LEAD_STATUS_LABELS,
-  WIN_PROBABILITY_OPTIONS,
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   EQUIPMENT_TYPES,
   EQUIPMENT_TYPE_LABELS,
-  END_USE_SEGMENTS,
-  END_USE_SEGMENT_LABELS,
   PURCHASE_TIMEFRAMES,
   PURCHASE_TIMEFRAME_LABELS,
 } from "@/lib/constants";
@@ -68,7 +65,6 @@ function LeadFormFields({
   const [company, setCompany] = useState(defaultValues?.company ?? "");
   const [email, setEmail] = useState(defaultValues?.email ?? "");
   const [phone, setPhone] = useState(defaultValues?.phone ?? "");
-  const visibleContacts = contacts.filter((c) => !accountId || c.accountId === accountId);
   const today = new Date().toISOString().slice(0, 10);
 
   // Picking a contact - directly, or automatically because it's the
@@ -82,10 +78,6 @@ function LeadFormFields({
       if (contact.phone) setPhone(contact.phone);
       if (contact.email) setEmail(contact.email);
     }
-  }
-
-  function handleContactSelect(opt: Option | null) {
-    applyContact(opt ? (contacts.find((c) => c.id === opt.id) ?? null) : null);
   }
 
   // Picking an account carries its name into Company, and auto-selects its
@@ -127,7 +119,6 @@ function LeadFormFields({
           />
           <p className="mt-1 text-xs text-slate-400">When the enquiry first came in - defaults to today, backdate it if you&apos;re entering the lead later.</p>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Customer name{isHead ? "" : " *"}</label>
           <input
@@ -139,7 +130,26 @@ function LeadFormFields({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Contact no. *</label>
+          <input
+            name="phone"
+            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
           <input
@@ -149,7 +159,6 @@ function LeadFormFields({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Estimated value (₦)</label>
           <input
@@ -162,9 +171,12 @@ function LeadFormFields({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+        {/* Status: New when created, Converted when it becomes a deal; on an
+            existing lead it records how far it got - Unqualified closes one
+            that went nowhere, so it stops counting as open. */}
+        {defaultValues?.status && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
           <select
             name="status"
             defaultValue={defaultValues?.status ?? "NEW"}
@@ -176,45 +188,18 @@ function LeadFormFields({
               </option>
             ))}
           </select>
-        </div>
-
+            <p className="mt-1 text-xs text-slate-400">Unqualified closes a lead that went nowhere, so it stops counting as open.</p>
+          </div>
+        )}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Winning probability</label>
-          <select
-            name="winProbability"
-            defaultValue={defaultValues?.winProbability ?? ""}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Unspecified</option>
-            {WIN_PROBABILITY_OPTIONS.map((pct) => (
-              <option key={pct} value={pct}>
-                {pct}%
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Budget confirmed?</label>
-          <select
-            name="budgetConfirmed"
-            defaultValue={defaultValues?.budgetConfirmed == null ? "" : defaultValues.budgetConfirmed ? "yes" : "no"}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Unknown</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Expected purchase timeframe</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Expected purchase timeframe *</label>
           <select
             name="expectedPurchaseTimeframe"
+            required
             defaultValue={defaultValues?.expectedPurchaseTimeframe ?? ""}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">Unspecified</option>
+            <option value="">Pick...</option>
             {PURCHASE_TIMEFRAMES.map((t) => (
               <option key={t} value={t}>
                 {PURCHASE_TIMEFRAME_LABELS[t]}
@@ -222,14 +207,15 @@ function LeadFormFields({
             ))}
           </select>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Source</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Source *</label>
           <select
             name="source"
-            defaultValue={defaultValues?.source ?? "DIRECT"}
+            defaultValue={defaultValues?.source ?? ""}
+            required
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
+            <option value="">Pick...</option>
             {LEAD_SOURCES.map((s) => (
               <option key={s} value={s}>
                 {LEAD_SOURCE_LABELS[s]}
@@ -237,7 +223,6 @@ function LeadFormFields({
             ))}
           </select>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Equipment type</label>
           <select
@@ -253,23 +238,6 @@ function LeadFormFields({
             ))}
           </select>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">End-use segment</label>
-          <select
-            name="endUseSegment"
-            defaultValue={defaultValues?.endUseSegment ?? ""}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Unspecified</option>
-            {END_USE_SEGMENTS.map((s) => (
-              <option key={s} value={s}>
-                {END_USE_SEGMENT_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Competing brand</label>
           <CompetitorBrandSelect
@@ -279,29 +247,6 @@ function LeadFormFields({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-          <input
-            name="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Customer phone{isHead ? "" : " *"}</label>
-          <input
-            name="phone"
-            required={!isHead}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Linked account</label>
           <SearchableSelect
@@ -312,26 +257,11 @@ function LeadFormFields({
             placeholder="Type to search accounts..."
           />
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Linked contact</label>
-          <SearchableSelect
-            name="contactId"
-            options={visibleContacts}
-            value={contactId}
-            onSelect={handleContactSelect}
-            placeholder="Type to search contacts..."
-          />
-        </div>
-
         {isHead && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Assigned to</label>
-            <select
-              name="ownerId"
-              defaultValue={defaultValues?.ownerId}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assigned to *</label>
+            <select name="ownerId" required defaultValue={defaultValues?.ownerId ?? ""} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">Pick the sales person...</option>
               {owners.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
@@ -341,6 +271,8 @@ function LeadFormFields({
           </div>
         )}
         {!isHead && <input type="hidden" name="ownerId" value={defaultValues?.ownerId ?? ""} />}
+        {/* The account's contact, picked with the account (fills name, phone, email). */}
+        <input type="hidden" name="contactId" value={contactId} />
 
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>

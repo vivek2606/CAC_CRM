@@ -38,7 +38,7 @@ export default async function NewLeadPage() {
               phone: c.phone,
               email: c.email,
             }))}
-            defaultValues={{ ownerId: isBackOffice(user) ? owners[0]?.id : user.id }}
+            defaultValues={{ ownerId: isBackOffice(user) ? undefined : user.id }}
             submitLabel="Create Lead"
           />
         </Card>
