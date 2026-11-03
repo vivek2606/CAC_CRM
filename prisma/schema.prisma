@@ -173,6 +173,7 @@ model User {
   stockReceipts StockReceipt[] @relation("StockReceiptCreator")
   inTransitOrders InTransitOrder[] @relation("InTransitCreator")
   pendingOrders PendingOrder[] @relation("PendingOrderOwner")
+  complaintsRegistered ServiceComplaint[] @relation("ComplaintRegisteredBy")
   quotations    Quotation[] @relation("QuotationCreator")
   serviceInvoices ServiceInvoice[] @relation("ServiceInvoiceCreator")
   ownedQuotations Quotation[] @relation("QuotationOwner")
@@ -231,6 +232,7 @@ model Account {
   contacts    Contact[]
   leads       Lead[]
   deals       Deal[]
+  complaints  ServiceComplaint[]
   activities  Activity[]
 }
 
@@ -406,12 +408,21 @@ model Deal {
   // be counted toward the next Midea factory order if they aren't in stock.
   considerForReorder Boolean @default(false)
 
+  // Part-billed orders: the products not billed when the order was marked
+  // Won (out of stock), kept as their own open deal to bill when the stock
+  // arrives - linked to the order (orderDealId) and to Pending Orders.
+  isBalance     Boolean     @default(false)
+  // Warranty in months from the invoice date, when not the standard 12.
+  warrantyMonths Int?
+
   activities    Activity[]
   notes         Note[]
   lineItems     SaleLineItem[]
   items         DealLineItem[]
   contactRoles  DealContactRole[]
   quotations    Quotation[]
+  pendingOrders PendingOrder[]
+  complaints    ServiceComplaint[]
 
   @@index([sourceTxnNo])
   @@index([orderDealId])
@@ -553,6 +564,7 @@ model Product {
   stock            ProductStock?
   stockReceipts    StockReceipt[]
   pendingOrders    PendingOrder[]
+  complaints       ServiceComplaint[]
   inTransitOrders  InTransitOrder[]
 }
 
@@ -634,7 +646,13 @@ model PendingOrder {
   ownerId         String
   owner           User               @relation("PendingOrderOwner", fields: [ownerId], references: [id])
 
+  // A balance order's products (see Deal.isBalance): fulfilled when it's
+  // billed, cancelled when it's lost.
+  dealId          String?
+  deal            Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
   @@index([status])
+  @@index([dealId])
 }
 
 model Pricelist {
@@ -833,4 +851,89 @@ model ServiceInvoice {
   createdBy    User     @relation("ServiceInvoiceCreator", fields: [createdById], references: [id])
 
   @@index([createdById])
+}
+
+// After-sales service: a customer's complaint about a unit we sold, from
+// registration to closing - who attended, when, what was wrong and done,
+// and the spares / consumables used (free in warranty, charged out of it).
+// Head, Sales Coordinator and the Service Manager.
+model ServiceComplaint {
+  id             String    @id @default(cuid())
+  ref            String    @unique // SC/2026/0001
+  registeredAt   DateTime  // date and time the customer complained
+  status         String    @default("OPEN") // OPEN, ASSIGNED, IN_PROGRESS, AWAITING_SPARES, RESOLVED, CLOSED, CANCELLED
+
+  // The customer and the sale (invoice) the unit came from.
+  customerName   String
+  contactName    String?
+  phone          String?
+  siteAddress    String?
+  accountId      String?
+  account        Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  dealId         String?
+  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  invoiceNo      String?
+  invoiceDate    DateTime?
+  billingCompany String?   // Sakuragi / Somotex
+
+  // The unit.
+  productId      String?
+  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  model          String?
+  serialNo       String?
+
+  // Warranty: the invoice date + warrantyMonths (12 unless the sale has
+  // other terms); inWarranty can be overridden with a note.
+  warrantyMonths Int       @default(12)
+  warrantyUntil  DateTime?
+  inWarranty     Boolean   @default(false)
+  warrantyNote   String?
+
+  nature         String    // e.g. Not cooling, Water leakage
+  description    String?
+  priority       String    @default("NORMAL") // NORMAL, URGENT
+
+  // Attending.
+  technician     String?
+  assignedAt     DateTime?
+  attendedAt     DateTime? // first visit
+  visits         Int       @default(0)
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+  rootCause      String?
+  resolution     String?
+  feedback       Int?      // customer rating 1-5
+
+  // Out of warranty: service charge and the invoice raised.
+  serviceCharge  Float     @default(0)
+  chargeInvoiceNo String?
+
+  registeredById String
+  registeredBy   User      @relation("ComplaintRegisteredBy", fields: [registeredById], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  parts          ServiceComplaintPart[]
+
+  @@index([status])
+  @@index([registeredAt])
+  @@index([dealId])
+}
+
+// Spares and consumables used on a complaint.
+model ServiceComplaintPart {
+  id          String   @id @default(cuid())
+  complaintId String
+  complaint   ServiceComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  kind        String   // SPARE, CONSUMABLE
+  name        String
+  qty         Float
+  unit        String   @default("No.")
+  unitCost    Float    @default(0) // what it cost us
+  unitPrice   Float    @default(0) // charged to the customer (0 in warranty)
+  chargeable  Boolean  @default(false)
+  usedAt      DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([complaintId])
 }

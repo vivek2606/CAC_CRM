@@ -20,6 +20,7 @@ import { invoiceKey, invoiceTypeOf, type InvoiceType } from "@/lib/invoice-key";
 import { saveWonPlan, clearWonPlan } from "@/lib/won-plan";
 import { binDeal } from "@/lib/recycle-bin";
 import { syncSaleLineItemsForDeal } from "@/lib/sale-line-sync";
+import { unbilled, type Unbilled } from "@/lib/unbilled";
 
 // Change log: a note on the deal, by whoever made the change, for changes
 // to a won deal's invoice, company, account and products (shown on the
@@ -467,6 +468,10 @@ async function setDealStage(
     },
   });
   if (isClosed) await keepConversionBeforeClose(dealId);
+  // A balance order lost: its products aren't owed any more.
+  if (stage === "LOST" && existing.isBalance) {
+    await prisma.pendingOrder.updateMany({ where: { dealId, status: "OPEN" }, data: { status: "CANCELLED" } });
+  }
   if (stage !== existing.stage) {
     await audit(
       "deal",
@@ -715,11 +720,16 @@ export type WonInvoice = {
 // other invoice becomes its own Won deal - same account, contact, customer,
 // owner and details - with its products, value, invoice no. and date.
 // Everything is checked before anything is saved.
-export async function markDealWon(dealId: string, invoices: WonInvoice[]): Promise<ActionResult> {
-  return attempt(() => markDealWonImpl(dealId, invoices));
+// balance: what to do with the deal's products not billed on these
+// invoices (out of stock) - keep them as a balance order to bill when the
+// stock arrives (paid: the customer has paid for them - counted in reorder
+// planning), or drop them.
+export type WonBalance = { keep: boolean; paid: boolean };
+export async function markDealWon(dealId: string, invoices: WonInvoice[], balance?: WonBalance): Promise<ActionResult> {
+  return attempt(() => markDealWonImpl(dealId, invoices, balance));
 }
 
-async function markDealWonImpl(dealId: string, invoices: WonInvoice[]) {
+async function markDealWonImpl(dealId: string, invoices: WonInvoice[], balance?: WonBalance) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
@@ -851,14 +861,85 @@ async function markDealWonImpl(dealId: string, invoices: WonInvoice[]) {
     await prisma.lead.updateMany({ where: { convertedDealId: dealId }, data: { value: total } });
   }
   await clearWonPlan(dealId);
+  // This balance order's pending products are now billed (any still not
+  // billed go on the new balance below).
+  if (deal.isBalance && !alreadyWon) {
+    await prisma.pendingOrder.updateMany({ where: { dealId, status: "OPEN" }, data: { status: "FULFILLED", fulfilledAt: new Date() } });
+  }
+  const left = alreadyWon ? [] : unbilled(deal.items, invoices);
+  if (left.length) {
+    const ps = await prisma.product.findMany({ where: { id: { in: left.map((l) => l.productId) } }, select: { id: true, model: true } });
+    for (const l of left) l.model = ps.find((p) => p.id === l.productId)?.model ?? "product";
+  }
+  const balanceDeal = left.length && balance?.keep ? await createBalanceOrder(deal, left, balance.paid, approval, user.id) : null;
   const invSummary = invoices
     .map((i) => `${i.invoiceNo.trim()} (${companyOf(i) ?? "company not recorded"}) ${i.closedAt}: ${i.items.length} line${i.items.length === 1 ? "" : "s"}, ${naira(i.items.reduce((t, x) => t + x.qty * x.unitPrice, 0))}`)
     .join("; ");
-  await logDealChange(dealId, user.id, `${alreadyWon ? "Invoices & products changed" : "Marked Won"} - ${invSummary}${rest.length ? " (each further invoice is its own won deal)" : ""}.`);
+  const leftNote = left.length
+    ? ` Not billed: ${left.map((l) => `${l.qty} x ${l.model}`).join(", ")} - ${balanceDeal ? "kept as a balance order to bill when the stock arrives" : "dropped"}.`
+    : "";
+  await logDealChange(dealId, user.id, `${alreadyWon ? "Invoices & products changed" : "Marked Won"} - ${invSummary}${rest.length ? " (each further invoice is its own won deal)" : ""}.${leftNote}`);
   revalidatePath("/deals");
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/reports/sales-register");
   revalidatePath("/");
+}
+
+// The products not billed, as their own open deal (a balance order) under
+// the same order, customer and sales person - in the pipeline until it's
+// billed - with each product a pending order (paid or not) so the Stock and
+// Reorder Planning pages count it.
+async function createBalanceOrder(
+  deal: Awaited<ReturnType<typeof prisma.deal.findUniqueOrThrow>>,
+  left: Unbilled[],
+  paid: boolean,
+  approval: { at: Date; by: string | null } | null,
+  userId: string,
+) {
+  const value = Math.round(left.reduce((t, l) => t + l.qty * l.unitPrice, 0) * 100) / 100;
+  const baseTitle = deal.title.replace(/ - Balance$/, "");
+  const account = deal.accountId ? await prisma.account.findUnique({ where: { id: deal.accountId }, select: { name: true } }) : null;
+  const b = await prisma.deal.create({
+    data: {
+      title: `${baseTitle} - Balance`,
+      isBalance: true,
+      customerName: deal.customerName,
+      customerPhone: deal.customerPhone,
+      stage: "NEGOTIATION",
+      stageChangedAt: new Date(),
+      probability: STAGE_DEFAULT_PROBABILITY.NEGOTIATION,
+      value,
+      expectedCloseDate: deal.expectedDeliveryDate ?? deal.expectedCloseDate,
+      equipmentType: deal.equipmentType,
+      endUseSegment: deal.endUseSegment,
+      paymentTerms: deal.paymentTerms,
+      expectedDeliveryDate: deal.expectedDeliveryDate,
+      tags: deal.tags,
+      ownerId: deal.ownerId,
+      accountId: deal.accountId,
+      contactId: deal.contactId,
+      billingCompany: deal.billingCompany,
+      warrantyMonths: deal.warrantyMonths,
+      orderDealId: deal.orderDealId ?? deal.id,
+      discountApprovedAt: approval?.at ?? null,
+      discountApprovedById: approval?.by ?? null,
+      items: { createMany: { data: left.map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice })) } },
+      pendingOrders: {
+        createMany: {
+          data: left.map((l) => ({
+            productId: l.productId,
+            quantity: Math.ceil(l.qty),
+            customerName: account?.name ?? deal.customerName ?? baseTitle,
+            paymentReceived: paid,
+            ownerId: deal.ownerId,
+            note: `Balance order of "${baseTitle}"`,
+          })),
+        },
+      },
+    },
+  });
+  await audit("deal", b.id, userId, "created", `Balance order of "${baseTitle}": ${left.map((l) => `${l.qty} x ${l.model}`).join(", ")} - to bill when the stock arrives${paid ? " (paid)" : ""}.`);
+  return b;
 }
 
 // Sets the invoice no. and date on a deal that is already Won and refreshes

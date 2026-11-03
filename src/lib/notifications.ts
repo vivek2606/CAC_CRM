@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getQuoteFollowUps, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
 import { isBackOffice, type SessionUser } from "@/lib/rbac";
 import { computeDealDiscount } from "@/lib/discount";
-import { getLatestPriceByProduct } from "@/lib/pricing";
+import { getAvailableStockByProduct, getLatestPriceByProduct } from "@/lib/pricing";
 import { getIncentiveApproval } from "@/lib/incentive-approval";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
@@ -41,7 +41,7 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       take: 50,
     }),
     prisma.deal.findMany({
-      where: { ...own, stage: { notIn: ["WON", "LOST"] }, expectedCloseDate: { lt: new Date(endOfToday.getTime() - day) } },
+      where: { ...own, isBalance: false, stage: { notIn: ["WON", "LOST"] }, expectedCloseDate: { lt: new Date(endOfToday.getTime() - day) } },
       orderBy: { expectedCloseDate: "asc" },
       select: { id: true, title: true, expectedCloseDate: true, owner: { select: { name: true } } },
       take: 200,
@@ -49,6 +49,7 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     prisma.deal.findMany({
       where: {
         ...own,
+        isBalance: false,
         stage: { notIn: ["WON", "LOST"] },
         updatedAt: { lt: staleBefore },
         activities: { none: { createdAt: { gte: staleBefore } } },
@@ -69,6 +70,8 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     prisma.deal.findMany({
       where: {
         ...own,
+        // A balance order waits on stock - its own reminder below.
+        isBalance: false,
         stage: { notIn: ["WON", "LOST"] },
         OR: [{ stageChangedAt: { lt: stuckBefore } }, { stageChangedAt: null, createdAt: { lt: stuckBefore } }],
       },
@@ -138,6 +141,29 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
         return { label: `${q.ref} - ${q.customerName}`, sub: `${c.description} ${verb} on ${fmt(c.on)}${q.priceChanges.length > 1 ? ` (+${q.priceChanges.length - 1} more)` : ""}${who(q.ownerName)}`, href: `/quotations?quote=${q.id}` };
       }),
     });
+  }
+  // Balance orders (part-billed, awaiting stock) whose products are now all
+  // in stock: bill them.
+  const balances = await prisma.deal.findMany({
+    where: { ...own, isBalance: true, stage: { notIn: ["WON", "LOST"] } },
+    select: { id: true, title: true, owner: { select: { name: true } }, items: { select: { productId: true, qty: true, product: { select: { model: true } } } } },
+  });
+  if (balances.length) {
+    const stock = await getAvailableStockByProduct();
+    const ready = balances.filter((b) => b.items.length && b.items.every((i) => (stock.get(i.productId) ?? 0) >= i.qty));
+    if (ready.length) {
+      groups.push({
+        key: "balanceStock",
+        label: "Stock arrived for balance orders - bill them",
+        count: ready.length,
+        href: `/deals/${ready[0].id}`,
+        items: ready.slice(0, SHOW).map((b) => ({
+          label: b.title,
+          sub: `${b.items.map((i) => `${i.qty} × ${i.product.model}`).join(", ")} in stock${who(b.owner.name)}`,
+          href: `/deals/${b.id}`,
+        })),
+      });
+    }
   }
   if (stuck.length) {
     const stageLabel: Record<string, string> = { QUALIFICATION: "Qualification", NEEDS_ANALYSIS: "Needs Analysis", PROPOSAL: "Quotation", NEGOTIATION: "Negotiation" };

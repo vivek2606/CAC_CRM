@@ -320,7 +320,17 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                         <td className="px-4 py-3 min-w-[180px]">
                           <div className="text-slate-800 font-medium">{o.product.model}</div>
                           <div className="text-xs text-slate-400">{o.product.code}</div>
-                          {o.note && <div className="text-xs text-slate-500 mt-0.5">{o.note}</div>}
+                          {o.note && (
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {o.dealId ? (
+                                <Link href={`/deals/${o.dealId}`} className="text-indigo-600 hover:text-indigo-500">
+                                  {o.note}
+                                </Link>
+                              ) : (
+                                o.note
+                              )}
+                            </div>
+                          )}
                           {o.status === "OPEN" && shortfalls.has(o.productId) && (
                             <span
                               className="mt-1 inline-flex whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700"

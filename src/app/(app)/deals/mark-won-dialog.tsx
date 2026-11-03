@@ -10,6 +10,7 @@ import { invoiceKey, invoiceTypeOf } from "@/lib/invoice-key";
 
 export type WonProductOption = { id: string; label: string; defaultPrice: number | null };
 export type WonExistingItem = { productId: string; label: string; qty: number; unitPrice: number };
+export type WonBalanceInput = { keep: boolean; paid: boolean };
 export type WonInvoiceInput = { invoiceNo: string; closedAt: string; billingCompany: string; items: { productId: string; qty: number; unitPrice: number }[] };
 
 // dealLine: the deal's own product line this row bills (index into
@@ -47,7 +48,9 @@ export function MarkWonDialog({
   existingItems: WonExistingItem[];
   quotedValue: number;
   products: WonProductOption[];
-  onConfirm: (invoices: WonInvoiceInput[]) => void;
+  // balance: the deal's products not billed on these invoices - kept as a
+  // balance order to bill when the stock arrives, or dropped.
+  onConfirm: (invoices: WonInvoiceInput[], balance?: WonBalanceInput) => void;
   onCancel: () => void;
   // Set for a deal that is already Won: its current invoice no. and date,
   // so its invoices and products can be recorded (or split) after the fact.
@@ -123,6 +126,20 @@ export function MarkWonDialog({
       }))
     : [];
   const fmtQty = (q: number) => q.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+  // Marking Won: the deal's products not billed on any invoice (e.g. out of
+  // stock) - kept as a balance order unless the customer doesn't want them.
+  const notBilled = wonInvoice
+    ? []
+    : [...new Map(existingItems.filter((i) => i.qty > 0).map((i) => [i.productId, i.label])).entries()]
+        .map(([productId, label]) => {
+          const onDeal = existingItems.filter((i) => i.productId === productId && i.qty > 0).reduce((s, i) => s + i.qty, 0);
+          const billed = blocks.reduce((s, b, n) => s + b.rows.filter((r) => r.productId === productId).reduce((t, r) => t + Math.max(0, qtyOf(r, n)), 0), 0);
+          const rate = existingItems.find((i) => i.productId === productId)?.unitPrice ?? 0;
+          return { productId, label, qty: Math.round((onDeal - billed) * 100) / 100, rate };
+        })
+        .filter((x) => x.qty > 0);
+  const [keepBalance, setKeepBalance] = useState(true);
+  const [balancePaid, setBalancePaid] = useState(false);
 
   const upload = (bkey: string, file: File) =>
     startUpload(async () => {
@@ -185,7 +202,7 @@ export function MarkWonDialog({
     const keys = invoices.map((i) => invoiceKey(i.billingCompany, invoiceTypeOf(i.items.reduce((t, x) => t + x.qty * x.unitPrice, 0)), i.invoiceNo));
     if (new Set(keys).size !== keys.length)
       return setError("Each invoice needs a different invoice no. (the same number is fine once per company, and once as a sale and once as a sales return).");
-    onConfirm(invoices);
+    onConfirm(invoices, notBilled.length ? { keep: keepBalance, paid: keepBalance && balancePaid } : undefined);
   };
 
   const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -370,6 +387,33 @@ export function MarkWonDialog({
                 );
               })}
             </ul>
+          </div>
+        )}
+
+        {notBilled.length > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm">
+            <p className="font-medium text-amber-900">
+              Not billed on {blocks.length > 1 ? "these invoices" : "this invoice"}:{" "}
+              {notBilled.map((x) => `${fmtQty(x.qty)} × ${x.label}`).join(", ")}{" "}
+              <span className="font-normal text-amber-800">({naira(notBilled.reduce((t, x) => t + x.qty * x.rate, 0))})</span>
+            </p>
+            <label className="mt-2 flex items-start gap-2 text-slate-800">
+              <input type="radio" checked={keepBalance} onChange={() => setKeepBalance(true)} className="mt-0.5" />
+              <span>
+                Keep as a <b>balance order</b>, to bill when the stock arrives - it stays in the pipeline (not achieved until invoiced) and goes on Pending
+                Orders.
+              </span>
+            </label>
+            {keepBalance && (
+              <label className="ml-6 mt-1 flex items-center gap-2 text-slate-700">
+                <input type="checkbox" checked={balancePaid} onChange={(e) => setBalancePaid(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                The customer has paid in full for these - count them in Reorder Planning
+              </label>
+            )}
+            <label className="mt-1 flex items-start gap-2 text-slate-800">
+              <input type="radio" checked={!keepBalance} onChange={() => setKeepBalance(false)} className="mt-0.5" />
+              <span>The customer doesn&apos;t want them - drop them</span>
+            </label>
           </div>
         )}
 

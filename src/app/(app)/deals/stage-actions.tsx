@@ -6,7 +6,7 @@ import { CheckCircle2, ReceiptText, XCircle } from "lucide-react";
 import { updateDealStage, markDealWon } from "./actions";
 import { MarkLostDialog, type LostInput } from "./mark-lost-dialog";
 import { LinkAccountDialog } from "./link-account-dialog";
-import { MarkWonDialog, type WonExistingItem, type WonInvoiceInput, type WonProductOption } from "./mark-won-dialog";
+import { MarkWonDialog, type WonBalanceInput, type WonExistingItem, type WonInvoiceInput, type WonProductOption } from "./mark-won-dialog";
 import type { DealStage } from "@prisma/client";
 
 export function StageActions({
@@ -91,10 +91,10 @@ export function StageActions({
 
   // The dialog stays open until the server accepts - on a problem it shows
   // why, with everything entered still there.
-  function markWon(invoices: WonInvoiceInput[]) {
+  function markWon(invoices: WonInvoiceInput[], balance?: WonBalanceInput) {
     setWonError(null);
     startTransition(async () => {
-      const res = await markDealWon(dealId, invoices);
+      const res = await markDealWon(dealId, invoices, balance);
       if (res.error) return setWonError(res.error);
       setShowWonDialog(false);
       router.refresh();

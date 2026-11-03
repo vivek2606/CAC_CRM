@@ -96,6 +96,14 @@ export default async function DealDetailPage({
     prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }).then(attachAccounts),
     getOrderInvoices(deal.id),
   ]);
+  // Part-billed orders: the order's balance still to bill (awaiting stock).
+  const openBalances = await prisma.deal.findMany({
+    where: { orderDealId: deal.orderDealId ?? deal.id, isBalance: true, stage: { notIn: ["WON", "LOST"] }, id: { not: deal.id } },
+    select: { id: true, title: true, value: true, items: { select: { qty: true, product: { select: { model: true } } } } },
+  });
+  const balancePending = deal.isBalance
+    ? await prisma.pendingOrder.findMany({ where: { dealId: deal.id, status: "OPEN" }, select: { paymentReceived: true } })
+    : [];
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
@@ -185,6 +193,54 @@ export default async function DealDetailPage({
       />
 
       <div className="p-6 space-y-6">
+        {deal.isBalance && deal.stage !== "WON" && deal.stage !== "LOST" && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <p>
+              <span className="font-semibold">Balance order - awaiting stock.</span> The products not billed when{" "}
+              {deal.orderDealId ? (
+                <Link href={`/deals/${deal.orderDealId}`} className="font-medium text-indigo-700 hover:underline">
+                  the order
+                </Link>
+              ) : (
+                "the order"
+              )}{" "}
+              was marked Won{balancePending.some((p) => p.paymentReceived) ? " (paid - counted in Reorder Planning)" : ""}. Not achieved until invoiced: when
+              the stock arrives, press Mark Won with the invoice; anything still not billed stays as the balance. If the customer no longer wants them, Mark
+              Lost.
+            </p>
+            <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+              {deal.items.map((i) => {
+                const stock = availableStockByProduct.get(i.productId);
+                return (
+                  <li key={i.id}>
+                    {i.qty} × {i.product.model}:{" "}
+                    {stock == null ? (
+                      <span className="text-slate-500">stock not tracked</span>
+                    ) : stock >= i.qty ? (
+                      <span className="font-semibold text-emerald-700">in stock ({stock})</span>
+                    ) : (
+                      <span className="text-amber-700">{stock} in stock{inTransitByProduct.get(i.productId)?.qty ? `, ${inTransitLabel(inTransitByProduct.get(i.productId))}` : ""}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+        {openBalances.length > 0 && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <span className="font-semibold">Balance still to bill:</span>{" "}
+            {openBalances.map((b, n) => (
+              <span key={b.id}>
+                {n > 0 && "; "}
+                <Link href={`/deals/${b.id}`} className="font-medium text-indigo-700 hover:underline">
+                  {b.items.map((i) => `${i.qty} × ${i.product.model}`).join(", ")} ({formatCurrency(b.value)})
+                </Link>
+              </span>
+            ))}{" "}
+            - awaiting stock, in the pipeline until invoiced.
+          </div>
+        )}
         {(deal.stage === "PROPOSAL" || deal.stage === "NEGOTIATION") && deal.items.length === 0 && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span>
