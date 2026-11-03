@@ -34,6 +34,8 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
     productId: "",
     model: "",
     serialNo: "",
+    unitId: "",
+    unitSlot: 0,
     warrantyMonths: STANDARD_WARRANTY_MONTHS,
     warrantyOverride: "",
     warrantyNote: "",
@@ -68,13 +70,19 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
       invoiceDate: s.invoiceDate,
       billingCompany: s.company,
       warrantyMonths: s.warrantyMonths,
-      productId: s.products.length === 1 ? s.products[0].productId : "",
-      model: s.products.length === 1 ? s.products[0].model : "",
+      // The unit: picked below (with its serial no.) - preset when it's the only one.
+      ...(() => {
+        const only = s.units.length === 1 && s.units[0].serials.length === 1 ? s.units[0] : null;
+        return only
+          ? { unitId: only.unitId, unitSlot: 0, productId: only.productId ?? "", model: only.model, serialNo: only.serials[0] }
+          : { unitId: "", unitSlot: 0, productId: "", model: "", serialNo: "" };
+      })(),
     });
   };
   const save = () =>
     start(async () => {
       setError("");
+      if (sale?.units.length && !v.unitId) return setError("Pick the unit the complaint is for, with its serial no.");
       const res = await registerComplaint(v);
       if (res.error) return setError(res.error);
       router.push(`/service/${res.id}`);
@@ -142,29 +150,69 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
           <span className="mb-1 block">Site address</span>
           <input value={v.siteAddress} onChange={(e) => set({ siteAddress: e.target.value })} className={field} />
         </label>
-        <div className="text-xs text-slate-500">
-          <span className="mb-1 block">Model</span>
-          {sale && sale.products.length > 1 ? (
-            <select
-              value={v.productId}
-              onChange={(e) => set({ productId: e.target.value, model: sale.products.find((p) => p.productId === e.target.value)?.model ?? "" })}
-              className={field}
-            >
-              <option value="">Pick the unit...</option>
-              {sale.products.map((p) => (
-                <option key={p.productId} value={p.productId}>
-                  {p.model} ({p.qty} on the invoice)
-                </option>
-              ))}
-            </select>
-          ) : (
-            <SearchableSelect key={sale?.dealId ?? "manual"} options={products} defaultValue={v.productId} onSelect={(o) => set({ productId: o?.id ?? "", model: o?.label ?? "" })} placeholder="Search models..." />
-          )}
-        </div>
-        <label className="text-xs text-slate-500">
-          <span className="mb-1 block">Serial no.</span>
-          <input value={v.serialNo} onChange={(e) => set({ serialNo: e.target.value })} className={field} />
-        </label>
+        {sale && sale.units.length > 0 ? (
+          <div className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
+            <span className="mb-1 block">Which unit? Pick it and fill its serial no. * ({sale.units.reduce((t, u) => t + u.serials.length, 0)} units on the invoice)</span>
+            <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+              {sale.units.flatMap((u) =>
+                u.serials.map((sn, i) => {
+                  const picked = v.unitId === u.unitId && v.unitSlot === i;
+                  return (
+                    <label key={`${u.unitId}-${i}`} className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm ${picked ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                      <input
+                        type="radio"
+                        checked={picked}
+                        onChange={() => set({ unitId: u.unitId, unitSlot: i, productId: u.productId ?? "", model: u.model, serialNo: sn })}
+                      />
+                      <span className="text-slate-800">
+                        {u.model} · unit {i + 1} of {u.serials.length}
+                      </span>
+                      {picked ? (
+                        <input
+                          value={v.serialNo}
+                          onChange={(e) => set({ serialNo: e.target.value })}
+                          placeholder="Serial no. *"
+                          autoFocus={!sn}
+                          className={`${field} w-56 py-1`}
+                        />
+                      ) : sn ? (
+                        <span className="text-xs text-slate-500">S/N {sn}</span>
+                      ) : (
+                        <span className="text-xs text-amber-700">no serial no. yet</span>
+                      )}
+                    </label>
+                  );
+                }),
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+          <div className="text-xs text-slate-500">
+            <span className="mb-1 block">Model</span>
+            {sale && sale.products.length > 1 ? (
+              <select
+                value={v.productId}
+                onChange={(e) => set({ productId: e.target.value, model: sale.products.find((p) => p.productId === e.target.value)?.model ?? "" })}
+                className={field}
+              >
+                <option value="">Pick the unit...</option>
+                {sale.products.map((p) => (
+                  <option key={p.productId} value={p.productId}>
+                    {p.model} ({p.qty} on the invoice)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <SearchableSelect key={sale?.dealId ?? "manual"} options={products} defaultValue={v.productId} onSelect={(o) => set({ productId: o?.id ?? "", model: o?.label ?? "" })} placeholder="Search models..." />
+            )}
+          </div>
+          <label className="text-xs text-slate-500">
+            <span className="mb-1 block">Serial no.</span>
+            <input value={v.serialNo} onChange={(e) => set({ serialNo: e.target.value })} className={field} />
+          </label>
+          </>
+        )}
         <label className="text-xs text-slate-500">
           <span className="mb-1 block">Invoice date (if no sale found)</span>
           <input type="date" value={v.invoiceDate} onChange={(e) => set({ invoiceDate: e.target.value })} disabled={!!sale} className={`${field} disabled:bg-slate-50`} />

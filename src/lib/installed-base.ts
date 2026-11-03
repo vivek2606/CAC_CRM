@@ -63,3 +63,36 @@ export async function applyDealWarranty(dealId: string, months: number) {
   for (const u of units)
     await prisma.installedUnit.update({ where: { id: u.id }, data: { warrantyMonths: months, warrantyUntil: u.invoiceDate ? warrantyUntil(u.invoiceDate, months) : null } });
 }
+
+// Serial nos. are kept one per unit, in order (unit 1, unit 2, ...) - blank
+// where not recorded yet.
+export function serialSlots(u: { qty: number; serialNos: string[] }): string[] {
+  return Array.from({ length: Math.max(u.qty, u.serialNos.length) }, (_, i) => u.serialNos[i]?.trim() ?? "");
+}
+export function filledSerials(u: { serialNos: string[] }): number {
+  return u.serialNos.filter((s) => s.trim()).length;
+}
+
+// A serial no. already recorded on another unit, if any ("MSAF-12 of
+// Customer, unit 2").
+export async function serialElsewhere(serial: string, unitId: string, slot: number): Promise<string | null> {
+  const s = serial.trim();
+  if (!s) return null;
+  const units = await prisma.installedUnit.findMany({ where: { serialNos: { has: s } }, select: { id: true, model: true, customerName: true, serialNos: true } });
+  for (const u of units)
+    u.serialNos.forEach((x, i) => {
+      if (x.trim() === s && !(u.id === unitId && i === slot)) throw new SerialTaken(`${u.model} of ${u.customerName}, unit ${i + 1}`);
+    });
+  return null;
+}
+export class SerialTaken extends Error {}
+
+// Records the serial no. of one unit of a sale line.
+export async function setUnitSerial(unitId: string, slot: number, serial: string) {
+  const u = await prisma.installedUnit.findUnique({ where: { id: unitId }, select: { qty: true, serialNos: true } });
+  if (!u || slot < 0 || slot >= Math.max(u.qty, u.serialNos.length)) return;
+  const slots = serialSlots(u);
+  slots[slot] = serial.trim();
+  while (slots.length && !slots[slots.length - 1]) slots.pop();
+  await prisma.installedUnit.update({ where: { id: unitId }, data: { serialNos: slots } });
+}

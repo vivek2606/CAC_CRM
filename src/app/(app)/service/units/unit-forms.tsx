@@ -58,7 +58,10 @@ type Unit = {
 export function UnitRow({ u, today }: { u: Unit; today: string }) {
   const router = useRouter();
   const [edit, setEdit] = useState(false);
-  const [v, setV] = useState({ serialNos: u.serialNos.join(", "), siteAddress: u.siteAddress, phone: u.phone, installedAt: u.installedAt, warrantyMonths: u.warrantyMonths, notes: u.notes });
+  // One serial no. per unit, in order.
+  const slots = Array.from({ length: Math.max(u.qty, u.serialNos.length) }, (_, i) => u.serialNos[i] ?? "");
+  const filled = u.serialNos.filter((x) => x.trim()).length;
+  const [v, setV] = useState({ serialNos: slots, siteAddress: u.siteAddress, phone: u.phone, installedAt: u.installedAt, warrantyMonths: u.warrantyMonths, notes: u.notes });
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const days = u.warrantyUntil ? Math.round((Date.parse(u.warrantyUntil) - Date.parse(today)) / 86400000) : null;
@@ -109,7 +112,16 @@ export function UnitRow({ u, today }: { u: Unit; today: string }) {
           )}
         </td>
         <td className="py-2 pr-3 text-xs text-slate-600 max-w-[260px]">
-          {u.serialNos.length ? <div className="truncate" title={u.serialNos.join(", ")}>S/N {u.serialNos.join(", ")}</div> : <span className="text-slate-400">No serial nos.</span>}
+          {filled ? (
+            <div className="truncate" title={u.serialNos.filter(Boolean).join(", ")}>
+              S/N {u.serialNos.filter(Boolean).join(", ")}
+            </div>
+          ) : null}
+          {filled < u.qty && (
+            <button type="button" onClick={() => setEdit(true)} className="font-medium text-amber-700 hover:text-amber-600">
+              {u.qty - filled} serial {u.qty - filled === 1 ? "no." : "nos."} to fill
+            </button>
+          )}
           {u.siteAddress && <div className="truncate text-slate-400">{u.siteAddress}</div>}
         </td>
         <td className="py-2 text-right">
@@ -122,10 +134,21 @@ export function UnitRow({ u, today }: { u: Unit; today: string }) {
         <tr>
           <td colSpan={7} className="bg-slate-50 px-3 py-3">
             <div className="flex flex-wrap items-end gap-2">
-              <label className="min-w-[240px] flex-1 text-xs text-slate-500">
-                <span className="mb-1 block">Serial nos. (comma-separated)</span>
-                <input value={v.serialNos} onChange={(e) => setV({ ...v, serialNos: e.target.value })} className={`${field} w-full`} />
-              </label>
+              <div className="w-full text-xs text-slate-500">
+                <span className="mb-1 block">Serial no. of each unit ({u.qty} × {u.model})</span>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                  {v.serialNos.map((sn, i) => (
+                    <input
+                      key={i}
+                      value={sn}
+                      onChange={(e) => setV({ ...v, serialNos: v.serialNos.map((x, j) => (j === i ? e.target.value : x)) })}
+                      placeholder={`Unit ${i + 1}`}
+                      aria-label={`Serial no. unit ${i + 1}`}
+                      className={`${field} w-full`}
+                    />
+                  ))}
+                </div>
+              </div>
               <label className="min-w-[200px] flex-1 text-xs text-slate-500">
                 <span className="mb-1 block">Site address</span>
                 <input value={v.siteAddress} onChange={(e) => setV({ ...v, siteAddress: e.target.value })} className={`${field} w-full`} />

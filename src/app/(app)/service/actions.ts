@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
-import { applyDealWarranty } from "@/lib/installed-base";
+import { applyDealWarranty, SerialTaken, serialElsewhere, serialSlots, setUnitSerial, syncInstalledUnits } from "@/lib/installed-base";
 import { amcFor } from "@/lib/amc";
 import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus } from "@/lib/service";
 
@@ -22,6 +22,9 @@ export type SaleMatch = {
   company: string;
   warrantyMonths: number;
   products: { productId: string; model: string; qty: number }[];
+  // Each unit sold on the invoice (per model, one per qty), with its serial
+  // no. if recorded - a complaint is for one of them.
+  units: { unitId: string; productId: string | null; model: string; serials: string[] }[];
   // An AMC covering the sale's units today.
   amc: { ref: string; until: string; comprehensive: boolean } | null;
 };
@@ -54,10 +57,18 @@ export async function findSaleByInvoice(q: string): Promise<SaleMatch[]> {
   });
   const now = new Date();
   const amcs = await Promise.all(deals.map((d) => amcFor({ dealId: d.id }, now)));
+  // The sale's units (added to the installed base first if they aren't yet).
+  const ids = deals.map((d) => d.id);
+  let units = await prisma.installedUnit.findMany({ where: { dealId: { in: ids } }, orderBy: { createdAt: "asc" }, select: { id: true, dealId: true, productId: true, model: true, qty: true, serialNos: true } });
+  if (ids.some((id) => !units.some((u) => u.dealId === id))) {
+    await syncInstalledUnits();
+    units = await prisma.installedUnit.findMany({ where: { dealId: { in: ids } }, orderBy: { createdAt: "asc" }, select: { id: true, dealId: true, productId: true, model: true, qty: true, serialNos: true } });
+  }
   return deals.map((d, i) => {
     const lines = d.items.length ? d.items : d.lineItems;
     const amc = amcs[i];
     return {
+      units: units.filter((u) => u.dealId === d.id).map((u) => ({ unitId: u.id, productId: u.productId, model: u.model, serials: serialSlots(u) })),
       amc: amc ? { ref: amc.ref, until: amc.endDate.toISOString().slice(0, 10), comprehensive: amc.comprehensive } : null,
       dealId: d.id,
       invoiceNo: d.invoiceNo ?? String(d.sourceTxnNo ?? ""),
@@ -93,6 +104,10 @@ export type ComplaintInput = {
   productId: string;
   model: string;
   serialNo: string;
+  // The unit of the sale it's for: its installed-base line and which of its
+  // units (0 = the first) - its serial no. is then required and recorded.
+  unitId: string;
+  unitSlot: number;
   warrantyMonths: number;
   // Set to override the warranty worked out from the invoice date (with a note).
   warrantyOverride: "" | "in" | "out";
@@ -121,6 +136,17 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
   const inWarranty = input.warrantyOverride ? input.warrantyOverride === "in" : byWarranty || !!amc;
   const amcNote = !input.warrantyOverride && !byWarranty && amc ? `Covered by AMC ${amc.ref}${amc.comprehensive ? " (comprehensive)" : " (labour only - spares charged)"}` : "";
   const technician = clean(input.technician, 120);
+  if (input.unitId) {
+    const sn = clean(input.serialNo, 100);
+    if (!sn) return { error: "Enter the serial no. of the unit the complaint is for." };
+    try {
+      await serialElsewhere(sn, input.unitId, input.unitSlot);
+    } catch (e) {
+      if (e instanceof SerialTaken) return { error: `Serial no. ${sn} is already recorded on ${e.message} - check it.` };
+      throw e;
+    }
+    await setUnitSerial(input.unitId, input.unitSlot, sn);
+  }
   const deal = input.dealId ? await prisma.deal.findUnique({ where: { id: input.dealId }, select: { id: true } }) : null;
   const account = input.accountId ? await prisma.account.findUnique({ where: { id: input.accountId }, select: { id: true } }) : null;
   const product = input.productId ? await prisma.product.findUnique({ where: { id: input.productId }, select: { id: true, model: true } }) : null;

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
-import { syncInstalledUnits } from "@/lib/installed-base";
+import { SerialTaken, serialElsewhere, syncInstalledUnits } from "@/lib/installed-base";
 import { nextAmcRef, visitPlan } from "@/lib/amc";
 import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
 
@@ -20,16 +20,31 @@ export async function refreshInstalledUnits(): Promise<Result & { added?: number
   return { added };
 }
 
-export type UnitInput = { serialNos: string; siteAddress: string; phone: string; installedAt: string; warrantyMonths: number; notes: string };
+// serialNos: one per unit, in order (blank where not known yet).
+export type UnitInput = { serialNos: string[]; siteAddress: string; phone: string; installedAt: string; warrantyMonths: number; notes: string };
 export async function updateInstalledUnit(id: string, u: UnitInput): Promise<Result> {
   await requireService();
-  const unit = await prisma.installedUnit.findUnique({ where: { id }, select: { invoiceDate: true } });
+  const unit = await prisma.installedUnit.findUnique({ where: { id }, select: { invoiceDate: true, qty: true } });
   if (!unit) return { error: "Unit not found." };
+  const serials = u.serialNos.slice(0, Math.max(unit.qty, 1)).map((x) => clean(x, 100));
+  while (serials.length && !serials[serials.length - 1]) serials.pop();
+  const seen = new Set<string>();
+  for (const [i, sn] of serials.entries()) {
+    if (!sn) continue;
+    if (seen.has(sn)) return { error: `Serial no. ${sn} is entered twice.` };
+    seen.add(sn);
+    try {
+      await serialElsewhere(sn, id, i);
+    } catch (e) {
+      if (e instanceof SerialTaken) return { error: `Serial no. ${sn} is already recorded on ${e.message}.` };
+      throw e;
+    }
+  }
   const months = Math.min(120, Math.max(0, Math.round(u.warrantyMonths || STANDARD_WARRANTY_MONTHS)));
   await prisma.installedUnit.update({
     where: { id },
     data: {
-      serialNos: [...new Set(u.serialNos.split(/[,\n;]+/).map((x) => x.trim()).filter(Boolean))].slice(0, 200),
+      serialNos: serials,
       siteAddress: clean(u.siteAddress) || null,
       phone: clean(u.phone, 60) || null,
       installedAt: day(u.installedAt),
