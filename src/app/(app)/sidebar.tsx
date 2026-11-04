@@ -23,7 +23,7 @@ import {
   Receipt,
   Landmark,
   TableProperties,
-  FileText, HeartPulse, Trash2, History, LifeBuoy } from "lucide-react";
+  FileText, HeartPulse, Trash2, History, LifeBuoy, CircleHelp } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
 import { SakuragiMark } from "@/components/sakuragi-logo";
@@ -287,6 +287,19 @@ export function Sidebar({
             </p>
           </div>
         </div>
+        <Link
+          href="/help"
+          onClick={onClose}
+          title="Help & user guide"
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm transition-colors ${
+            pathname.startsWith("/help")
+              ? "bg-indigo-50 text-indigo-700"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <CircleHelp className="h-4 w-4 shrink-0" />
+          <span className={label}>Help & user guide</span>
+        </Link>
         <Link
           href="/account"
           onClick={onClose}
