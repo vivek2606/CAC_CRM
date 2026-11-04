@@ -39,16 +39,18 @@ export async function getLeadStats(ownerIds: string[], now = new Date()): Promis
       select: { ownerId: true, createdAt: true, status: true, convertedDeal: { select: { createdAt: true } } },
     }),
     prisma.deal.aggregate({ where: { ...owner, stage: "LOST", closedAt: { gte: startOfMonth } }, _count: true, _sum: { value: true } }),
-    prisma.user.findMany({ where: { id: { in: ownerIds } }, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true, title: true } }),
+    prisma.user.findMany({ where: { id: { in: ownerIds } }, orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true, title: true, role: true } }),
   ]);
 
   const isConverted = (l: (typeof window90)[number]) => l.status === "CONVERTED" || !!l.convertedDeal;
   const converted = window90.filter(isConverted);
   const days = converted.filter((l) => l.convertedDeal).map((l) => Math.max(0, (l.convertedDeal!.createdAt.getTime() - l.createdAt.getTime()) / DAY));
 
-  // Active sales managers, plus anyone else who has leads in these figures.
+  // The sales people only - active ones, plus any who have leads in these
+  // figures. The Head, the Sales Coordinator and the Service Manager aren't
+  // listed (the team figures still count every lead).
   const withLeads = new Set([...recent, ...active, ...window90].map((l) => l.ownerId));
-  const people = users.filter((u) => withLeads.has(u.id) || (u.isActive && isSalesTitle(u.title)));
+  const people = users.filter((u) => u.role === "SALES_MANAGER" && u.title !== "Service Manager" && (withLeads.has(u.id) || (u.isActive && isSalesTitle(u.title))));
   const byPerson: LeadStatsRow[] = people.map((u) => {
     const mineActive = active.filter((l) => l.ownerId === u.id);
     const mine90 = window90.filter((l) => l.ownerId === u.id);

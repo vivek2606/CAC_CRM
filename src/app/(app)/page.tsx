@@ -116,6 +116,18 @@ export default async function DashboardPage() {
   const ytdPct = achievementPct(ytd.actual, ytd.target);
   const openValue = openDeals.reduce((t, d) => t + d.value, 0);
   const weighted = openDeals.reduce((t, d) => t + (d.value * (d.probability ?? 0)) / 100, 0);
+  // The sales people's rows added up (leads under the Head aren't listed).
+  const teamLeads = leadStats.byPerson.reduce(
+    (t, r) => ({
+      newThisMonth: t.newThisMonth + r.newThisMonth,
+      newLastMonth: t.newLastMonth + r.newLastMonth,
+      active: t.active + r.active,
+      activeValue: t.activeValue + r.activeValue,
+      created90: t.created90 + r.created90,
+      converted90: t.converted90 + r.converted90,
+    }),
+    { newThisMonth: 0, newLastMonth: 0, active: 0, activeValue: 0, created90: 0, converted90: 0 },
+  );
   const leadTrend = leadStats.newLastMonth > 0 ? Math.round(((leadStats.newThisMonth - leadStats.newLastMonth) / leadStats.newLastMonth) * 100) : null;
   const pctText = (p: number | null) => (p == null ? "—" : `${p}%`);
   const stageData = OPEN_DEAL_STAGES.map((stage) => {
@@ -482,12 +494,12 @@ export default async function DashboardPage() {
                     <tfoot>
                       <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
                         <td>Team</td>
-                        <td className="text-right tabular-nums">{leadStats.newThisMonth}</td>
-                        <td className="text-right tabular-nums">{leadStats.newLastMonth}</td>
-                        <td className="text-right tabular-nums">{leadStats.activeCount}</td>
-                        <td className="text-right tabular-nums">{formatCurrency(leadStats.activeValue)}</td>
+                        <td className="text-right tabular-nums">{teamLeads.newThisMonth}</td>
+                        <td className="text-right tabular-nums">{teamLeads.newLastMonth}</td>
+                        <td className="text-right tabular-nums">{teamLeads.active}</td>
+                        <td className="text-right tabular-nums">{formatCurrency(teamLeads.activeValue)}</td>
                         <td className="text-right tabular-nums">
-                          {leadStats.conversionPct == null ? "—" : `${leadStats.conversionPct}% (${leadStats.converted90} of ${leadStats.created90})`}
+                          {teamLeads.created90 ? `${Math.round((teamLeads.converted90 / teamLeads.created90) * 100)}% (${teamLeads.converted90} of ${teamLeads.created90})` : "—"}
                         </td>
                       </tr>
                     </tfoot>

@@ -2,6 +2,7 @@
 
 import { QUOTE_TEMPLATES, refPrefixFor, type QuoteTemplate } from "@/lib/quote-templates";
 import { createLeadForDeal } from "@/lib/auto-lead";
+import { moveBackOfficeDeal, salesPersonId } from "@/lib/deal-owner";
 
 import { audit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -185,8 +186,16 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
     select: { id: true, ownerId: true, createdById: true, dealId: true, customerName: true, total: true, data: true, deal: { select: { ownerId: true } } },
   });
   if (!q || !canSeeQuotation(user, q)) return { error: "Download the quotation first - then it can be linked to a deal." };
-  if (q.dealId) return { dealId: q.dealId, quoteId: q.id };
-  const dealOwner = isBackOffice(user) ? ownerId || (user.role === "HEAD" ? user.id : "") : user.id;
+  // The sales person the quote is for: the one picked, else the quote's own
+  // sales person, else (the Head's own quote) the Head.
+  const quoteSalesPerson = isBackOffice(user) && !ownerId ? await salesPersonId(q.ownerId) : null;
+  if (q.dealId) {
+    if (isBackOffice(user)) await moveBackOfficeDeal(q.dealId, ownerId || quoteSalesPerson, user.id, ref);
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { dealId: q.dealId, quoteId: q.id };
+  }
+  const dealOwner = isBackOffice(user) ? ownerId || quoteSalesPerson || (user.role === "HEAD" ? user.id : "") : user.id;
   if (!dealOwner) return { error: "Pick the sales person this deal is for." };
   const ownerProblem = await dealOwnerProblem(dealOwner);
   if (ownerProblem) return { error: ownerProblem };

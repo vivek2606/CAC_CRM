@@ -5,6 +5,7 @@ import { canAccessOwner, isBackOffice, type SessionUser } from "@/lib/rbac";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 import type { DocumentInput, SalesDocument } from "@/lib/sales-document";
 import { applyQuoteToDeal } from "@/app/(app)/deals/actions";
+import { moveBackOfficeDeal } from "@/lib/deal-owner";
 
 // Quotations kept from the Quotations builder: each download saves the
 // builder's input under the quote's reference, for a sales person and
@@ -113,6 +114,9 @@ export async function saveQuotation(
     const q = await prisma.quotation.update({ where: { id: existing.id }, data: { ...fields, dealId: deal?.id ?? existing.dealId }, select: { id: true, dealId: true } });
     quoteId = q.id;
     linked = q.dealId != null;
+    // The sales person picked after the deal was made under the Head: the
+    // deal and its lead go to them.
+    if (q.dealId && isBackOffice(user)) await moveBackOfficeDeal(q.dealId, owner.id, user.id, input.ref);
   } else {
     const q = await prisma.quotation.create({ data: { ...fields, ref: input.ref, dealId: deal?.id ?? null, createdById: user.id }, select: { id: true } });
     quoteId = q.id;

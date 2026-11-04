@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { audit } from "@/lib/audit";
 
 // A deal is always under a sales person (or the Head) - never the Sales
 // Coordinator, who prepares things for the sales people.
@@ -21,4 +22,24 @@ export async function backOfficeDefaultOwner(user: { id: string; role: string })
   const head = await prisma.user.findFirst({ where: { role: "HEAD", isActive: true }, orderBy: { createdAt: "asc" }, select: { id: true } });
   if (!head) throw new Error("Pick the sales person.");
   return head.id;
+}
+
+// The id, if it is an active sales person's (who can own deals).
+export async function salesPersonId(id: string | null | undefined): Promise<string | null> {
+  if (!id) return null;
+  const u = await prisma.user.findUnique({ where: { id }, select: { role: true, isActive: true } });
+  return u?.isActive && u.role === "SALES_MANAGER" ? id : null;
+}
+
+// A deal made from a quote while it was still under the Head (left on
+// "None") moves - with its lead - to the sales person picked on the quote
+// afterwards. A deal already under a sales person stays where it is.
+export async function moveBackOfficeDeal(dealId: string, to: string | null, userId: string, ref: string): Promise<boolean> {
+  if (!to || !(await salesPersonId(to))) return false;
+  const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { ownerId: true, owner: { select: { role: true } } } });
+  if (!deal || deal.ownerId === to || deal.owner.role !== "HEAD") return false;
+  await prisma.deal.update({ where: { id: dealId }, data: { ownerId: to } });
+  await prisma.lead.updateMany({ where: { convertedDealId: dealId, ownerId: deal.ownerId }, data: { ownerId: to } });
+  await audit("deal", dealId, userId, "edited", `Moved to the sales person picked on quotation ${ref}, with its lead.`);
+  return true;
 }
