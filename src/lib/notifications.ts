@@ -7,6 +7,7 @@ import { getIncentiveApproval } from "@/lib/incentive-approval";
 import { canUseService } from "@/lib/service-access";
 import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
 import { claimableWhere } from "@/lib/warranty-claims";
+import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -305,45 +306,38 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   // days with no AMC - the AMCs to offer.
   if (await canUseService(user)) {
     const week = new Date(now.getTime() + 7 * day);
-    // Complaints: open over 48 h, urgent ones not assigned, resolved ones
-    // waiting 3+ days to be closed.
-    const [late, urgent, toClose] = await Promise.all([
+    // Complaints against their service levels (service-sla.ts): breached
+    // and at risk now, and resolved ones waiting to be closed.
+    const sla = await getSla();
+    const [open, toClose] = await Promise.all([
       prisma.serviceComplaint.findMany({
-        where: { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS", "AWAITING_SPARES"] }, registeredAt: { lt: new Date(now.getTime() - 2 * day) } },
+        where: { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS", "AWAITING_SPARES"] } },
         orderBy: { registeredAt: "asc" },
-        select: { id: true, ref: true, customerName: true, nature: true, registeredAt: true },
-        take: 200,
+        select: { id: true, ref: true, customerName: true, nature: true, registeredAt: true, priority: true, status: true, assignedAt: true, attendedAt: true, resolvedAt: true },
+        take: 500,
       }),
       prisma.serviceComplaint.findMany({
-        where: { status: "OPEN", priority: "URGENT", technician: null },
-        select: { id: true, ref: true, customerName: true, nature: true },
-      }),
-      prisma.serviceComplaint.findMany({
-        where: { status: "RESOLVED", resolvedAt: { lt: new Date(now.getTime() - 3 * day) } },
+        where: { status: "RESOLVED", resolvedAt: { lt: new Date(now.getTime() - sla.closeDays * day) } },
         select: { id: true, ref: true, customerName: true, resolvedAt: true },
         take: 200,
       }),
     ]);
-    if (urgent.length)
-      groups.unshift({
-        key: "complaintUrgent",
-        label: "Urgent complaints not assigned",
-        count: urgent.length,
-        href: "/service",
-        items: urgent.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: c.nature, href: `/service/${c.id}` })),
-      });
-    if (late.length)
-      groups.push({
-        key: "complaintLate",
-        label: "Complaints open over 48 hours",
-        count: late.length,
-        href: "/service",
-        items: late.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `${c.nature} · since ${fmt(c.registeredAt)}`, href: `/service/${c.id}` })),
-      });
+    const withSla = open.map((c) => ({ c, s: slaSummary(c, sla, now) }));
+    const breached = withSla.filter((x) => x.s.state === "breached");
+    const atRisk = withSla.filter((x) => x.s.state === "at_risk");
+    const slaItem = ({ c, s: x }: (typeof withSla)[number]) => ({
+      label: `${c.ref} - ${c.customerName}${c.priority === "URGENT" ? " (URGENT)" : ""}`,
+      sub: `${STAGE_LABEL[x.stage!]} ${x.state === "breached" ? "overdue since" : "due"} ${x.due!.toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`,
+      href: `/service/${c.id}`,
+    });
+    if (breached.length)
+      groups.unshift({ key: "slaBreached", label: "Complaints past their service level", count: breached.length, href: "/service?sla=breached", items: breached.slice(0, SHOW).map(slaItem) });
+    if (atRisk.length)
+      groups.push({ key: "slaRisk", label: "Complaints at risk of missing their service level", count: atRisk.length, href: "/service?sla=at_risk", items: atRisk.slice(0, SHOW).map(slaItem) });
     if (toClose.length)
       groups.push({
         key: "complaintClose",
-        label: "Resolved complaints to close (customer to confirm)",
+        label: `Resolved complaints to close (over ${sla.closeDays} days)`,
         count: toClose.length,
         href: "/service?status=RESOLVED",
         items: toClose.slice(0, SHOW).map((c) => ({ label: `${c.ref} - ${c.customerName}`, sub: `Resolved ${fmt(c.resolvedAt!)}`, href: `/service/${c.id}` })),

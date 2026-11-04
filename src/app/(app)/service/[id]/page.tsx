@@ -6,6 +6,7 @@ import { PageHeader, Card } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { STATUS_LABEL, STATUS_TONE, fmtHours, hoursBetween, lagosDateTime, toLagosInput, type ComplaintStatus, isSerialNA } from "@/lib/service";
 import { ComplaintActions, PartsEditor } from "./complaint-actions";
+import { getSla, slaStages, STAGE_LABEL as SLA_STAGE, STATE_LABEL as SLA_LABEL, STATE_TONE as SLA_TONE } from "@/lib/service-sla";
 import { RaiseClaimButton } from "../claims/claim-buttons";
 import { CLAIM_STATUS_LABEL, type ClaimStatus } from "@/lib/warranty-claims";
 
@@ -37,6 +38,7 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
       : Promise.resolve([]),
   ]);
   const status = c.status as ComplaintStatus;
+  const sla = await getSla();
   // Covered by an AMC (out of warranty): free labour; spares too only when
   // the AMC is comprehensive.
   const underAmc = !!c.warrantyNote?.startsWith("Covered by AMC");
@@ -102,6 +104,18 @@ export default async function ComplaintPage({ params }: { params: Promise<{ id: 
             {row("Resolved", c.resolvedAt ? `${lagosDateTime(c.resolvedAt)} (${fmtHours(hoursBetween(c.registeredAt, c.resolvedAt))})` : "Not yet")}
             {row("Closed", c.closedAt ? lagosDateTime(c.closedAt) : "Not yet")}
             {row("Customer rating", c.feedback ? `${"★".repeat(c.feedback)}${"☆".repeat(5 - c.feedback)}` : "-")}
+            <div className="mt-2 border-t border-slate-100 pt-2">
+              <p className="mb-1 text-xs font-semibold text-slate-500">Service level ({c.priority === "URGENT" ? "urgent" : "normal"})</p>
+              {slaStages(c, sla).map((x) => (
+                <div key={x.stage} className="flex items-center justify-between gap-2 py-1 text-xs">
+                  <span className="text-slate-600">
+                    {SLA_STAGE[x.stage]} within {x.hours} h
+                    <span className="text-slate-400"> · due {lagosDateTime(x.due)}</span>
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 font-medium ${SLA_TONE[x.state]}`}>{SLA_LABEL[x.state]}</span>
+                </div>
+              ))}
+            </div>
           </Card>
 
           <Card className="p-4">

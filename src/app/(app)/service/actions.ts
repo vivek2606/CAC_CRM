@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
 import { applyDealWarranty, assignSerial, serialSlots, syncInstalledUnits, unitLineFor } from "@/lib/installed-base";
 import { amcFor } from "@/lib/amc";
+import { saveSla, type SlaSettings } from "@/lib/service-sla";
 import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus, isSerialNA } from "@/lib/service";
 
 type Result = { error?: string };
@@ -304,5 +305,20 @@ export async function setDealWarranty(dealId: string, months: number | null): Pr
   await prisma.deal.update({ where: { id: dealId }, data: { warrantyMonths: m === STANDARD_WARRANTY_MONTHS ? null : m } });
   await applyDealWarranty(dealId, m ?? STANDARD_WARRANTY_MONTHS);
   revalidatePath(`/deals/${dealId}`);
+  return {};
+}
+
+// The service level targets (the Head).
+export async function saveSlaSettings(s: SlaSettings): Promise<Result> {
+  const user = await requireService();
+  if (user.role !== "HEAD") return { error: "Only the Head of Sales sets the service levels." };
+  const h = (x: number) => Math.min(720, Math.max(0.5, Number(x) || 1));
+  await saveSla({
+    assignHours: { URGENT: h(s.assignHours.URGENT), NORMAL: h(s.assignHours.NORMAL) },
+    attendHours: { URGENT: h(s.attendHours.URGENT), NORMAL: h(s.attendHours.NORMAL) },
+    resolveHours: { URGENT: h(s.resolveHours.URGENT), NORMAL: h(s.resolveHours.NORMAL) },
+    closeDays: Math.min(60, Math.max(1, Math.round(s.closeDays || 3))),
+  });
+  revalidatePath("/service");
   return {};
 }

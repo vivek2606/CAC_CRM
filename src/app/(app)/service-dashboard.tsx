@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { PENDING_STATUSES, STATUS_LABEL, STATUS_TONE, TAT_HOURS, fmtHours, hoursBetween, lagosDateTime, serviceMetrics, type ComplaintStatus } from "@/lib/service";
 import { amcStatus } from "@/lib/amc";
 import { claimableWhere } from "@/lib/warranty-claims";
+import { getSla, slaCompliance, slaSummary } from "@/lib/service-sla";
 import { FileText, LifeBuoy, Plus, ShieldCheck } from "lucide-react";
 
 // The Service Manager's dashboard: complaints (this month's performance and
@@ -23,7 +24,7 @@ export async function ServiceDashboard({ name }: { name: string }) {
     prisma.serviceComplaint.findMany({
       where: { registeredAt: { gte: monthStart } },
       select: {
-        registeredAt: true, status: true, inWarranty: true, attendedAt: true, resolvedAt: true, visits: true, feedback: true, serviceCharge: true,
+        registeredAt: true, status: true, priority: true, assignedAt: true, inWarranty: true, attendedAt: true, resolvedAt: true, visits: true, feedback: true, serviceCharge: true,
         technician: true, nature: true, model: true, serialNo: true, dealId: true,
         parts: { select: { qty: true, unitCost: true, unitPrice: true, chargeable: true } },
       },
@@ -31,7 +32,7 @@ export async function ServiceDashboard({ name }: { name: string }) {
     prisma.serviceComplaint.findMany({
       where: { status: { in: PENDING_STATUSES } },
       orderBy: [{ priority: "desc" }, { registeredAt: "asc" }],
-      select: { id: true, ref: true, registeredAt: true, status: true, customerName: true, model: true, nature: true, technician: true, priority: true, inWarranty: true },
+      select: { id: true, ref: true, registeredAt: true, status: true, customerName: true, model: true, nature: true, technician: true, priority: true, inWarranty: true, assignedAt: true, attendedAt: true, resolvedAt: true },
     }),
     prisma.amcContract.findMany({ where: { cancelled: false }, select: { id: true, ref: true, customerName: true, startDate: true, endDate: true, cancelled: true, value: true, renewedFromId: true } }),
     prisma.amcVisit.findMany({
@@ -50,7 +51,11 @@ export async function ServiceDashboard({ name }: { name: string }) {
     prisma.serviceComplaint.count({ where: { ...claimableWhere, warrantyClaim: null } }),
   ]);
   const m = serviceMetrics(month, now);
-  const over48 = pending.filter((c) => (hoursBetween(c.registeredAt, now) ?? 0) > TAT_HOURS).length;
+  const sla = await getSla();
+  const slaNow = pending.map((c) => slaSummary(c, sla, now).state);
+  const breachedNow = slaNow.filter((s) => s === "breached").length;
+  const riskNow = slaNow.filter((s) => s === "at_risk").length;
+  const slaMonth = slaCompliance(month, sla, now);
   const unassigned = pending.filter((c) => !c.technician).length;
   const renewedIds = new Set(contracts.map((c) => c.renewedFromId).filter(Boolean));
   const live = contracts.filter((c) => ["ACTIVE", "RENEWAL_DUE"].includes(amcStatus(c, now)));
@@ -83,12 +88,21 @@ export async function ServiceDashboard({ name }: { name: string }) {
           <StatCard
             label="Pending complaints"
             value={String(pending.length)}
-            sub={`${over48} over ${TAT_HOURS} h · ${unassigned} not assigned`}
+            sub={
+              <Link href="/service?status=pending&sla=breached" className={breachedNow ? "font-semibold text-rose-600" : ""}>
+                {breachedNow} past service level · {riskNow} at risk · {unassigned} not assigned
+              </Link>
+            }
             icon={<LifeBuoy className="h-4 w-4 text-rose-500" />}
-            accent={over48 ? "rose" : "emerald"}
+            accent={breachedNow ? "rose" : riskNow ? "amber" : "emerald"}
           />
           <StatCard label={`Registered in ${monthName}`} value={String(m.total)} sub={`${m.resolved} resolved · ${m.inWarranty} in warranty / AMC`} accent="indigo" />
-          <StatCard label="Avg response / resolution" value={fmtHours(m.avgResponseHours)} sub={`${fmtHours(m.avgResolutionHours)} to resolve · ${pct(m.onTimePct)} within ${TAT_HOURS} h`} accent="sky" />
+          <StatCard
+            label="Avg response / resolution"
+            value={fmtHours(m.avgResponseHours)}
+            sub={`${fmtHours(m.avgResolutionHours)} to resolve · service levels met: ${pct(slaMonth.resolve.pct)} resolved, ${pct(slaMonth.attend.pct)} first visit`}
+            accent="sky"
+          />
           <StatCard
             label="First-time fix · rating"
             value={pct(m.firstTimeFixPct)}

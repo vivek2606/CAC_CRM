@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getNotifications } from "@/lib/notifications";
 import { syncInstalledUnits } from "@/lib/installed-base";
+import { runSlaEscalations } from "@/lib/service-sla";
 import { sendPush, subscribedUserIds } from "@/lib/push";
 
 // Morning reminder push (Vercel Cron, see vercel.json): everyone with
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
 
   // Every morning: units sold yesterday join the installed base.
   await syncInstalledUnits().catch((e) => console.error("installed units", e));
+  await runSlaEscalations();
 
   const ids = await subscribedUserIds();
   const users = await prisma.user.findMany({
