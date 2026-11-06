@@ -21,6 +21,7 @@ import {
 } from "@/lib/service";
 import { Plus } from "lucide-react";
 import { ServiceTabs } from "./service-tabs";
+import { withLineUnits } from "@/lib/installed-base";
 import { getSla, slaCompliance, slaSummary, STAGE_LABEL as SLA_STAGE, STATE_LABEL as SLA_LABEL, STATE_TONE as SLA_TONE } from "@/lib/service-sla";
 import { SlaSettingsForm } from "./sla-settings";
 
@@ -78,7 +79,7 @@ export default async function ServicePage({
     // Every complaint still with us, whatever the period.
     prisma.serviceComplaint.count({ where: { status: { in: PENDING_STATUSES } } }),
   ]);
-  const m = serviceMetrics(inPeriod, now);
+  const m = serviceMetrics(await withLineUnits(inPeriod), now);
   const listWhere: Prisma.ServiceComplaintWhereInput = {
     ...(status === "pending" ? { status: { in: PENDING_STATUSES } } : { ...periodWhere, ...(status !== "all" ? { status } : {}) }),
     ...(status === "pending" && sp.warranty ? { inWarranty: sp.warranty === "in" } : {}),

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { SearchableSelect, type SearchableOption } from "@/components/searchable-select";
 import { COMPLAINT_NATURES, STANDARD_WARRANTY_MONTHS } from "@/lib/service";
-import { findSaleByInvoice, registerComplaint, type ComplaintInput, type SaleMatch } from "../actions";
+import { findSaleByInvoice, registerComplaint, registerComplaints, type ComplaintInput, type SaleMatch } from "../actions";
 
 const field = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
 const dmy = (iso: string) => iso.split("-").reverse().join("/");
@@ -47,6 +47,17 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
   const [lookup, setLookup] = useState("");
   const [matches, setMatches] = useState<SaleMatch[] | null>(null);
   const [sale, setSale] = useState<SaleMatch | null>(null);
+  // Per model on the invoice: how many are faulty and their serial nos. (if known).
+  const [faulty, setFaulty] = useState<Record<string, { qty: number; serials: string[] }>>({});
+  const setQty = (unitId: string, qty: number, max: number) =>
+    setFaulty((f) => {
+      const n = Math.max(0, Math.min(max, Math.floor(qty) || 0));
+      const serials = (f[unitId]?.serials ?? []).slice(0, n);
+      return { ...f, [unitId]: { qty: n, serials: [...serials, ...Array(n - serials.length).fill("")] } };
+    });
+  const setSerial = (unitId: string, i: number, sn: string) =>
+    setFaulty((f) => ({ ...f, [unitId]: { ...f[unitId], serials: f[unitId].serials.map((x, j) => (j === i ? sn : x)) } }));
+  const faultyCount = Object.values(faulty).reduce((t, f) => t + f.qty, 0);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const w = warrantyCheck(v.invoiceDate, v.warrantyMonths, v.registeredAt);
@@ -60,6 +71,8 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
     });
   const pick = (s: SaleMatch) => {
     setSale(s);
+    // Only one unit sold: that's the faulty one.
+    setFaulty(s.units.length === 1 && s.units[0].serials.length === 1 ? { [s.units[0].unitId]: { qty: 1, serials: [""] } } : {});
     set({
       dealId: s.dealId,
       accountId: s.accountId ?? "",
@@ -78,7 +91,16 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
   const save = () =>
     start(async () => {
       setError("");
-      if (sale?.units.length && !v.unitId) return setError("Pick the model the complaint is for.");
+      if (sale?.units.length) {
+        if (!faultyCount) return setError("Enter how many units of which model are faulty.");
+        const res = await registerComplaints(
+          v,
+          Object.entries(faulty).map(([unitId, f]) => ({ unitId, ...f })),
+        );
+        if (res.error) return setError(res.error);
+        const ids = res.ids ?? [];
+        return router.push(ids.length === 1 ? `/service/${ids[0]}` : `/service?q=${encodeURIComponent(v.invoiceNo)}`);
+      }
       const res = await registerComplaint(v);
       if (res.error) return setError(res.error);
       router.push(`/service/${res.id}`);
@@ -148,25 +170,58 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
         </label>
         {sale && sale.units.length > 0 ? (
           <div className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
-            <span className="mb-1 block">Which model on the invoice? *</span>
-            <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+            <span className="mb-1 block">Faulty units - how many of each model on the invoice *</span>
+            <div className="max-h-96 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
               {sale.units.map((u) => {
                 const known = u.serials.filter(Boolean);
+                const f = faulty[u.unitId] ?? { qty: 0, serials: [] };
                 return (
-                  <label key={u.unitId} className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-sm ${v.unitId === u.unitId ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
-                    <input type="radio" checked={v.unitId === u.unitId} onChange={() => set({ unitId: u.unitId, productId: u.productId ?? "", model: u.model })} />
-                    <span className="text-slate-800">
-                      {u.serials.length} × {u.model}
-                    </span>
-                    <span className="text-xs text-slate-500">{known.length ? `serial nos. known: ${known.join(", ")}` : "no serial nos. yet"}</span>
-                  </label>
+                  <div key={u.unitId} className={`px-3 py-2 ${f.qty ? "bg-indigo-50/60" : ""}`}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={u.serials.length}
+                          value={f.qty || ""}
+                          placeholder="0"
+                          onChange={(e) => setQty(u.unitId, Number(e.target.value), u.serials.length)}
+                          className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                          aria-label={`Faulty ${u.model}`}
+                        />
+                        <span className="text-sm text-slate-800">
+                          of {u.serials.length} × {u.model}
+                        </span>
+                      </label>
+                      <span className="text-xs text-slate-500">{known.length ? `serial nos. known: ${known.join(", ")}` : "no serial nos. yet"}</span>
+                    </div>
+                    {f.qty > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2 pl-1">
+                        {f.serials.map((sn, i) => (
+                          <input
+                            key={i}
+                            value={sn}
+                            onChange={(e) => setSerial(u.unitId, i, e.target.value)}
+                            placeholder={`Unit ${i + 1} serial no. (if known)`}
+                            list={`known-${u.unitId}`}
+                            className="w-56 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                          />
+                        ))}
+                        <datalist id={`known-${u.unitId}`}>
+                          {known.map((k) => (
+                            <option key={k} value={k} />
+                          ))}
+                        </datalist>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
-            <label className="mt-2 block">
-              <span className="mb-1 block">Serial no. (if the customer can tell - otherwise the technician fills it in after the visit)</span>
-              <input value={v.serialNo} onChange={(e) => set({ serialNo: e.target.value })} className={`${field} w-72`} />
-            </label>
+            <p className="mt-1">
+              One complaint is registered per faulty unit. Serial nos. are optional now - if the customer can&apos;t tell, the technician fills them in after the visit. The
+              same serial as an earlier complaint means the same unit again.
+            </p>
           </div>
         ) : (
           <>
@@ -284,7 +339,7 @@ export function RegisterComplaintForm({ now, products, technicians }: { now: str
       <div className="flex items-center justify-end gap-3">
         {error && <p className="text-sm text-rose-600">{error}</p>}
         <button type="button" onClick={save} disabled={pending} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
-          {pending ? "Saving..." : "Register complaint"}
+          {pending ? "Saving..." : faultyCount > 1 ? `Register ${faultyCount} complaints` : "Register complaint"}
         </button>
       </div>
     </div>

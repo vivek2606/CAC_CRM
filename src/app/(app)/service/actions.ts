@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireService } from "@/lib/service-access";
-import { applyDealWarranty, assignSerial, serialSlots, syncInstalledUnits, unitLineFor } from "@/lib/installed-base";
+import { applyDealWarranty, assignSerial, serialElsewhere, SerialTaken, serialSlots, syncInstalledUnits, unitLineFor } from "@/lib/installed-base";
 import { amcFor } from "@/lib/amc";
 import { saveSla, type SlaSettings } from "@/lib/service-sla";
 import { COMPLAINT_STATUSES, fromLagosInput, isInWarranty, STANDARD_WARRANTY_MONTHS, warrantyUntil, type ComplaintStatus, isSerialNA } from "@/lib/service";
@@ -121,6 +121,66 @@ export type ComplaintInput = {
 
 export async function registerComplaint(input: ComplaintInput): Promise<Result & { id?: string }> {
   const user = await requireService();
+  return createComplaint(user.id, input);
+}
+
+// The faulty units of a sale, registered together: per model on the
+// invoice, how many are faulty and the serial nos. the customer gave (any
+// left blank are filled in after the visit). One complaint per unit, all
+// sharing the customer, fault, priority and technician. Everything is
+// checked first - either all are registered or none.
+export type FaultyUnits = { unitId: string; qty: number; serials: string[] };
+export async function registerComplaints(input: ComplaintInput, faulty: FaultyUnits[]): Promise<Result & { ids?: string[] }> {
+  const user = await requireService();
+  const wanted = faulty.filter((f) => f.qty > 0);
+  if (!wanted.length) return { error: "Enter how many units of which model are faulty." };
+  if (!fromLagosInput(input.registeredAt)) return { error: "Enter the date and time the complaint was registered." };
+  if (!clean(input.customerName, 200)) return { error: "Enter the customer." };
+  if (!clean(input.nature, 120)) return { error: "Pick the nature of the complaint." };
+  if (input.warrantyOverride && !clean(input.warrantyNote)) return { error: "Say why the warranty is overridden (e.g. extended warranty agreed)." };
+
+  const lines = await prisma.installedUnit.findMany({
+    where: { id: { in: wanted.map((f) => f.unitId) } },
+    select: { id: true, dealId: true, qty: true, serialNos: true, model: true, productId: true },
+  });
+  const typed = new Set<string>();
+  const plan: { unitId: string; productId: string; model: string; serial: string }[] = [];
+  for (const f of wanted) {
+    const line = lines.find((l) => l.id === f.unitId);
+    if (!line || (input.dealId && line.dealId !== input.dealId)) return { error: "Pick the models from the invoice found." };
+    const units = serialSlots(line).length;
+    const qty = Math.floor(f.qty);
+    if (qty > units) return { error: `Only ${units} × ${line.model} on this invoice.` };
+    const serials = Array.from({ length: qty }, (_, i) => clean(f.serials[i] ?? "", 100));
+    // New serial nos. need free places on the line, and mustn't be on another unit.
+    const known = serialSlots(line).filter(Boolean);
+    const fresh = serials.filter((sn) => sn && !isSerialNA(sn) && !known.includes(sn));
+    if (fresh.length > units - known.length) return { error: `All ${units} × ${line.model} on this invoice already have serial nos. (${known.join(", ")}) - check the ones entered.` };
+    for (const sn of serials.filter((x) => x && !isSerialNA(x))) {
+      if (typed.has(sn.toUpperCase())) return { error: `Serial no. ${sn} is entered twice.` };
+      typed.add(sn.toUpperCase());
+    }
+    for (const sn of fresh) {
+      try {
+        await serialElsewhere(sn, line.id, -1);
+      } catch (e) {
+        if (e instanceof SerialTaken) return { error: `Serial no. ${sn} is already recorded on ${e.message} - check it.` };
+        throw e;
+      }
+    }
+    for (const serial of serials) plan.push({ unitId: line.id, productId: line.productId ?? "", model: line.model, serial });
+  }
+
+  const ids: string[] = [];
+  for (const u of plan) {
+    const res = await createComplaint(user.id, { ...input, unitId: u.unitId, productId: u.productId, model: u.model, serialNo: u.serial });
+    if (res.error || !res.id) return { error: `${ids.length ? `${ids.length} registered, then: ` : ""}${res.error ?? "Couldn't save."}`, ids };
+    ids.push(res.id);
+  }
+  return { ids };
+}
+
+async function createComplaint(userId: string, input: ComplaintInput): Promise<Result & { id?: string }> {
   const registeredAt = fromLagosInput(input.registeredAt);
   if (!registeredAt) return { error: "Enter the date and time the complaint was registered." };
   const customerName = clean(input.customerName, 200);
@@ -172,7 +232,7 @@ export async function registerComplaint(input: ComplaintInput): Promise<Result &
           priority: input.priority === "URGENT" ? "URGENT" : "NORMAL",
           technician: technician || null,
           assignedAt: technician ? new Date() : null,
-          registeredById: user.id,
+          registeredById: userId,
         },
       });
       revalidatePath("/service");

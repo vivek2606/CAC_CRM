@@ -68,4 +68,16 @@ describe("service performance", () => {
     expect(m.billed).toBe(15000 + 12000);
     expect(m.pendingOver48h).toBe(1);
   });
+  it("counts a repeat without serial nos. only when one unit of the model was sold", () => {
+    const noSerial = { ...base, serialNo: null, dealId: "deal1", model: "B-18" };
+    const later = { ...noSerial, registeredAt: d("2026-11-11T08:00:00Z") };
+    // 3 x B-18 on the invoice: units without serials can't be told apart.
+    expect(serviceMetrics([{ ...noSerial, lineUnits: 3 }, { ...noSerial, lineUnits: 3 }, { ...later, lineUnits: 3 }]).repeats).toBe(0);
+    // Not available, likewise.
+    expect(serviceMetrics([{ ...noSerial, serialNo: "Not available - plate not visible", lineUnits: 2 }, { ...later, lineUnits: 2 }]).repeats).toBe(0);
+    // Only one sold: it must be the same unit.
+    expect(serviceMetrics([{ ...noSerial, lineUnits: 1 }, { ...later, lineUnits: 1 }]).repeats).toBe(1);
+    // Different serials on the same invoice: different units.
+    expect(serviceMetrics([{ ...noSerial, serialNo: "B1", lineUnits: 3 }, { ...later, serialNo: "B2", lineUnits: 3 }]).repeats).toBe(0);
+  });
 });

@@ -91,6 +91,8 @@ export type MetricComplaint = {
   model: string | null;
   serialNo: string | null;
   dealId: string | null;
+  // Units of this model on the complaint's invoice (see withLineUnits).
+  lineUnits?: number | null;
   parts: { qty: number; unitCost: number; unitPrice: number; chargeable: boolean }[];
 };
 
@@ -110,8 +112,12 @@ export function serviceMetrics(list: MetricComplaint[], now = new Date()) {
   const pending = list.filter((c) => (PENDING_STATUSES as string[]).includes(c.status));
   const ages = pending.map((c) => hoursBetween(c.registeredAt, now)!);
   const rated = list.filter((c) => c.feedback != null);
-  // Repeats: the same unit (serial no., else model on the same sale) again within REPEAT_DAYS.
-  const unitKey = (c: MetricComplaint) => (c.serialNo?.trim() && !isSerialNA(c.serialNo) ? `s:${c.serialNo.trim().toUpperCase()}` : c.dealId && c.model ? `d:${c.dealId}:${c.model}` : null);
+  // Repeats: the same unit again within REPEAT_DAYS - known by its serial
+  // no., or (no serial) by the model on the same sale when only one unit of
+  // it was sold. Two units of a model on one invoice without serials can't
+  // be told apart, so they aren't counted as repeats of each other.
+  const unitKey = (c: MetricComplaint) =>
+    c.serialNo?.trim() && !isSerialNA(c.serialNo) ? `s:${c.serialNo.trim().toUpperCase()}` : c.dealId && c.model && c.lineUnits === 1 ? `d:${c.dealId}:${c.model.toUpperCase()}` : null;
   const byUnit = new Map<string, Date[]>();
   for (const c of list) {
     const k = unitKey(c);

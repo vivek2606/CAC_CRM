@@ -4,6 +4,7 @@ import { PageHeader, Card, StatCard, EmptyState } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { PENDING_STATUSES, STATUS_LABEL, STATUS_TONE, TAT_HOURS, fmtHours, hoursBetween, lagosDateTime, serviceMetrics, type ComplaintStatus } from "@/lib/service";
 import { amcStatus } from "@/lib/amc";
+import { withLineUnits } from "@/lib/installed-base";
 import { claimableWhere } from "@/lib/warranty-claims";
 import { getSla, slaCompliance, slaSummary } from "@/lib/service-sla";
 import { FileText, LifeBuoy, Plus, ShieldCheck } from "lucide-react";
@@ -50,7 +51,7 @@ export async function ServiceDashboard({ name }: { name: string }) {
     prisma.warrantyClaim.aggregate({ where: { status: "CREDITED", creditedAt: { gte: yearStart } }, _sum: { creditedAmount: true } }),
     prisma.serviceComplaint.count({ where: { ...claimableWhere, warrantyClaim: null } }),
   ]);
-  const m = serviceMetrics(month, now);
+  const m = serviceMetrics(await withLineUnits(month), now);
   const sla = await getSla();
   const slaNow = pending.map((c) => slaSummary(c, sla, now).state);
   const breachedNow = slaNow.filter((s) => s === "breached").length;

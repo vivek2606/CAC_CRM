@@ -186,10 +186,10 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 ### Handling a complaint, step by step
 
-1. **Register** it as soon as the customer calls: **Register complaint**, find the sale by invoice number or customer, pick which model on the invoice, enter the nature of complaint, date and time, and priority (Normal or Urgent). The warranty (standard 1 year from the invoice) is worked out for you; the Head can override it for exceptional terms, with a reason.
+1. **Register** it as soon as the customer calls: **Register complaint**, find the sale by invoice number, enter **how many units of each model are faulty** (e.g. 1 of 2 × A and 2 of 3 × B), and their serial nos. if the customer can give them. Then the nature of complaint, date and time, and priority (Normal or Urgent). One complaint is made per faulty unit, so each is tracked, fixed and claimed separately. The warranty (standard 1 year from the invoice) is worked out for you; the Head can override it for exceptional terms, with a reason.
 2. **Assign a technician.** The service-level clock is already running.
 3. **Attend**: site visit or remote fix. Record what the customer reported, the root cause and what was done.
-4. **Serial number.** Not needed when registering, because contractors install most units. Enter it after the site visit. If the plate isn't visible, or the fault was fixed remotely, pick **Not available** with the reason.
+4. **Serial number.** Optional when registering, because contractors install most units. If not given, enter it after the site visit. The same serial as an earlier complaint means the same unit failing again (a repeat); a different serial is another unit. If the plate isn't visible, or the fault was fixed remotely, pick **Not available** with the reason.
 5. **Spares and consumables used**, with our cost. Mark whether each is charged; in warranty, spares are free to the customer (labour-only AMCs still pay for spares). Out of warranty, enter the service charge and the invoice number raised.
 6. **Resolve**, then **Close** once the customer confirms. Record the customer rating (1-5).
 

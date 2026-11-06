@@ -127,3 +127,18 @@ export async function unitLineFor(c: { dealId: string | null; productId: string 
     select: { id: true },
   });
 }
+
+// Adds to each complaint how many units of its model its invoice had, so a
+// complaint without a serial no. is only taken as the same unit as another
+// when there was just one.
+export async function withLineUnits<T extends { dealId: string | null; model: string | null }>(list: T[]): Promise<(T & { lineUnits: number | null })[]> {
+  const dealIds = [...new Set(list.map((c) => c.dealId).filter((d): d is string => !!d))];
+  const lines = dealIds.length ? await prisma.installedUnit.findMany({ where: { dealId: { in: dealIds } }, select: { dealId: true, model: true, qty: true, product: { select: { model: true } } } }) : [];
+  const qty = new Map<string, number>();
+  for (const l of lines)
+    for (const m of new Set([l.model, l.product?.model].filter((x): x is string => !!x).map((x) => x.trim().toUpperCase()))) {
+      const k = `${l.dealId}:${m}`;
+      qty.set(k, (qty.get(k) ?? 0) + l.qty);
+    }
+  return list.map((c) => ({ ...c, lineUnits: c.dealId && c.model ? (qty.get(`${c.dealId}:${c.model.trim().toUpperCase()}`) ?? null) : null }));
+}
