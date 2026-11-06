@@ -136,3 +136,13 @@ export async function deleteActivity(activityId: string, path: string) {
   revalidatePath("/leads");
   revalidatePath("/");
 }
+
+// While a lead / account / deal is being entered: is this customer already
+// in the CRM (same phone, or same company / customer name)? Says whose it
+// is; links only what the user can open.
+export async function checkExistingCustomer(input: { phone?: string; name?: string; exclude?: { kind: "account" | "contact" | "lead" | "deal"; id: string } }) {
+  const user = await requireUser();
+  const { findExisting } = await import("@/lib/existing-customer");
+  const matches = await findExisting({ phone: String(input.phone ?? "").slice(0, 40), name: String(input.name ?? "").slice(0, 200), exclude: input.exclude });
+  return matches.map((m) => ({ kind: m.kind, label: m.label, owner: m.owner, mine: m.ownerId === user.id, why: m.why, href: canAccessOwner(user, m.ownerId) ? m.href : null }));
+}

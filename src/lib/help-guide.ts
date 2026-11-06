@@ -75,7 +75,7 @@ The Service Manager's Dashboard is the **Service Dashboard** instead: pending co
     for: SALES_SIDE,
     body: `A **lead** is any enquiry that isn't a firm requirement yet: a phone call, a walk-in, a referral, a tender notice. Log it the same day so it counts towards your conversion and nobody else chases the same customer.
 
-**Add a lead:** Leads & Activities → **New Lead**. Fill in the title, customer name, contact number, company, estimated value, equipment type, source and expected purchase timeframe. Link it to the customer's **account** if they already buy from us. The Head and the Coordinator can save a lead with only a title and fill in the rest later.
+**Add a lead:** Leads & Activities → **New Lead**. Fill in the title, customer name, contact number, company, estimated value, equipment type, source and expected purchase timeframe. Link it to the customer's **account** if they already buy from us. As you type the phone no. or company, the CRM warns if the customer is **already in the CRM** - and whose it is ("Rohan Verma's") - so check with them before adding it. The Head and the Coordinator can save a lead with only a title and fill in the rest later.
 
 **Move it along** by changing its status:
 

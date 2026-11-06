@@ -1,5 +1,6 @@
 "use client";
 
+import { ExistingCustomerHint } from "@/components/existing-customer-hint";
 import { useState } from "react";
 import {
   LEAD_STATUSES,
@@ -166,6 +167,14 @@ function LeadFormFields({
             />
           </div>
         )}
+        {/* Already in the CRM? (same phone, or same company / customer name) */}
+        <div className="sm:col-span-2 empty:hidden">
+          <ExistingCustomerHint
+            phone={phone}
+            name={accountId ? "" : company || customerName}
+            exclude={draft.key !== "lead:new" ? { kind: "lead", id: draft.key.slice("lead:".length) } : undefined}
+          />
+        </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Estimated value (₦)</label>
           <input

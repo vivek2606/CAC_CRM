@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from "@/lib/constants";
 import { CompanyNameField, type AccountNameOption } from "./company-name-field";
+import { ExistingCustomerHint } from "@/components/existing-customer-hint";
 import { SearchableSelect } from "@/components/searchable-select";
 import { TagInput } from "@/components/tag-input";
 import { CompletenessBar } from "@/components/completeness-bar";
@@ -55,6 +56,9 @@ export function AccountForm({
 }) {
   const [contactMode, setContactMode] = useState<ContactMode>("none");
   const [error, setError] = useState<string | null>(null);
+  // For the "already in the CRM" check (whose customer it is).
+  const [name, setName] = useState(defaultValues?.name ?? "");
+  const [phone, setPhone] = useState(defaultValues?.phone ?? "");
   const [saving, startSaving] = useTransition();
 
   const completenessFields = [
@@ -87,7 +91,7 @@ export function AccountForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-slate-700 mb-1">Company name *</label>
-          <CompanyNameField accounts={accounts} defaultValue={defaultValues?.name} excludeId={excludeId} />
+          <CompanyNameField accounts={accounts} defaultValue={defaultValues?.name} excludeId={excludeId} onChange={setName} />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Customer code *</label>
@@ -137,9 +141,13 @@ export function AccountForm({
           <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
           <input
             name="phone"
-            defaultValue={defaultValues?.phone ?? ""}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+        <div className="sm:col-span-2 empty:hidden">
+          <ExistingCustomerHint phone={phone} name={name} exclude={excludeId ? { kind: "account", id: excludeId } : undefined} />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">RC number / Tax ID</label>

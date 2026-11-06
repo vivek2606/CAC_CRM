@@ -15,7 +15,7 @@ export type DupAccount = {
 export type DupGroup = { key: string; accounts: DupAccount[]; differentCodes: boolean };
 
 // Letter-pair (Dice) similarity of two match keys, 0..1.
-function similarity(a: string, b: string): number {
+export function similarity(a: string, b: string): number {
   if (a === b) return 1;
   const pairs = (s: string) => {
     const x = s.replace(/ /g, "");

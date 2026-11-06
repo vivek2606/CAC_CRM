@@ -13,12 +13,18 @@ export function CompanyNameField({
   accounts,
   defaultValue,
   excludeId,
+  onChange,
 }: {
   accounts: AccountNameOption[];
   defaultValue?: string;
   excludeId?: string;
+  onChange?: (value: string) => void;
 }) {
-  const [value, setValue] = useState(defaultValue ?? "");
+  const [value, setValueState] = useState(defaultValue ?? "");
+  const setValue = (v: string) => {
+    setValueState(v);
+    onChange?.(v);
+  };
   const candidates = excludeId ? accounts.filter((a) => a.id !== excludeId) : accounts;
   const query = value.trim().toLowerCase();
 
