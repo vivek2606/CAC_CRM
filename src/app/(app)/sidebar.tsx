@@ -23,7 +23,7 @@ import {
   Receipt,
   Landmark,
   TableProperties,
-  FileText, HeartPulse, Trash2, History, LifeBuoy, CircleHelp } from "lucide-react";
+  FileText, HeartPulse, Trash2, History, LifeBuoy, CircleHelp, CalendarCheck } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
 import { SakuragiMark } from "@/components/sakuragi-logo";
@@ -71,35 +71,70 @@ const NAV_COLOR_CLASSES: Record<NavColor, { text: string; bar: string }> = {
   purple: { text: "text-purple-500", bar: "bg-purple-500" },
 };
 
-// service: only for those with service access (the Head, the Sales
-// Coordinator and the Service Manager).
-// sales: not for the Service Manager (no leads, deals or incentives).
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; service?: boolean; sales?: boolean }[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
-  { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky", sales: true },
-  { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet", sales: true },
-  { href: "/incentives", label: "Incentives & Targets", icon: BadgePercent, color: "purple", sales: true },
-  { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
-  { href: "/products", label: "Products", icon: Package, color: "orange" },
-  { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
-  { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
-  { href: "/reports/sales-register", label: "Sales Register", icon: TableProperties, color: "teal" },
-  { href: "/service", label: "Service & Complaints", icon: LifeBuoy, color: "cyan", service: true },
+// The menu, in groups. service: only for those with service access (the
+// Head, the Sales Coordinator and the Service Manager). sales: not for the
+// Service Manager (no leads, deals or incentives). backOffice: the Head and
+// the Sales Coordinator only; headOnly: the Head only.
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; service?: boolean; sales?: boolean; backOffice?: boolean; headOnly?: boolean };
+const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
+  {
+    title: null,
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "indigo" },
+      { href: "/my-day", label: "My Day", icon: CalendarCheck, color: "emerald" },
+    ],
+  },
+  {
+    title: "Sell",
+    items: [
+      { href: "/leads", label: "Leads & Activities", icon: Target, color: "sky", sales: true },
+      { href: "/deals", label: "Pipeline", icon: KanbanSquare, color: "violet", sales: true },
+      { href: "/quotations", label: "Quotations", icon: FileText, color: "indigo" },
+      { href: "/accounts", label: "Accounts & Contacts", icon: Building2, color: "amber" },
+      { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal", backOffice: true },
+    ],
+  },
+  {
+    title: "Stock",
+    items: [
+      { href: "/products", label: "Products", icon: Package, color: "orange" },
+      { href: "/stock", label: "Stock & Pending Orders", icon: Boxes, color: "red" },
+      { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue", backOffice: true },
+    ],
+  },
+  { title: "Service", items: [{ href: "/service", label: "Service & Complaints", icon: LifeBuoy, color: "cyan", service: true }] },
+  {
+    title: "Reports",
+    items: [
+      { href: "/reports/sales-register", label: "Sales Register", icon: TableProperties, color: "teal" },
+      { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan", backOffice: true },
+      { href: "/incentives", label: "Incentives & Targets", icon: BadgePercent, color: "purple", sales: true },
+    ],
+  },
+  {
+    title: "Settings",
+    items: [
+      { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime", backOffice: true },
+      { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red", backOffice: true },
+      { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink", backOffice: true },
+      { href: "/admin/change-history", label: "Change History", icon: History, color: "sky", headOnly: true },
+      { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
+      { href: "/admin/company", label: "Company Details", icon: Landmark, color: "violet", headOnly: true },
+      { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink", headOnly: true },
+    ],
+  },
 ];
+const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
 
-// Shown to the Head and the Sales Coordinator; headOnly items to the Head only.
-const MANAGEMENT_NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; color: NavColor; headOnly?: boolean }[] = [
-  { href: "/reports", label: "Team Reports", icon: BarChart3, color: "cyan" },
-  { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red" },
-  { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink" },
-  { href: "/admin/change-history", label: "Change History", icon: History, color: "sky", headOnly: true },
-  { href: "/project-billing", label: "Project & Service Billing", icon: Receipt, color: "teal" },
-  { href: "/reorder", label: "Reorder Planning", icon: ClipboardList, color: "blue" },
-  { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime" },
-  { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
-  { href: "/admin/company", label: "Company Details", icon: Landmark, color: "violet", headOnly: true },
-  { href: "/admin/team", label: "Team & Logins", icon: Users, color: "pink", headOnly: true },
-];
+// Who sees an item.
+function canSee(item: NavItem, user: { role: string; title?: string | null; service?: boolean }): boolean {
+  const backOffice = user.role === "HEAD" || user.role === "COORDINATOR";
+  if (item.headOnly && user.role !== "HEAD") return false;
+  if (item.backOffice && !backOffice) return false;
+  if (item.service && !user.service) return false;
+  if (item.sales && user.title === "Service Manager") return false;
+  return true;
+}
 
 function roleLabel(role: string): string {
   return role === "HEAD" ? "Head of Sales" : role === "COORDINATOR" ? "Sales Coordinator" : "Sales Manager";
@@ -123,7 +158,7 @@ export function sectionFor(pathname: string, role: SessionUser["role"]): { href:
           : under("/service-billings")
             ? "/project-billing"
             : path;
-  const items = role === "HEAD" || role === "COORDINATOR" ? [...NAV_ITEMS, ...MANAGEMENT_NAV_ITEMS] : NAV_ITEMS;
+  const items = ALL_NAV_ITEMS.filter((n) => (!n.backOffice && !n.headOnly) || role === "HEAD" || (role === "COORDINATOR" && !n.headOnly));
   return (
     items
       .filter((n) => (n.href === "/" ? navPath === "/" : navPath === n.href || navPath.startsWith(n.href + "/")))
@@ -221,55 +256,40 @@ export function Sidebar({
       </div>
 
       <nav className={`flex-1 overflow-y-auto py-4 px-3 ${collapsed ? "lg:px-2" : ""} space-y-1`}>
-        {NAV_ITEMS.filter((item) => (!item.service || user.service) && !(item.sales && user.title === "Service Manager")).map((item) => {
-          const active = item.href === activeHref;
-          const Icon = item.icon;
-          const colors = NAV_COLOR_CLASSES[item.color];
+        {NAV_GROUPS.map((group) => {
+          const visible = group.items.filter((item) => canSee(item, user));
+          if (!visible.length) return null;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={openInTab(item.href, item.label)}
-              title={item.label}
-              className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm font-medium transition-colors ${
-                active
-                  ? "bg-slate-100 text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              {active && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full ${colors.bar}`} aria-hidden />}
-              <Icon className={`h-4 w-4 shrink-0 ${colors.text}`} />
-              <span className={label}>{item.label}</span>
-            </Link>
+            <div key={group.title ?? "top"} className="space-y-1">
+              {group.title && (
+                <>
+                  <div className={`pt-4 pb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 ${label}`}>{group.title}</div>
+                  {collapsed && <div className="hidden lg:block my-3 border-t border-slate-200" />}
+                </>
+              )}
+              {visible.map((item) => {
+                const active = item.href === activeHref;
+                const Icon = item.icon;
+                const colors = NAV_COLOR_CLASSES[item.color];
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={openInTab(item.href, item.label)}
+                    title={item.label}
+                    className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm font-medium transition-colors ${
+                      active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    }`}
+                  >
+                    {active && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full ${colors.bar}`} aria-hidden />}
+                    <Icon className={`h-4 w-4 shrink-0 ${colors.text}`} />
+                    <span className={label}>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           );
         })}
-
-        {(user.role === "HEAD" || user.role === "COORDINATOR") && (
-          <>
-            <div className={`pt-4 pb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400 ${label}`}>Management</div>
-            {collapsed && <div className="hidden lg:block my-3 border-t border-slate-200" />}
-            {MANAGEMENT_NAV_ITEMS.filter((item) => !item.headOnly || user.role === "HEAD").map((item) => {
-              const active = item.href === activeHref;
-              const Icon = item.icon;
-              const colors = NAV_COLOR_CLASSES[item.color];
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={openInTab(item.href, item.label)}
-                  title={item.label}
-                  className={`relative flex items-center gap-3 rounded-lg px-3 py-2 ${collapsed ? "lg:justify-center lg:px-0" : ""} text-sm font-medium transition-colors ${
-                    active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {active && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full ${colors.bar}`} aria-hidden />}
-                  <Icon className={`h-4 w-4 shrink-0 ${colors.text}`} />
-                  <span className={label}>{item.label}</span>
-                </Link>
-              );
-            })}
-          </>
-        )}
       </nav>
 
       <div className={`border-t border-slate-200 p-3 ${collapsed ? "lg:p-2" : ""}`}>
