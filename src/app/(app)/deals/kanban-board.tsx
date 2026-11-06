@@ -20,6 +20,8 @@ type DealCard = {
   account: { name: string } | null;
   tags: string[];
   itemCount: number;
+  // Days with no customer contact, when stalled (stalled.ts).
+  noContactDays: number | null;
 };
 
 // From the Quotation stage on, a deal should carry its products - moving
@@ -131,6 +133,9 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
                     <p className="text-xs text-slate-400 mt-0.5 truncate">{deal.account?.name ?? "No account"}</p>
                     {PRODUCT_STAGES.includes(deal.stage) && deal.itemCount === 0 && (
                       <p className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">No products yet</p>
+                    )}
+                    {deal.noContactDays != null && (
+                      <p className="mt-1 inline-block rounded bg-rose-50 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">No contact for {deal.noContactDays} days</p>
                     )}
                     <TagChips tags={deal.tags} className="mt-1.5" />
                     <div className="flex items-center justify-between mt-2.5">

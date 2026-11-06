@@ -10,6 +10,7 @@ import { claimableWhere } from "@/lib/warranty-claims";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { awaitingHandoverWhere } from "@/lib/installation";
 import { getGoneQuiet } from "@/lib/win-back";
+import { STALE_DAYS, lastContact, stalledWhere } from "@/lib/stalled";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -17,7 +18,6 @@ export type NotificationGroup = { key: string; label: string; count: number; hre
 // are set up (added by the route).
 export type Notifications = { total: number; groups: NotificationGroup[]; pushKey?: string | null };
 
-const STALE_DAYS = 14;
 // An open deal in the same stage this long: move it on, or close it.
 const STUCK_DAYS = 30;
 const SHOW = 5;
@@ -34,7 +34,6 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   const own = team ? {} : { ownerId: user.id };
   const now = new Date();
   const endOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  const staleBefore = new Date(now.getTime() - STALE_DAYS * day);
   const groups: NotificationGroup[] = [];
   const who = (name: string) => (team ? ` · ${name}` : "");
 
@@ -52,16 +51,16 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       select: { id: true, title: true, expectedCloseDate: true, owner: { select: { name: true } } },
       take: 200,
     }),
+    // Stalled: no real contact for STALE_DAYS (stalled.ts) - not the last edit.
     prisma.deal.findMany({
-      where: {
-        ...own,
-        isBalance: false,
-        stage: { notIn: ["WON", "LOST"] },
-        updatedAt: { lt: staleBefore },
-        activities: { none: { createdAt: { gte: staleBefore } } },
+      where: { ...own, ...stalledWhere(now) },
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        owner: { select: { name: true } },
+        activities: { orderBy: { createdAt: "desc" }, take: 5, select: { createdAt: true, completedAt: true } },
       },
-      orderBy: { updatedAt: "asc" },
-      select: { id: true, title: true, updatedAt: true, owner: { select: { name: true } } },
       take: 200,
     }),
     prisma.deal.findMany({
@@ -111,12 +110,17 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     });
   }
   if (quiet.length) {
+    const byLast = quiet.map((d) => ({ d, last: lastContact(d) })).sort((a, b) => a.last.getTime() - b.last.getTime());
     groups.push({
       key: "quiet",
-      label: `Deals with no activity for ${STALE_DAYS}+ days`,
+      label: `Deals with no customer contact for ${STALE_DAYS}+ days`,
       count: quiet.length,
       href: "/deals",
-      items: quiet.slice(0, SHOW).map((d) => ({ label: d.title, sub: `Last touched ${fmt(d.updatedAt)}${who(d.owner.name)}`, href: `/deals/${d.id}` })),
+      items: byLast.slice(0, SHOW).map(({ d, last }) => ({
+        label: d.title,
+        sub: `${d.activities.length ? `Last contact ${fmt(last)}` : `No contact logged since ${fmt(d.createdAt)}`}${who(d.owner.name)}`,
+        href: `/deals/${d.id}`,
+      })),
     });
   }
   if (followUps.length) {

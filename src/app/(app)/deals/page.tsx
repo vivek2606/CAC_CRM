@@ -5,6 +5,7 @@ import { requireUser, visibleOwnerIds, isBackOffice } from "@/lib/rbac";
 import { PageHeader, NewButton } from "@/components/ui";
 import { OPEN_DEAL_STAGES } from "@/lib/constants";
 import { KanbanBoard } from "./kanban-board";
+import { STALE_DAYS, daysSince, lastContact } from "@/lib/stalled";
 import { OwnerFilter } from "./owner-filter";
 
 export default async function DealsPage({
@@ -25,8 +26,17 @@ export default async function DealsPage({
       owner: { select: { name: true, avatarColor: true } },
       account: { select: { name: true } },
       _count: { select: { items: true } },
+      activities: { orderBy: { createdAt: "desc" }, take: 5, select: { createdAt: true, completedAt: true, status: true, dueAt: true } },
     },
   });
+  // No customer contact for STALE_DAYS (stalled.ts): flagged on the card.
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const noContactDays = (d: (typeof deals)[number]) => {
+    if (d.activities.some((a) => a.status === "PENDING" && a.dueAt && a.dueAt >= today)) return null;
+    const days = daysSince(lastContact(d), now);
+    return days >= STALE_DAYS ? days : null;
+  };
 
   // The current 6 active core sales reps, plus Sikiru (Service Manager) -
   // not the full historical SALES_MANAGER-role roster.
@@ -52,7 +62,7 @@ export default async function DealsPage({
         {isBackOffice(user) && owners.length > 0 && (
           <OwnerFilter owners={owners} value={params.owner ?? ""} />
         )}
-        <KanbanBoard deals={deals.map((d) => ({ ...d, itemCount: d._count.items }))} />
+        <KanbanBoard deals={deals.map(({ activities: _a, ...d }) => ({ ...d, itemCount: d._count.items, noContactDays: noContactDays({ ...d, activities: _a }) }))} />
       </div>
     </div>
   );

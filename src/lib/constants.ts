@@ -70,11 +70,6 @@ export const DEAL_STAGE_COLORS: Record<DealStage, { bg: string; text: string; do
   LOST: { bg: "bg-rose-100", text: "text-rose-700", dot: "bg-rose-500" },
 };
 
-// An open deal with no update in this many days is flagged as stalled on
-// the Dashboard, since there's no dedicated stage-change timestamp to track
-// "time in current stage" - last edit is the best available proxy.
-export const STALE_DEAL_DAYS = 14;
-
 // Pricelist.dealerPrice is stored excluding VAT (the Stock & Price List
 // upload's own convention - see admin/import/pricelist). This rate is used
 // only to compute a VAT-inclusive figure for display, never to change what

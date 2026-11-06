@@ -104,7 +104,7 @@ You don't always need to create the lead by hand: a deal created directly gets i
 | Won | Invoiced - counts as your sale |
 | Lost | Not going ahead - reason recorded |
 
-**Keep each deal honest:** the expected closure date, winning probability (10-100%) and value drive your forecast. A deal past its close date or untouched for 14 days is flagged on the Dashboard and in the bell.
+**Keep each deal honest:** the expected closure date, winning probability (10-100%) and value drive your forecast. A deal past its close date is flagged in the bell. A deal with **no customer contact for 14 days** (no call, email, meeting, visit or quote sent - editing the deal doesn't count) shows "No contact for N days" on its Pipeline card and in the bell, unless a follow-up is already planned.
 
 **Mark Won** when you invoice. Enter the invoice number, date, billing company (Sakuragi or Somotex) and the products and rates billed. Your achievement comes **only from invoices**: a deal without an invoice number doesn't count towards your target.
 
