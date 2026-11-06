@@ -422,6 +422,10 @@ model Deal {
   isBalance      Boolean @default(false)
   // Warranty in months from the invoice date, when not the standard 12.
   warrantyMonths Int?
+  // Closing checklist: when the goods left / reached the customer, and the
+  // waybill or delivery note no.
+  deliveredAt   DateTime?
+  deliveryRef   String?
 
   activities      Activity[]
   notes           Note[]

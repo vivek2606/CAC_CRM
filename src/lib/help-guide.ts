@@ -110,6 +110,8 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 **Part billing.** If only some items are in stock, bill what you deliver. The CRM shows "Billed vs the deal" and keeps the rest as a **balance order**, a separate open deal. When the stock arrives the bell says "Stock arrived for balance orders - bill them". If the customer no longer wants them, tick "The customer doesn't want them - drop them". Paid but unbilled items also feed **Reorder Planning**.
 
+**Order checklist.** A won deal shows what's done and what's left: invoiced, account linked, everything billed (or a balance order waiting for stock), **delivered** (click Mark delivered with the date and waybill no.), installed (supply-only sales skip this) and serial nos. The bell reminds you about won orders not marked delivered a week on.
+
 **Mark Lost** asks for the reason (price, competitor, project cancelled...). Be honest - these reasons tell us where we lose business. A lost or won deal can be reopened if needed.`,
   },
   {

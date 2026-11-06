@@ -36,6 +36,7 @@ import { canUseService } from "@/lib/service-access";
 import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
 import { WarrantyTerms } from "../../service/warranty-terms";
 import { InstallationHandover } from "../installation-handover";
+import { ClosingChecklist, type ChecklistStep } from "../closing-checklist";
 import { INSTALL_LABEL, INSTALL_TONE, quotedWithInstallation, type InstallStatus } from "@/lib/installation";
 
 export default async function DealDetailPage({
@@ -110,6 +111,37 @@ export default async function DealDetailPage({
   const balancePending = deal.isBalance
     ? await prisma.pendingOrder.findMany({ where: { dealId: deal.id, status: "OPEN" }, select: { paymentReceived: true } })
     : [];
+  // Closing checklist for a won order (entered in the CRM).
+  let checklist: ChecklistStep[] | null = null;
+  const quotedInstall = deal.stage === "WON" && !deal.installationJob ? await quotedWithInstallation(deal.id) : false;
+  if (deal.stage === "WON" && deal.sourceTxnNo == null) {
+    const units = await prisma.installedUnit.findMany({ where: { dealId: deal.id }, select: { qty: true, serialNos: true } });
+    const totalUnits = units.reduce((t, u) => t + u.qty, 0);
+    const knownSerials = units.reduce((t, u) => t + u.serialNos.filter((x) => x.trim()).length, 0);
+    const job = deal.installationJob;
+    const installs = (job && job.status !== "CANCELLED") || quotedInstall;
+    const dmy = (d: Date) => formatDate(d);
+    checklist = [
+      { key: "invoiced", label: "Invoiced", state: deal.invoiceNo ? "done" : "todo", detail: deal.invoiceNo ? `${deal.invoiceNo}${deal.closedAt ? `, ${dmy(deal.closedAt)}` : ""}` : "add the invoice no. (above)" },
+      { key: "account", label: "Account linked", state: deal.account ? "done" : "todo", detail: deal.account ? deal.account.name : "link the customer's account", href: deal.account ? `/accounts/${deal.account.id}` : undefined },
+      openBalances.length
+        ? { key: "billed", label: "Everything billed", state: "todo", detail: `${openBalances.length} balance order${openBalances.length === 1 ? "" : "s"} waiting for stock`, href: `/deals/${openBalances[0].id}` }
+        : { key: "billed", label: "Everything billed", state: "done", detail: "nothing left to bill" },
+      { key: "delivered", label: "Delivered", state: deal.deliveredAt ? "done" : "todo", detail: deal.deliveredAt ? `${dmy(deal.deliveredAt)}${deal.deliveryRef ? ` · ${deal.deliveryRef}` : ""}` : "not recorded yet" },
+      job
+        ? job.status === "CANCELLED"
+          ? { key: "installed", label: "Installed", state: "na", detail: `not by us (${job.cancelReason ?? "cancelled"})` }
+          : { key: "installed", label: "Installed", state: job.status === "COMMISSIONED" ? "done" : "todo", detail: job.commissionedAt ? `commissioned ${dmy(job.commissionedAt)}` : `${INSTALL_LABEL[job.status as InstallStatus].toLowerCase()} (${job.ref})` }
+        : quotedInstall
+          ? { key: "installed", label: "Installed", state: "todo", detail: "quoted with installation - hand it over (below)" }
+          : { key: "installed", label: "Installed", state: "na", detail: "supply only" },
+      totalUnits === 0
+        ? { key: "serials", label: "Serial nos.", state: "na", detail: "no products recorded" }
+        : installs
+          ? { key: "serials", label: "Serial nos.", state: knownSerials >= totalUnits ? "done" : "todo", detail: `${knownSerials} of ${totalUnits} recorded${knownSerials < totalUnits ? " - at commissioning" : ""}` }
+          : { key: "serials", label: "Serial nos.", state: "na", detail: `${knownSerials} of ${totalUnits} known - filled in at the first service visit` },
+    ];
+  }
   const productOptions = products.map((p) => ({
     id: p.id,
     label: `${p.model} (${p.code})`,
@@ -278,6 +310,7 @@ export default async function DealDetailPage({
             until={warrantyUntil(deal.closedAt, deal.warrantyMonths ?? STANDARD_WARRANTY_MONTHS).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
           />
         )}
+        {checklist && <ClosingChecklist dealId={deal.id} steps={checklist} delivered={!!deal.deliveredAt} today={new Date().toISOString().slice(0, 10)} />}
         {deal.installationJob ? (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
             <span className="font-semibold text-slate-900">Installation {deal.installationJob.ref}</span>
@@ -306,7 +339,7 @@ export default async function DealDetailPage({
           deal.sourceTxnNo == null && (
             <InstallationHandover
               dealId={deal.id}
-              quoted={await quotedWithInstallation(deal.id)}
+              quoted={quotedInstall}
               defaults={{
                 contactName: deal.contact ? `${deal.contact.firstName} ${deal.contact.lastName ?? ""}`.trim() : "",
                 phone: deal.contact?.phone ?? deal.customerPhone ?? deal.account?.phone ?? "",

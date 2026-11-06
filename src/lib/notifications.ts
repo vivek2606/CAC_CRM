@@ -199,6 +199,23 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     });
   }
 
+  // Won orders (entered in the CRM) not marked delivered a week on - within
+  // the last 60 days, so old sales don't flood the bell.
+  const undelivered = await prisma.deal.findMany({
+    where: { ...own, stage: "WON", sourceTxnNo: null, deliveredAt: null, closedAt: { gte: new Date(now.getTime() - 60 * day), lt: new Date(now.getTime() - 7 * day) } },
+    orderBy: { closedAt: "asc" },
+    select: { id: true, title: true, closedAt: true, owner: { select: { name: true } } },
+    take: 100,
+  });
+  if (undelivered.length)
+    groups.push({
+      key: "undelivered",
+      label: "Won orders not marked delivered",
+      count: undelivered.length,
+      href: `/deals/${undelivered[0].id}`,
+      items: undelivered.slice(0, SHOW).map((d) => ({ label: d.title, sub: `Won ${fmt(d.closedAt!)}${who(d.owner.name)}`, href: `/deals/${d.id}` })),
+    });
+
   // Won supply + installation orders not handed over to service yet (the
   // Service Manager sees these on the Installations tab instead).
   const notHandedOver = await prisma.deal.findMany({
