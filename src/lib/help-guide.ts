@@ -162,6 +162,8 @@ You don't always need to create the lead by hand: a deal created directly gets i
 | Stock & Pending Orders | Stock in the warehouse, units arriving, and orders taken for items not in stock | Promise delivery only on what's in stock or arriving |
 | Sales Register | Every invoiced line: date, invoice, customer, model, qty, value, sales person | Your real sales, filterable and exportable to Excel |
 
+**Regular customers gone quiet.** Accounts → Win-back starts with customers who bought 2+ times in the last 15 months but haven't ordered for over 3 months - and longer than twice their usual gap. They also show in your bell. Call them: once there's an open deal or any call, visit or note logged with them, they drop off the list.
+
 **Accounts matter.** Link every lead, deal and quote to the customer's account; the CRM asks after a quote is downloaded. Repeat business, warranty and service history all hang off the account.
 
 **Sales Register.** Sales come in from invoices: Mark Won on a deal, or the Head or the Coordinator importing the sales sheet. Sales of upcountry branch sales people are entered by the Head or the Coordinator and show together as **Others** (from 2026). They don't log in.`,

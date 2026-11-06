@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getQuoteFollowUps, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
-import { isBackOffice, type SessionUser } from "@/lib/rbac";
+import { isBackOffice, visibleOwnerIds, type SessionUser } from "@/lib/rbac";
 import { computeDealDiscount } from "@/lib/discount";
 import { getAvailableStockByProduct, getLatestPriceByProduct } from "@/lib/pricing";
 import { getIncentiveApproval } from "@/lib/incentive-approval";
@@ -9,6 +9,7 @@ import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
 import { claimableWhere } from "@/lib/warranty-claims";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { awaitingHandoverWhere } from "@/lib/installation";
+import { getGoneQuiet } from "@/lib/win-back";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -211,6 +212,18 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       items: notHandedOver.slice(0, SHOW).map((d) => ({ label: d.title, sub: team ? d.owner.name : undefined, href: `/deals/${d.id}` })),
     });
   }
+
+  // Regular customers gone quiet (win-back.ts) - the account owner's, or the
+  // team's for the Head / Coordinator.
+  const quietCustomers = await getGoneQuiet(team ? await visibleOwnerIds(user) : [user.id], now);
+  if (quietCustomers.length)
+    groups.push({
+      key: "goneQuiet",
+      label: "Regular customers gone quiet - call them",
+      count: quietCustomers.length,
+      href: "/accounts?tab=winback",
+      items: quietCustomers.slice(0, SHOW).map((c) => ({ label: c.name, sub: `No order for ${c.daysQuiet} days (usually every ${c.usualGapDays})${who(c.owner)}`, href: `/accounts/${c.accountId}` })),
+    });
 
   if (user.role === "HEAD") {
     // Discounts beyond the threshold, not yet approved.

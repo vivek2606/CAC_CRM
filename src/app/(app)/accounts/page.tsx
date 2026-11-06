@@ -5,7 +5,8 @@ import { PageHeader, NewButton } from "@/components/ui";
 import { AccountsTable } from "./accounts-table";
 import { ContactsList } from "../contacts/contacts-list";
 import { WinBackTable } from "./win-back-table";
-import { getWinBackList } from "@/lib/win-back";
+import { getWinBackList, getGoneQuiet, QUIET_HANDLED_DAYS } from "@/lib/win-back";
+import { formatCompactCurrency, formatDate } from "@/lib/format";
 
 const WIN_BACK_MONTHS = [3, 6, 9, 12, 18, 24];
 
@@ -109,9 +110,52 @@ async function ContactsTab({ ownerIds }: { ownerIds: string[] }) {
 async function WinBackTab({ ownerIds, months, showOwner }: { ownerIds: string[]; months: number; showOwner: boolean }) {
   const now = new Date();
   const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, now.getUTCDate()));
-  const rows = await getWinBackList(ownerIds, cutoff);
+  const [rows, quiet] = await Promise.all([getWinBackList(ownerIds, cutoff), getGoneQuiet(ownerIds, now)]);
   return (
     <div className="space-y-3">
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Regular customers gone quiet - call them ({quiet.length})</h2>
+        <p className="mb-2 text-xs text-slate-600">
+          Bought 2+ times in the last 15 months, but nothing for over 3 months and more than twice their usual gap between orders. A customer drops off this list
+          once there&apos;s an open deal or any call, visit or note with them in the last {QUIET_HANDLED_DAYS} days.
+        </p>
+        {quiet.length === 0 ? (
+          <p className="text-sm text-slate-500">None right now.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-amber-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="py-1.5 pr-3 font-medium">Customer</th>
+                  {showOwner && <th className="py-1.5 pr-3 font-medium">Account owner</th>}
+                  <th className="py-1.5 pr-3 font-medium">Last purchase</th>
+                  <th className="py-1.5 pr-3 text-right font-medium">Quiet for</th>
+                  <th className="py-1.5 pr-3 text-right font-medium">Usually orders every</th>
+                  <th className="py-1.5 text-right font-medium">Bought, 15 months</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100">
+                {quiet.map((r) => (
+                  <tr key={r.accountId}>
+                    <td className="py-1.5 pr-3">
+                      <Link href={`/accounts/${r.accountId}`} className="font-medium text-indigo-700 hover:underline">
+                        {r.name}
+                      </Link>
+                    </td>
+                    {showOwner && <td className="py-1.5 pr-3 text-slate-600">{r.owner}</td>}
+                    <td className="py-1.5 pr-3 text-slate-600">{formatDate(new Date(r.lastPurchase))}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums font-semibold text-amber-800">{r.daysQuiet} days</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-slate-600">{r.usualGapDays} days</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-700">
+                      {formatCompactCurrency(r.value15m)} · {r.orders15m} orders
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
       <form className="flex flex-wrap items-end gap-3" action="/accounts">
         <input type="hidden" name="tab" value="winback" />
         <div>
