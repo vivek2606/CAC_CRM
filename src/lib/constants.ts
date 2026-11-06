@@ -315,7 +315,6 @@ export const CONTACT_ROLE_COLORS: Record<ContactRole, { bg: string; text: string
 };
 
 // A new deal's winning probability unless the sales person sets another.
-export const DEFAULT_WIN_PROBABILITY = 50;
 
 export const STAGE_DEFAULT_PROBABILITY: Record<DealStage, number> = {
   QUALIFICATION: 20,

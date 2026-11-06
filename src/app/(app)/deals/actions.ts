@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
-import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS, DEFAULT_WIN_PROBABILITY } from "@/lib/constants";
+import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
 import { computeDealDiscount } from "@/lib/discount";
 import { parseTagsInput } from "@/lib/tags";
@@ -190,6 +190,27 @@ function parseLineItems(raw: FormDataEntryValue | undefined): z.infer<typeof dea
     .map((result) => result.data);
 }
 
+// Winning probability: each stage has its usual figure (constants.ts). A
+// sales person setting a different one says why - kept as a note on the
+// deal, so the Head can see the reasoning behind the forecast. The Head /
+// Coordinator needn't give one.
+function probabilityFor(
+  user: { role: string },
+  stage: DealStage,
+  probability: number | undefined,
+  reason: string,
+  existing?: { stage: DealStage; probability: number },
+): { probability: number; note: string | null } {
+  const usual = STAGE_DEFAULT_PROBABILITY[stage];
+  const p = probability ?? usual;
+  const changed = !existing || p !== existing.probability || stage !== existing.stage;
+  if (p === usual || !changed) return { probability: p, note: null };
+  const why = reason.trim().slice(0, 500);
+  if (!why && !isBackOffice(user as Parameters<typeof isBackOffice>[0]))
+    throw new Error(`Winning probability ${p}% is different from the usual ${usual}% at ${DEAL_STAGE_LABELS[stage]} - say why (e.g. "PO promised", "competitor 15% cheaper").`);
+  return { probability: p, note: `Winning probability ${p}% (usual at ${DEAL_STAGE_LABELS[stage]}: ${usual}%)${why ? `: ${why}` : "."}` };
+}
+
 export async function createDeal(formData: FormData) {
   const user = await requireUser();
   const raw = Object.fromEntries(formData.entries());
@@ -200,6 +221,7 @@ export async function createDeal(formData: FormData) {
   const ownerProblem = await dealOwnerProblem(ownerId);
   if (ownerProblem) throw new Error(ownerProblem);
   const lineItems = parseLineItems(formData.get("lineItems") ?? undefined);
+  const prob = probabilityFor(user, parsed.stage, parsed.probability, String(formData.get("probabilityReason") ?? ""));
 
   const deal = await prisma.deal.create({
     data: {
@@ -210,7 +232,7 @@ export async function createDeal(formData: FormData) {
       stage: parsed.stage,
       stageChangedAt: new Date(),
       value: parsed.value,
-      probability: parsed.probability ?? DEFAULT_WIN_PROBABILITY,
+      probability: prob.probability,
       expectedCloseDate: parsed.expectedCloseDate ? new Date(parsed.expectedCloseDate) : null,
       accountId: toNullable(parsed.accountId),
       contactId: toNullable(parsed.contactId),
@@ -226,6 +248,7 @@ export async function createDeal(formData: FormData) {
     },
   });
   await syncDealValueFromItems(deal.id);
+  if (prob.note) await prisma.note.create({ data: { body: prob.note, dealId: deal.id, authorId: user.id } });
   // Every deal has its lead: made for it, 2 days before the deal's date.
   await createLeadForDeal(deal.id, user.id, "created directly");
   {
@@ -264,6 +287,9 @@ export async function updateDeal(dealId: string, formData: FormData) {
   // number.
   const isClosed = existing.stage === "WON" || existing.stage === "LOST";
   const stage = isClosed ? existing.stage : parsed.stage;
+  const prob = isClosed
+    ? { probability: existing.probability, note: null }
+    : probabilityFor(user, stage, parsed.probability, String(formData.get("probabilityReason") ?? ""), existing);
 
   // A won deal's invoice no. / company changed here mustn't duplicate another sale.
   if (existing.stage === "WON" && existing.sourceTxnNo == null) {
@@ -285,7 +311,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       stage,
       ...(stage !== existing.stage ? { stageChangedAt: new Date() } : {}),
       value: parsed.value,
-      probability: parsed.probability ?? STAGE_DEFAULT_PROBABILITY[stage],
+      probability: prob.probability,
       expectedCloseDate: parsed.expectedCloseDate ? new Date(parsed.expectedCloseDate) : null,
       accountId: toNullable(parsed.accountId),
       ...(formData.has("contactId") ? { contactId: toNullable(parsed.contactId) } : {}),
@@ -311,6 +337,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
       createdAt: parseDateInput(parsed.createdAt),
     },
   });
+  if (prob.note) await prisma.note.create({ data: { body: prob.note, dealId, authorId: user.id } });
   // A closed deal converted after it closed goes to 3 days before closing;
   // and the lead it came from can't be dated after the deal.
   if (isClosed) await keepConversionBeforeClose(dealId);

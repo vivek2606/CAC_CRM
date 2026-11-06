@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { binLead } from "@/lib/recycle-bin";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
-import { DEAL_STAGE_LABELS, DEFAULT_WIN_PROBABILITY } from "@/lib/constants";
+import { DEAL_STAGE_LABELS, STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
 import type { EquipmentType, DealStage, Lead, PurchaseTimeframe } from "@prisma/client";
 
@@ -231,7 +231,7 @@ export async function convertLeadToDeal(leadId: string) {
     redirect(`/leads/${leadId}`);
   }
 
-  const deal = await createDealFromLead(lead, "QUALIFICATION", DEFAULT_WIN_PROBABILITY, user.id);
+  const deal = await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION, user.id);
 
   revalidatePath("/leads");
   revalidatePath("/deals");
@@ -262,7 +262,7 @@ export async function bulkConvertSelectedLeads(leadIds: string[]): Promise<BulkC
       skipped++;
       continue;
     }
-    await createDealFromLead(lead, "QUALIFICATION", DEFAULT_WIN_PROBABILITY, user.id);
+    await createDealFromLead(lead, "QUALIFICATION", STAGE_DEFAULT_PROBABILITY.QUALIFICATION, user.id);
     converted++;
     totalValue += lead.value ?? 0;
   }

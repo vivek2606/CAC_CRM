@@ -201,7 +201,7 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
   if (ownerProblem) return { error: ownerProblem };
   const name = title.trim() || q.customerName || ref;
   const accountId = await quoteAccountId(q.data);
-  const { DEFAULT_WIN_PROBABILITY } = await import("@/lib/constants");
+  const { STAGE_DEFAULT_PROBABILITY } = await import("@/lib/constants");
   // The customer's phone: a line of the quotation's "To" that is a number.
   const toLines = String((q.data as { to?: string } | null)?.to ?? "").split("\n").map((l) => l.trim());
   const phone = toLines.slice(1).find((l) => /^[+\d][\d\s\-()/]{8,}$/.test(l) && l.replace(/\D/g, "").length >= 10) ?? null;
@@ -210,7 +210,7 @@ export async function createDealForQuote(ref: string, title: string, ownerId?: s
       title: name.slice(0, 200),
       stage: "PROPOSAL",
       stageChangedAt: new Date(),
-      probability: DEFAULT_WIN_PROBABILITY,
+      probability: STAGE_DEFAULT_PROBABILITY.PROPOSAL,
       customerName: q.customerName || null,
       customerPhone: phone,
       paymentTerms: "FULL_ADVANCE",

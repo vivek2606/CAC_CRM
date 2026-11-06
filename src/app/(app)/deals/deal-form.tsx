@@ -5,7 +5,7 @@ import { Plus, Trash2, Upload } from "lucide-react";
 import {
   OPEN_DEAL_STAGES,
   DEAL_STAGE_LABELS,
-  DEFAULT_WIN_PROBABILITY,
+  STAGE_DEFAULT_PROBABILITY,
   EQUIPMENT_TYPES,
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENTS,
@@ -144,6 +144,15 @@ function DealFormFields({
   }
 
   const [items, setItems] = useState<LineItemRow[]>(initialItems);
+  // Winning probability follows the stage's usual figure unless changed -
+  // a different figure needs a reason.
+  const savedStage = defaultValues?.stage ?? "QUALIFICATION";
+  const [stage, setStage] = useState<DealStage>(savedStage);
+  const [probability, setProbability] = useState(String(defaultValues?.probability ?? STAGE_DEFAULT_PROBABILITY[savedStage]));
+  const closedDeal = savedStage === "WON" || savedStage === "LOST";
+  const usualProbability = STAGE_DEFAULT_PROBABILITY[stage];
+  const needsReason =
+    !closedDeal && probability !== "" && Number(probability) !== usualProbability && (Number(probability) !== defaultValues?.probability || stage !== savedStage);
   const [formError, setFormError] = useState<string | null>(null);
   const [value, setValue] = useState(defaultValues?.value != null ? String(defaultValues.value) : "");
 
@@ -377,7 +386,13 @@ function DealFormFields({
           ) : (
             <select
               name="stage"
-              defaultValue={defaultValues?.stage ?? "QUALIFICATION"}
+              value={stage}
+              onChange={(e) => {
+                const next = e.target.value as DealStage;
+                // Still at the stage's usual figure: follow the new stage's.
+                if (Number(probability) === STAGE_DEFAULT_PROBABILITY[stage]) setProbability(String(STAGE_DEFAULT_PROBABILITY[next]));
+                setStage(next);
+              }}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {OPEN_DEAL_STAGES.map((s) => (
@@ -435,10 +450,21 @@ function DealFormFields({
             type="number"
             min={0}
             max={100}
+            step={5}
             required={!isHead}
-            defaultValue={defaultValues?.probability ?? (creating ? DEFAULT_WIN_PROBABILITY : undefined)}
+            value={probability}
+            onChange={(e) => setProbability(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+          {!closedDeal && <p className="mt-1 text-xs text-slate-400">Usual at {DEAL_STAGE_LABELS[stage]}: {usualProbability}%</p>}
+          {needsReason && (
+            <input
+              name="probabilityReason"
+              required={!isHead}
+              placeholder={`Why ${probability}% and not ${usualProbability}%? (e.g. PO promised)`}
+              className="mt-1.5 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          )}
         </div>
 
         <div>

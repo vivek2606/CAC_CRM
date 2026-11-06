@@ -6,6 +6,8 @@ import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { PerfTabs } from "@/components/perf-tabs";
 import { ForecastTable, type ForecastRow } from "./forecast-table";
+import { ForecastAccuracyTable } from "./forecast-accuracy-table";
+import { ensureForecastSnapshot, getForecastAccuracy } from "@/lib/forecast-accuracy";
 import { formatCurrency, formatCompactCurrency } from "@/lib/format";
 import { SetTargetForm } from "./set-target-form";
 import { ExportCsvButton } from "@/components/export-csv-button";
@@ -136,6 +138,9 @@ export default async function TargetsPage({
       weighted: Math.round(mine.reduce((t, d) => t + (d.value * (d.probability ?? 0)) / 100, 0) * 100) / 100,
     };
   });
+
+  await ensureForecastSnapshot(now);
+  const accuracy = await getForecastAccuracy(reps, 6, now);
 
   const rows = reps.map((r) => ({
     name: r.name.split(" ")[0],
@@ -281,6 +286,9 @@ export default async function TargetsPage({
             <ForecastTable rows={forecastRows} monthLabel={monthLabel(month)} isCurrent={isCurrentMonth} monthParam={monthStr} />
           </Card>
         )}
+        <Card className="p-5">
+          <ForecastAccuracyTable months={accuracy.months} rows={accuracy.rows} />
+        </Card>
 
         <Card>
           <div className="flex items-center justify-end p-4 pb-0">
