@@ -388,6 +388,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     <span className="font-semibold">Lost to:</span> {r.lostTo.map((b) => `${b.brand} (${b.count})`).join(", ")}
                   </p>
                 )}
+                {r.priceGaps.length > 0 && (
+                  <p className="mt-1 text-xs text-slate-600">
+                    <span className="font-semibold">Price gap when lost to them:</span>{" "}
+                    {r.priceGaps.map((g) => `${g.brand} - we were ${Math.abs(g.avgGapPct)}% ${g.avgGapPct >= 0 ? "higher" : "lower"} on average (${g.count} deal${g.count === 1 ? "" : "s"})`).join("; ")}
+                  </p>
+                )}
               </>
             )}
           </Section>

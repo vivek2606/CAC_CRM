@@ -57,15 +57,18 @@ export async function followUpQuote(quoteId: string, channel: FollowUpChannel, n
 
 // Lost: a quote on an open deal marks the deal Lost (with the reason);
 // a quote with no deal is closed as lost on its own.
-export async function markQuoteLost(quoteId: string, reason: LostReason, note: string, lostToBrand: string): Promise<{ error?: string }> {
+export async function markQuoteLost(quoteId: string, reason: LostReason, note: string, lostToBrand: string, lostToPrice?: number | null): Promise<{ error?: string }> {
   try {
     const { q } = await openQuote(quoteId);
     if (!LOST_REASONS.includes(reason)) return { error: "Pick the reason." };
+    const theirPrice = typeof lostToPrice === "number" && lostToPrice > 0 ? lostToPrice : null;
+    if (reason === "PRICE_TOO_HIGH" && (!lostToBrand.trim() || !theirPrice)) return { error: "Lost on price - enter the brand they bought and its price for the same scope (excl. VAT)." };
     if (q.dealId && q.deal && q.deal.stage !== "WON" && q.deal.stage !== "LOST") {
-      const res = await updateDealStage(q.dealId, "LOST", reason, note.trim() || undefined, undefined, undefined, lostToBrand.trim() || undefined);
+      const res = await updateDealStage(q.dealId, "LOST", reason, note.trim() || undefined, undefined, undefined, lostToBrand.trim() || undefined, theirPrice);
       if (res.error) return { error: res.error };
     }
-    await prisma.quotation.update({ where: { id: q.id }, data: { outcome: "lost", outcomeNote: [reason, note.trim()].filter(Boolean).join(": ").slice(0, 500) } });
+    const lostTo = lostToBrand.trim() ? `to ${lostToBrand.trim()}${theirPrice ? ` at ₦${theirPrice.toLocaleString("en-NG")}` : ""}` : "";
+    await prisma.quotation.update({ where: { id: q.id }, data: { outcome: "lost", outcomeNote: [reason, lostTo, note.trim()].filter(Boolean).join(": ").slice(0, 500) } });
     revalidate(q.dealId);
     return {};
   } catch (e) {

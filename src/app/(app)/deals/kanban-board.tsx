@@ -74,7 +74,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     });
   }
 
-  function confirmLost({ category, note, lostToBrand, closedAt }: LostInput) {
+  function confirmLost({ category, note, lostToBrand, lostToPrice, closedAt }: LostInput) {
     const dealId = pendingLostDealId;
     setPendingLostDealId(null);
     if (!dealId) return;
@@ -82,7 +82,7 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
     const deal = items.find((d) => d.id === dealId);
     setItems((prev) => prev.filter((d) => d.id !== dealId));
     startTransition(async () => {
-      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
+      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined, lostToPrice);
       if (res.error) {
         if (deal) setItems((prev) => [...prev, deal]);
         alert(res.error);
@@ -168,7 +168,9 @@ export function KanbanBoard({ deals }: { deals: DealCard[] }) {
         );
       })}
     </div>
-    {pendingLostDealId && <MarkLostDialog onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />}
+    {pendingLostDealId && (
+      <MarkLostDialog dealValue={items.find((d) => d.id === pendingLostDealId)?.value} onConfirm={confirmLost} onCancel={() => setPendingLostDealId(null)} />
+    )}
     {noProducts && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setNoProducts(null)}>
         <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>

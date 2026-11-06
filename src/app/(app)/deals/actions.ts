@@ -421,6 +421,7 @@ async function reopenDealImpl(dealId: string) {
       lostReasonCategory: null,
       lostReason: null,
       lostToBrand: null,
+      lostToPrice: null,
     },
   });
   await syncSaleLineItemsForDeal(dealId);
@@ -445,8 +446,10 @@ export async function updateDealStage(
   invoiceNo?: string,
   // Marking Lost: the brand the customer bought instead.
   lostToBrand?: string,
+  // Lost on price: the competitor's price for the same scope (excl. VAT).
+  lostToPrice?: number | null,
 ): Promise<ActionResult> {
-  return attempt(() => setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true, lostToBrand));
+  return attempt(() => setDealStage(dealId, stage, lostReasonCategory, lostReasonNote, closedAtOverride, invoiceNo, true, lostToBrand, lostToPrice));
 }
 
 // updateDealStage, minus the discount check when markDealWon has already
@@ -461,8 +464,15 @@ async function setDealStage(
   invoiceNo: string | undefined,
   checkDiscount: boolean,
   lostToBrand?: string,
+  lostToPrice?: number | null,
 ) {
   const user = await requireUser();
+  // Lost on price: whose price, and theirs - to see by how much we were beaten.
+  const theirPrice = typeof lostToPrice === "number" && Number.isFinite(lostToPrice) && lostToPrice > 0 ? Math.round(lostToPrice * 100) / 100 : null;
+  if (stage === "LOST" && lostReasonCategory === "PRICE_TOO_HIGH") {
+    if (!lostToBrand?.trim()) throw new Error("Lost on price - pick the brand the customer bought.");
+    if (!theirPrice) throw new Error("Lost on price - enter the competitor's price for the same scope (excl. VAT), even roughly.");
+  }
   const existing = await prisma.deal.findUniqueOrThrow({ where: { id: dealId }, include: { items: true } });
   if (!canAccessOwner(user, existing.ownerId)) throw new Error("You do not have access to this deal.");
 
@@ -500,6 +510,7 @@ async function setDealStage(
       lostReasonCategory: stage === "LOST" ? (lostReasonCategory ?? existing.lostReasonCategory ?? "OTHER") : null,
       lostReason: stage === "LOST" ? (lostReasonNote ?? null) : null,
       lostToBrand: stage === "LOST" ? lostToBrand?.trim().slice(0, 80) || null : null,
+      lostToPrice: stage === "LOST" && (lostReasonCategory === "PRICE_TOO_HIGH" || lostReasonCategory === "COMPETITOR") ? theirPrice : null,
       invoiceNo: stage === "WON" ? invoiceNo!.trim().slice(0, 60) : existing.invoiceNo,
     },
   });
@@ -517,7 +528,7 @@ async function setDealStage(
       stage === "WON"
         ? `Marked Won - invoice ${invoiceNo?.trim()}, dated ${closedAtOverride}.`
         : stage === "LOST"
-          ? `Marked Lost (${DEAL_STAGE_LABELS[existing.stage]} →)${lostReasonCategory ? ` - ${lostReasonCategory.replace(/_/g, " ").toLowerCase()}` : ""}${lostReasonNote ? `: ${lostReasonNote}` : ""}${lostToBrand ? `, bought ${lostToBrand}` : ""}.`
+          ? `Marked Lost (${DEAL_STAGE_LABELS[existing.stage]} →)${lostReasonCategory ? ` - ${lostReasonCategory.replace(/_/g, " ").toLowerCase()}` : ""}${lostReasonNote ? `: ${lostReasonNote}` : ""}${lostToBrand ? `, bought ${lostToBrand}` : ""}${theirPrice ? ` at ${fmtMoney(theirPrice)}` : ""}.`
           : `${DEAL_STAGE_LABELS[existing.stage]} → ${DEAL_STAGE_LABELS[stage]}.`,
     );
   }

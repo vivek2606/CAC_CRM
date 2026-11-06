@@ -112,7 +112,7 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 **Order checklist.** A won deal shows what's done and what's left: invoiced, account linked, everything billed (or a balance order waiting for stock), **delivered** (click Mark delivered with the date and waybill no.), installed (supply-only sales skip this) and serial nos. The bell reminds you about won orders not marked delivered a week on.
 
-**Mark Lost** asks for the reason (price, competitor, project cancelled...). Be honest - these reasons tell us where we lose business. A lost or won deal can be reopened if needed.`,
+**Mark Lost** asks for the reason (price, competitor, project cancelled...). Be honest - these reasons tell us where we lose business. **Lost on price:** enter the brand they bought and **their price for the same scope** (excl. VAT, even roughly) - the CRM shows how much higher we were, and Team Reports shows the average gap per competitor. A lost or won deal can be reopened if needed.`,
   },
   {
     id: "quotations",

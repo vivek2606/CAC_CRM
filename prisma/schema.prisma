@@ -364,6 +364,9 @@ model Deal {
   lostReason           String?
   // The brand the customer bought instead, entered when marking Lost.
   lostToBrand          String?
+  // Lost on price: the competitor's price for the same scope (₦, excl.
+  // VAT - like the deal value), to see by how much we were beaten.
+  lostToPrice          Float?
   // Assigned once, the first time a quote is generated for this deal - kept
   // stable across re-prints even if line items change afterward.
   quoteNumber          Int?           @unique
@@ -419,13 +422,13 @@ model Deal {
   // Part-billed orders: the products not billed when the order was marked
   // Won (out of stock), kept as their own open deal to bill when the stock
   // arrives - linked to the order (orderDealId) and to Pending Orders.
-  isBalance      Boolean @default(false)
+  isBalance      Boolean   @default(false)
   // Warranty in months from the invoice date, when not the standard 12.
   warrantyMonths Int?
   // Closing checklist: when the goods left / reached the customer, and the
   // waybill or delivery note no.
-  deliveredAt   DateTime?
-  deliveryRef   String?
+  deliveredAt    DateTime?
+  deliveryRef    String?
 
   activities      Activity[]
   notes           Note[]

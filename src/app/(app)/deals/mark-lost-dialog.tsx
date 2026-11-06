@@ -5,7 +5,7 @@ import { LOST_REASONS, LOST_REASON_LABELS } from "@/lib/constants";
 import type { LostReason } from "@prisma/client";
 import { CompetitorBrandSelect } from "@/components/competitor-brand-select";
 
-export type LostInput = { category: LostReason; note: string; lostToBrand: string; closedAt: string };
+export type LostInput = { category: LostReason; note: string; lostToBrand: string; lostToPrice: number | null; closedAt: string };
 
 // Why the deal was lost (one of the fixed reasons, for the "why we lose"
 // report), a brief note, and the brand the customer bought instead.
@@ -13,15 +13,21 @@ export function MarkLostDialog({
   onConfirm,
   onCancel,
   competitorBrand,
+  dealValue,
 }: {
   onConfirm: (input: LostInput) => void;
   onCancel: () => void;
   // The competing brand recorded on the deal, if any - suggested as the winner.
   competitorBrand?: string | null;
+  // Our price (the deal value, excl. VAT) - to show the gap on price.
+  dealValue?: number;
 }) {
   const [category, setCategory] = useState<LostReason | "">("");
   const [note, setNote] = useState("");
   const [brand, setBrand] = useState(competitorBrand ?? "");
+  const [theirPrice, setTheirPrice] = useState("");
+  const their = Number(theirPrice.replace(/,/g, ""));
+  const gapPct = dealValue && their > 0 ? Math.round(((dealValue - their) / their) * 100) : null;
   const today = new Date().toISOString().slice(0, 10);
   const [closedAt, setClosedAt] = useState(today);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +37,9 @@ export function MarkLostDialog({
     if (!category) return setError("Pick the reason the deal was lost.");
     if (category === "OTHER" && !note.trim()) return setError("Write the reason in the box below.");
     if (category === "COMPETITOR" && !brand.trim()) return setError("Pick the brand the customer preferred.");
-    onConfirm({ category, note: note.trim(), lostToBrand: brand.trim(), closedAt });
+    if (category === "PRICE_TOO_HIGH" && !brand.trim()) return setError("Pick the brand the customer bought.");
+    if (category === "PRICE_TOO_HIGH" && !(their > 0)) return setError("Enter the competitor's price for the same scope - even roughly.");
+    onConfirm({ category, note: note.trim(), lostToBrand: brand.trim(), lostToPrice: their > 0 ? their : null, closedAt });
   };
 
   return (
@@ -78,7 +86,7 @@ export function MarkLostDialog({
           className={`${input} mb-3`}
         />
 
-        <label className="block text-xs font-medium text-slate-500 mb-1">Brand that won the deal{category === "COMPETITOR" ? " *" : ""}</label>
+        <label className="block text-xs font-medium text-slate-500 mb-1">Brand that won the deal{category === "COMPETITOR" || category === "PRICE_TOO_HIGH" ? " *" : ""}</label>
         <CompetitorBrandSelect
           value={brand}
           onChange={(b) => {
@@ -88,6 +96,35 @@ export function MarkLostDialog({
           placeholder="Not known"
           className={`${input} mb-3`}
         />
+
+        {(category === "PRICE_TOO_HIGH" || category === "COMPETITOR") && (
+          <>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Their price for the same scope (₦, excl. VAT){category === "PRICE_TOO_HIGH" ? " *" : ""}
+            </label>
+            <input
+              inputMode="decimal"
+              value={theirPrice}
+              onChange={(e) => {
+                setTheirPrice(e.target.value);
+                setError(null);
+              }}
+              placeholder={category === "PRICE_TOO_HIGH" ? "What the customer paid / was offered" : "If known"}
+              className={`${input} mb-1`}
+            />
+            <p className="mb-3 text-xs text-slate-500">
+              {gapPct == null
+                ? dealValue
+                  ? `Ours: ₦${dealValue.toLocaleString("en-NG")} (the deal value).`
+                  : ""
+                : gapPct > 0
+                  ? `We were ${gapPct}% higher (ours ₦${dealValue!.toLocaleString("en-NG")}).`
+                  : gapPct < 0
+                    ? `They were ${-gapPct}% higher than us (ours ₦${dealValue!.toLocaleString("en-NG")}) - so not really price?`
+                    : "Same price as ours."}
+            </p>
+          </>
+        )}
 
         <label className="block text-xs font-medium text-slate-500 mb-1">Date lost</label>
         <input type="date" value={closedAt} max={today} onChange={(e) => setClosedAt(e.target.value)} className={`${input} mb-4`} />

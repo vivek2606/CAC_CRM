@@ -48,6 +48,7 @@ function FollowUpRow({ q, showOwner }: { q: FollowUpItem; showOwner: boolean }) 
   const [next, setNext] = useState("7");
   const [reason, setReason] = useState<LostReason>("PRICE_TOO_HIGH");
   const [brand, setBrand] = useState("");
+  const [theirPrice, setTheirPrice] = useState("");
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ error?: string }>) =>
@@ -163,11 +164,17 @@ function FollowUpRow({ q, showOwner }: { q: FollowUpItem; showOwner: boolean }) 
               ))}
             </select>
           </label>
-          {reason === "COMPETITOR" && (
-            <label className="text-xs text-slate-500">
-              <span className="mb-1 block">Brand they bought</span>
-              <input value={brand} onChange={(e) => setBrand(e.target.value)} className={field} />
-            </label>
+          {(reason === "COMPETITOR" || reason === "PRICE_TOO_HIGH") && (
+            <>
+              <label className="text-xs text-slate-500">
+                <span className="mb-1 block">Brand they bought{reason === "PRICE_TOO_HIGH" ? " *" : ""}</span>
+                <input value={brand} onChange={(e) => setBrand(e.target.value)} className={field} />
+              </label>
+              <label className="text-xs text-slate-500">
+                <span className="mb-1 block">Their price, same scope (₦ excl. VAT){reason === "PRICE_TOO_HIGH" ? " *" : ""}</span>
+                <input inputMode="decimal" value={theirPrice} onChange={(e) => setTheirPrice(e.target.value)} className={field} />
+              </label>
+            </>
           )}
           <label className="min-w-[200px] flex-1 text-xs text-slate-500">
             <span className="mb-1 block">Note</span>
@@ -176,7 +183,7 @@ function FollowUpRow({ q, showOwner }: { q: FollowUpItem; showOwner: boolean }) 
           <button
             type="button"
             disabled={pending}
-            onClick={() => run(() => markQuoteLost(q.id, reason, note, brand))}
+            onClick={() => run(() => markQuoteLost(q.id, reason, note, brand, Number(theirPrice.replace(/,/g, "")) || null))}
             className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
           >
             {pending ? "Saving..." : q.dealId ? "Mark quote & deal lost" : "Mark quote lost"}

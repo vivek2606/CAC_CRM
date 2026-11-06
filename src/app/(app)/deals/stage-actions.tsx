@@ -101,11 +101,11 @@ export function StageActions({
     });
   }
 
-  function markLost({ category, note, lostToBrand, closedAt }: LostInput) {
+  function markLost({ category, note, lostToBrand, lostToPrice, closedAt }: LostInput) {
     setShowLostDialog(false);
     setError(null);
     startTransition(async () => {
-      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined);
+      const res = await updateDealStage(dealId, "LOST", category, note || undefined, closedAt, undefined, lostToBrand || undefined, lostToPrice);
       if (res.error) return setError(res.error);
       router.refresh();
     });
@@ -131,7 +131,7 @@ export function StageActions({
           <XCircle className="h-4 w-4" />
           Mark Lost
         </button>
-        {showLostDialog && <MarkLostDialog competitorBrand={competitorBrand} onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
+        {showLostDialog && <MarkLostDialog competitorBrand={competitorBrand} dealValue={quotedValue} onConfirm={markLost} onCancel={() => setShowLostDialog(false)} />}
         {showWonDialog && !needsAccount && !blockWonReason && (
           <MarkWonDialog
             existingItems={existingItems}

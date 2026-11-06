@@ -55,6 +55,8 @@ export type TeamReport = {
   forecast: { label: string; count: number; value: number; weighted: number; commit: number }[];
   lostReasons: { reason: LostReason | "UNSPECIFIED"; count: number; value: number }[];
   lostTo: { brand: string; count: number }[];
+  // Lost on price, by the brand that won: how many, and how much higher we were on average.
+  priceGaps: { brand: string; count: number; avgGapPct: number }[];
   competitors: { label: string; won: number; lost: number; winRate: number }[];
   sources: { source: string; leads: number; converted: number; convRate: number; wonValue: number }[];
   segments: { segment: string; open: number; openValue: number; won: number; wonValue: number; winRate: number | null }[];
@@ -94,6 +96,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
         sourceTxnNo: true,
         lostReasonCategory: true,
         lostToBrand: true,
+        lostToPrice: true,
         competitorBrand: true,
         endUseSegment: true,
         activities: { select: { type: true, createdAt: true }, orderBy: { createdAt: "asc" } },
@@ -227,6 +230,17 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
     brandMap.set(b.toLowerCase(), g);
   }
   const lostTo = [...brandMap.values()].sort((a, b) => b.count - a.count).slice(0, 6);
+  const gapMap = new Map<string, { brand: string; gaps: number[] }>();
+  for (const d of lostIn) {
+    const b = d.lostToBrand?.trim();
+    if (!b || !d.lostToPrice || d.lostToPrice <= 0 || d.value <= 0) continue;
+    const g = gapMap.get(b.toLowerCase()) ?? { brand: b, gaps: [] };
+    g.gaps.push(((d.value - d.lostToPrice) / d.lostToPrice) * 100);
+    gapMap.set(b.toLowerCase(), g);
+  }
+  const priceGaps = [...gapMap.values()]
+    .map((g) => ({ brand: g.brand, count: g.gaps.length, avgGapPct: Math.round(g.gaps.reduce((s, x) => s + x, 0) / g.gaps.length) }))
+    .sort((a, b) => b.count - a.count);
   const compMap = new Map<string, { label: string; won: number; lost: number }>();
   for (const d of closedCrmIn) {
     const b = d.competitorBrand?.trim();
@@ -281,6 +295,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
     forecast,
     lostReasons,
     lostTo,
+    priceGaps,
     competitors,
     sources,
     segments,

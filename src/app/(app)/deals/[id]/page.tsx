@@ -544,6 +544,19 @@ export default async function DealDetailPage({
                   <dd className="text-slate-700">{deal.lostToBrand}</dd>
                 </div>
               )}
+              {deal.lostToPrice != null && deal.lostToPrice > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Their price</dt>
+                  <dd className="text-slate-700">
+                    {formatCurrency(deal.lostToPrice)}
+                    {deal.value > 0 && (
+                      <span className="ml-1 text-xs text-slate-500">
+                        (we were {Math.abs(Math.round(((deal.value - deal.lostToPrice) / deal.lostToPrice) * 100))}% {deal.value >= deal.lostToPrice ? "higher" : "lower"})
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               {deal.account && (
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Account</dt>
