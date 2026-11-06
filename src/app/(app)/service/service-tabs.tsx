@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type Tab = "complaints" | "units" | "amc" | "claims" | "analysis";
+type Tab = "complaints" | "installations" | "units" | "amc" | "claims" | "analysis";
 
 // Service: complaints, the installed base, AMC contracts and warranty claims.
 export function ServiceTabs({ active }: { active: Tab }) {
@@ -15,6 +15,7 @@ export function ServiceTabs({ active }: { active: Tab }) {
   return (
     <div className="inline-flex flex-wrap rounded-lg bg-slate-100 p-1">
       {tab("complaints", "/service", "Complaints")}
+      {tab("installations", "/service/installations", "Installations")}
       {tab("units", "/service/units", "Installed units & warranty")}
       {tab("amc", "/service/amc", "AMC contracts")}
       {tab("claims", "/service/claims", "Warranty claims")}

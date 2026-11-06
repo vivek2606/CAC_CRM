@@ -184,7 +184,7 @@ You don't always need to create the lead by hand: a deal created directly gets i
     id: "service",
     title: "Service and complaints",
     for: ["service", "coordinator", "head"],
-    body: `The service side is run by the Service Manager, with the Head and the Coordinator able to register and follow complaints too. Its menu, **Service & Complaints**, has five tabs: Complaints, Installed units & warranty, AMC contracts, Warranty claims and Failure analysis.
+    body: `The service side is run by the Service Manager, with the Head and the Coordinator able to register and follow complaints too. Its menu, **Service & Complaints**, has six tabs: Complaints, Installations, Installed units & warranty, AMC contracts, Warranty claims and Failure analysis.
 
 ### Handling a complaint, step by step
 
@@ -205,6 +205,15 @@ Each complaint must be assigned, attended and resolved within set hours. The cur
 | Urgent | 2 h | 8 h | 24 h |
 
 Resolved complaints should be closed within 3 days. Every complaint shows **On track**, **At risk** (75% of the time gone) or **Breached** for each stage. At risk, the Service Manager gets a phone notification; once breached, the Head and the Coordinator are notified too. Filter the list by "Past service level" or "At risk" each morning.
+
+### Installations (supply + installation orders only)
+
+Most sales - to contractors - are supply only and need nothing here. When **we** supply and install:
+
+1. **Sales hands over** the won deal: on the deal page, **Hand over for installation** with the site address, contact, the customer's preferred date and notes for the installer. If the quotation included installation, the deal page and the bell remind the sales person until it's done.
+2. **The Service Manager schedules it**: date and team or contractor (Installations tab). The bell shows installations to schedule and any past their date.
+3. **Commission it** after testing: enter each unit's **serial no. from its plate**. They go on the installed units straight away, so later complaints and warranty claims have them. A serial that can't be read needs a reason.
+4. The sales person is notified when it's commissioned. If the customer uses their own installer after all, cancel it with the reason.
 
 ### The other tabs
 

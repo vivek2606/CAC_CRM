@@ -52,6 +52,12 @@ export async function ServiceDashboard({ name }: { name: string }) {
     prisma.serviceComplaint.count({ where: { ...claimableWhere, warrantyClaim: null } }),
   ]);
   const m = serviceMetrics(await withLineUnits(month), now);
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const [installsToSchedule, installsActive, installsLate] = await Promise.all([
+    prisma.installationJob.count({ where: { status: "PENDING" } }),
+    prisma.installationJob.count({ where: { status: { in: ["SCHEDULED", "IN_PROGRESS"] } } }),
+    prisma.installationJob.count({ where: { status: { in: ["SCHEDULED", "IN_PROGRESS"] }, scheduledDate: { lt: todayStart } } }),
+  ]);
   const sla = await getSla();
   const slaNow = pending.map((c) => slaSummary(c, sla, now).state);
   const breachedNow = slaNow.filter((s) => s === "breached").length;
@@ -109,6 +115,16 @@ export async function ServiceDashboard({ name }: { name: string }) {
             value={pct(m.firstTimeFixPct)}
             sub={`${m.avgFeedback != null ? `${m.avgFeedback.toFixed(1)} / 5 rating` : "no ratings yet"} · ${m.repeats} repeat${m.repeats === 1 ? "" : "s"}`}
             accent="emerald"
+          />
+          <StatCard
+            label="Installations"
+            value={`${installsToSchedule} to schedule`}
+            sub={
+              <Link href="/service/installations" className="hover:text-indigo-700">
+                {installsActive} scheduled / installing{installsLate ? ` · ${installsLate} past their date` : ""}
+              </Link>
+            }
+            accent={installsLate || installsToSchedule ? "amber" : "emerald"}
           />
           <StatCard label="Active AMCs" value={String(live.length)} sub={`${formatCurrency(live.reduce((s, c) => s + c.value, 0))} a year`} accent="emerald" />
           <StatCard label="AMC visits" value={`${overdueVisits} overdue`} sub={`${visits.length - overdueVisits} due in 14 days`} accent={overdueVisits ? "rose" : "sky"} />

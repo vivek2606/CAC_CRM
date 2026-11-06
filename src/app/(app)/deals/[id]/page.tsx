@@ -35,6 +35,8 @@ import { Pencil, FileText, ShieldCheck } from "lucide-react";
 import { canUseService } from "@/lib/service-access";
 import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
 import { WarrantyTerms } from "../../service/warranty-terms";
+import { InstallationHandover } from "../installation-handover";
+import { INSTALL_LABEL, INSTALL_TONE, quotedWithInstallation, type InstallStatus } from "@/lib/installation";
 
 export default async function DealDetailPage({
   params,
@@ -53,8 +55,9 @@ export default async function DealDetailPage({
     where: { id },
     include: {
       owner: { select: { name: true, avatarColor: true } },
-      account: { select: { id: true, name: true } },
-      contact: { select: { id: true, firstName: true, lastName: true } },
+      account: { select: { id: true, name: true, address: true, city: true, phone: true } },
+      contact: { select: { id: true, firstName: true, lastName: true, phone: true } },
+      installationJob: { select: { id: true, ref: true, status: true, scheduledDate: true, team: true, commissionedAt: true, preferredDate: true, cancelReason: true } },
       activities: { orderBy: { createdAt: "desc" } },
       notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true, avatarColor: true } } } },
       sourceLead: { select: { id: true, title: true, createdAt: true } },
@@ -274,6 +277,43 @@ export default async function DealDetailPage({
             months={deal.warrantyMonths}
             until={warrantyUntil(deal.closedAt, deal.warrantyMonths ?? STANDARD_WARRANTY_MONTHS).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
           />
+        )}
+        {deal.installationJob ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+            <span className="font-semibold text-slate-900">Installation {deal.installationJob.ref}</span>
+            <Badge bg={INSTALL_TONE[deal.installationJob.status as InstallStatus].bg} text={INSTALL_TONE[deal.installationJob.status as InstallStatus].text}>
+              {INSTALL_LABEL[deal.installationJob.status as InstallStatus]}
+            </Badge>
+            <span className="text-slate-600">
+              {deal.installationJob.commissionedAt
+                ? `Commissioned ${formatDate(deal.installationJob.commissionedAt)}`
+                : deal.installationJob.status === "CANCELLED"
+                  ? deal.installationJob.cancelReason
+                  : deal.installationJob.scheduledDate
+                    ? `Scheduled ${formatDate(deal.installationJob.scheduledDate)}${deal.installationJob.team ? ` · ${deal.installationJob.team}` : ""}`
+                    : deal.installationJob.preferredDate
+                      ? `Customer prefers ${formatDate(deal.installationJob.preferredDate)} - waiting to be scheduled`
+                      : "Waiting to be scheduled"}
+            </span>
+            {(await canUseService(user)) && (
+              <Link href={`/service/installations/${deal.installationJob.id}`} className="ml-auto text-indigo-600 hover:text-indigo-700">
+                Open
+              </Link>
+            )}
+          </div>
+        ) : (
+          deal.stage === "WON" &&
+          deal.sourceTxnNo == null && (
+            <InstallationHandover
+              dealId={deal.id}
+              quoted={await quotedWithInstallation(deal.id)}
+              defaults={{
+                contactName: deal.contact ? `${deal.contact.firstName} ${deal.contact.lastName ?? ""}`.trim() : "",
+                phone: deal.contact?.phone ?? deal.customerPhone ?? deal.account?.phone ?? "",
+                siteAddress: [deal.account?.address, deal.account?.city].filter(Boolean).join(", "),
+              }}
+            />
+          )
         )}
         {deal.stage === "WON" && !deal.invoiceNo && deal.sourceTxnNo == null && deal.closedAt && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">

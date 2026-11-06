@@ -11,8 +11,8 @@ enum Role {
   HEAD // Head of Sales - sees everything across the team
   SALES_MANAGER // Individual sales rep reporting to the Head
   COORDINATOR // Sales Coordinator - back office: sees all records and does
-              // the data entry (imports, stock, targets...), but not team
-              // logins, incentives, discount approval or team reports
+  // the data entry (imports, stock, targets...), but not team
+  // logins, incentives, discount approval or team reports
 }
 
 enum LeadStatus {
@@ -144,55 +144,56 @@ enum PaymentTerms {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  passwordHash  String
-  role          Role      @default(SALES_MANAGER)
-  auditLogs     AuditLog[] @relation("AuditUser")
-  title         String?
-  phone         String?
-  avatarColor   String    @default("#6366f1")
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(SALES_MANAGER)
+  auditLogs    AuditLog[] @relation("AuditUser")
+  title        String?
+  phone        String?
+  avatarColor  String     @default("#6366f1")
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   // Manager relationship: a SALES_MANAGER reports to a HEAD
   managerId     String?
-  manager       User?     @relation("TeamMembers", fields: [managerId], references: [id])
-  directReports User[]    @relation("TeamMembers")
+  manager       User?   @relation("TeamMembers", fields: [managerId], references: [id])
+  directReports User[]  @relation("TeamMembers")
 
-  accounts      Account[] @relation("AccountOwner")
-  contacts      Contact[] @relation("ContactOwner")
-  leads         Lead[]    @relation("LeadOwner")
-  deals         Deal[]    @relation("DealOwner")
-  activities    Activity[] @relation("ActivityOwner")
-  notes         Note[]    @relation("NoteAuthor")
-  targets       Target[]  @relation("SalesTarget")
-  saleLineItems SaleLineItem[] @relation("SaleLineItemOwner")
-  projectBillings ProjectBilling[] @relation("ProjectBillingOwner")
-  approvedDealDiscounts Deal[] @relation("DiscountApprover")
-  stockReceipts StockReceipt[] @relation("StockReceiptCreator")
-  inTransitOrders InTransitOrder[] @relation("InTransitCreator")
-  pendingOrders PendingOrder[] @relation("PendingOrderOwner")
-  complaintsRegistered ServiceComplaint[] @relation("ComplaintRegisteredBy")
-  amcContractsCreated AmcContract[] @relation("AmcCreatedBy")
-  warrantyClaimsCreated WarrantyClaim[] @relation("ClaimCreatedBy")
-  quotations    Quotation[] @relation("QuotationCreator")
-  serviceInvoices ServiceInvoice[] @relation("ServiceInvoiceCreator")
-  ownedQuotations Quotation[] @relation("QuotationOwner")
-  deletedRecords DeletedRecord[] @relation("DeletedBy")
+  accounts              Account[]          @relation("AccountOwner")
+  contacts              Contact[]          @relation("ContactOwner")
+  leads                 Lead[]             @relation("LeadOwner")
+  deals                 Deal[]             @relation("DealOwner")
+  activities            Activity[]         @relation("ActivityOwner")
+  notes                 Note[]             @relation("NoteAuthor")
+  targets               Target[]           @relation("SalesTarget")
+  installationJobs      InstallationJob[]  @relation("InstallationCreatedBy")
+  saleLineItems         SaleLineItem[]     @relation("SaleLineItemOwner")
+  projectBillings       ProjectBilling[]   @relation("ProjectBillingOwner")
+  approvedDealDiscounts Deal[]             @relation("DiscountApprover")
+  stockReceipts         StockReceipt[]     @relation("StockReceiptCreator")
+  inTransitOrders       InTransitOrder[]   @relation("InTransitCreator")
+  pendingOrders         PendingOrder[]     @relation("PendingOrderOwner")
+  complaintsRegistered  ServiceComplaint[] @relation("ComplaintRegisteredBy")
+  amcContractsCreated   AmcContract[]      @relation("AmcCreatedBy")
+  warrantyClaimsCreated WarrantyClaim[]    @relation("ClaimCreatedBy")
+  quotations            Quotation[]        @relation("QuotationCreator")
+  serviceInvoices       ServiceInvoice[]   @relation("ServiceInvoiceCreator")
+  ownedQuotations       Quotation[]        @relation("QuotationOwner")
+  deletedRecords        DeletedRecord[]    @relation("DeletedBy")
 }
 
 model Target {
-  id            String    @id @default(cuid())
-  month         DateTime // first-of-month
-  targetValue   Float
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  month       DateTime // first-of-month
+  targetValue Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  userId        String
-  user          User      @relation("SalesTarget", fields: [userId], references: [id])
+  userId String
+  user   User   @relation("SalesTarget", fields: [userId], references: [id])
 
   @@unique([userId, month])
 }
@@ -200,25 +201,25 @@ model Target {
 // One company-wide Naira/USD rate per month, used to compute landed price
 // when the monthly Price Master upload doesn't supply its own.
 model MonthlyExchangeRate {
-  id            String    @id @default(cuid())
-  month         DateTime  @unique
-  rate          Float
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  month     DateTime @unique
+  rate      Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Account {
-  id          String    @id @default(cuid())
-  name        String
-  code        String?   @unique
-  industry    String?
-  accountType AccountType?
-  website     String?
-  phone       String?
-  address     String?
-  city        String?
-  state       String?
-  country     String?
+  id                 String       @id @default(cuid())
+  name               String
+  code               String?      @unique
+  industry           String?
+  accountType        AccountType?
+  website            String?
+  phone              String?
+  address            String?
+  city               String?
+  state              String?
+  country            String?
   // Nigerian CAC RC number / TIN, for invoicing and KYC - free text since
   // formats vary and this isn't validated against an external registry.
   registrationNumber String?
@@ -226,181 +227,181 @@ model Account {
   // doesn't fit a fixed field - same idea as HubSpot's tags. A plain string
   // array rather than a related Tag model since the vocabulary is entirely
   // ad hoc per rep, not a managed list.
-  tags        String[]  @default([])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  tags               String[]     @default([])
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  ownerId     String
-  owner       User      @relation("AccountOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("AccountOwner", fields: [ownerId], references: [id])
 
-  contacts    Contact[]
-  leads       Lead[]
-  deals       Deal[]
-  complaints  ServiceComplaint[]
+  contacts       Contact[]
+  leads          Lead[]
+  deals          Deal[]
+  complaints     ServiceComplaint[]
   installedUnits InstalledUnit[]
-  amcContracts AmcContract[]
-  activities  Activity[]
+  amcContracts   AmcContract[]
+  activities     Activity[]
 }
 
 model Contact {
-  id          String    @id @default(cuid())
-  firstName   String
-  lastName    String
-  email       String?
-  phone       String?
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
   whatsappNumber String?
-  jobTitle    String?
-  department  String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  jobTitle       String?
+  department     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  ownerId     String
-  owner       User      @relation("ContactOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("ContactOwner", fields: [ownerId], references: [id])
 
-  accountId   String?
-  account     Account?  @relation(fields: [accountId], references: [id])
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
 
-  leads       Lead[]
-  deals       Deal[]
-  activities  Activity[]
-  notes       Note[]
-  dealRoles   DealContactRole[]
+  leads      Lead[]
+  deals      Deal[]
+  activities Activity[]
+  notes      Note[]
+  dealRoles  DealContactRole[]
 
   // Set only for contacts brought in via the Leads sheet import, so
   // re-running the import can safely replace its own rows.
-  importKey   String?   @unique
+  importKey String? @unique
 }
 
 model Lead {
-  id            String      @id @default(cuid())
-  title         String
+  id                        String             @id @default(cuid())
+  title                     String
   // Required in the form going forward, but left nullable here (like phone
   // below) so historical/bulk-imported leads that predate this field don't
   // block a schema migration.
-  customerName  String?
-  company       String?
-  status        LeadStatus  @default(NEW)
+  customerName              String?
+  company                   String?
+  status                    LeadStatus         @default(NEW)
   // Probability this lead closes, as a percentage in steps of 10 (10-100).
-  winProbability Int?
-  source        LeadSource  @default(DIRECT)
-  equipmentType EquipmentType?
+  winProbability            Int?
+  source                    LeadSource         @default(DIRECT)
+  equipmentType             EquipmentType?
   // Business-insight fields: which vertical this is for, and which
   // competing brand (if any) is also being quoted - feed the Team Reports
   // segment breakdown.
-  endUseSegment EndUseSegment?
-  competitorBrand String?
+  endUseSegment             EndUseSegment?
+  competitorBrand           String?
   // Qualification fields: whether the customer has confirmed they have
   // budget, and roughly when they intend to buy - distinct from
   // winProbability (that's "will they buy from us"; this is "when will
   // they buy at all"). Lead-only - once converted, Deal.expectedCloseDate
   // is the precise version of "when".
-  budgetConfirmed Boolean?
+  budgetConfirmed           Boolean?
   expectedPurchaseTimeframe PurchaseTimeframe?
-  value         Float?
-  email         String?
+  value                     Float?
+  email                     String?
   // Required in the form going forward (the customer's contact number) -
   // stays nullable here for the same reason as customerName above.
-  phone         String?
-  notes         String?
+  phone                     String?
+  notes                     String?
   // Freeform labels for segmentation beyond the fixed fields above - see
   // Account.tags for the full reasoning.
-  tags          String[]    @default([])
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  tags                      String[]           @default([])
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
 
   // Set only for leads brought in via the Leads sheet import, so re-running
   // the import can safely replace its own rows instead of duplicating them.
-  importKey     String?     @unique
+  importKey String? @unique
 
-  ownerId       String
-  owner         User        @relation("LeadOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("LeadOwner", fields: [ownerId], references: [id])
 
-  accountId     String?
-  account       Account?    @relation(fields: [accountId], references: [id])
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
 
-  contactId     String?
-  contact       Contact?    @relation(fields: [contactId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
 
-  convertedDealId String?   @unique
-  convertedDeal   Deal?     @relation("LeadConversion", fields: [convertedDealId], references: [id])
+  convertedDealId String? @unique
+  convertedDeal   Deal?   @relation("LeadConversion", fields: [convertedDealId], references: [id])
 
-  activities    Activity[]
-  noteItems     Note[]
+  activities Activity[]
+  noteItems  Note[]
 }
 
 model Deal {
-  id            String      @id @default(cuid())
-  title         String
-  stage         DealStage   @default(QUALIFICATION)
+  id                   String         @id @default(cuid())
+  title                String
+  stage                DealStage      @default(QUALIFICATION)
   // When the deal last moved stage (for "same stage for 30+ days"); null on
   // deals from before this was recorded - their created date stands in.
-  stageChangedAt DateTime?
-  value         Float       @default(0)
-  probability   Int         @default(20)
-  expectedCloseDate DateTime?
-  closedAt      DateTime?
+  stageChangedAt       DateTime?
+  value                Float          @default(0)
+  probability          Int            @default(20)
+  expectedCloseDate    DateTime?
+  closedAt             DateTime?
   // Same business-insight fields as Lead - carried over automatically when a
   // lead converts, or set directly for deals created without one.
-  equipmentType EquipmentType?
-  endUseSegment EndUseSegment?
-  competitorBrand String?
+  equipmentType        EquipmentType?
+  endUseSegment        EndUseSegment?
+  competitorBrand      String?
   // Required in the form going forward - the customer's name and contact
   // number, carried over automatically from Lead on conversion. Nullable
   // here for the same reason as Lead.customerName/phone.
-  customerName  String?
-  customerPhone String?
-  customerEmail String?
+  customerName         String?
+  customerPhone        String?
+  customerEmail        String?
   // Closing-stage fields: how the customer will pay, and when the unit
   // needs to actually ship/install - distinct from expectedCloseDate
   // (that's when the sale is won, not when it's delivered). Deal-only,
   // negotiated per-deal so there's no Lead equivalent.
-  paymentTerms  PaymentTerms?
+  paymentTerms         PaymentTerms?
   expectedDeliveryDate DateTime?
   // A fixed category (for the "why we lose" breakdown) plus this pre-existing
   // free-text field, now used for optional extra detail rather than the
   // whole reason - kept as-is (not renamed) so no existing data moves.
-  lostReasonCategory LostReason?
-  lostReason    String?
+  lostReasonCategory   LostReason?
+  lostReason           String?
   // The brand the customer bought instead, entered when marking Lost.
-  lostToBrand   String?
+  lostToBrand          String?
   // Assigned once, the first time a quote is generated for this deal - kept
   // stable across re-prints even if line items change afterward.
-  quoteNumber   Int?        @unique
+  quoteNumber          Int?           @unique
   // Entered when a deal is marked Won in the CRM (the register's Txn No for
   // imported deals is sourceTxnNo).
-  invoiceNo     String?
+  invoiceNo            String?
   // Which company raised the invoice: "Sakuragi" or "Somotex" (both bill
   // CAC sales). From the Sales Register's Company column, or entered when
   // marking Won / in the products sheet.
-  billingCompany String?
+  billingCompany       String?
   // Set when a Head approves a deal whose itemized total is discounted past
   // DISCOUNT_APPROVAL_THRESHOLD_PCT below catalog price - required before
   // the deal can be marked Won. Cleared whenever line items change, so a
   // stale approval can't cover a since-modified quote.
   discountApprovedAt   DateTime?
   discountApprovedById String?
-  discountApprovedBy   User?    @relation("DiscountApprover", fields: [discountApprovedById], references: [id])
+  discountApprovedBy   User?          @relation("DiscountApprover", fields: [discountApprovedById], references: [id])
   // Freeform labels for segmentation beyond the fixed fields above - see
   // Account.tags for the full reasoning.
-  tags          String[]    @default([])
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  tags                 String[]       @default([])
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
-  ownerId       String
-  owner         User        @relation("DealOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("DealOwner", fields: [ownerId], references: [id])
 
-  accountId     String?
-  account       Account?    @relation(fields: [accountId], references: [id])
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
 
-  contactId     String?
-  contact       Contact?    @relation(fields: [contactId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
 
-  sourceLead    Lead?       @relation("LeadConversion")
+  sourceLead    Lead?   @relation("LeadConversion")
   // An order billed across several invoices: each further invoice is its
   // own won deal, pointing at the deal it was marked Won from.
   orderDealId   String?
-  orderDeal     Deal?       @relation("DealOrder", fields: [orderDealId], references: [id], onDelete: SetNull)
-  orderInvoices Deal[]      @relation("DealOrder")
+  orderDeal     Deal?   @relation("DealOrder", fields: [orderDealId], references: [id], onDelete: SetNull)
+  orderInvoices Deal[]  @relation("DealOrder")
 
   // Set only for deals brought in via the historical sales-register import.
   // sourceDocKey ("<Txn Code>/<Txn No>") is what identifies the document, so
@@ -408,8 +409,8 @@ model Deal {
   // document series (Lagos invoices, sales returns, ...) separately, so the
   // same Txn No can belong to two different documents. sourceTxnNo is kept
   // as the plain invoice number for display and as the "imported" marker.
-  sourceTxnNo   Int?
-  sourceDocKey  String?     @unique
+  sourceTxnNo  Int?
+  sourceDocKey String? @unique
 
   // Set by the sales person on a Negotiation-stage deal: its line items can
   // be counted toward the next Midea factory order if they aren't in stock.
@@ -418,19 +419,20 @@ model Deal {
   // Part-billed orders: the products not billed when the order was marked
   // Won (out of stock), kept as their own open deal to bill when the stock
   // arrives - linked to the order (orderDealId) and to Pending Orders.
-  isBalance     Boolean     @default(false)
+  isBalance      Boolean @default(false)
   // Warranty in months from the invoice date, when not the standard 12.
   warrantyMonths Int?
 
-  activities    Activity[]
-  notes         Note[]
-  lineItems     SaleLineItem[]
-  items         DealLineItem[]
-  contactRoles  DealContactRole[]
-  quotations    Quotation[]
-  pendingOrders PendingOrder[]
-  complaints    ServiceComplaint[]
-  installedUnits InstalledUnit[]
+  activities      Activity[]
+  notes           Note[]
+  lineItems       SaleLineItem[]
+  items           DealLineItem[]
+  contactRoles    DealContactRole[]
+  quotations      Quotation[]
+  pendingOrders   PendingOrder[]
+  complaints      ServiceComplaint[]
+  installedUnits  InstalledUnit[]
+  installationJob InstallationJob?
 
   @@index([sourceTxnNo])
   @@index([orderDealId])
@@ -446,11 +448,11 @@ model DealContactRole {
   role      ContactRole
   createdAt DateTime    @default(now())
 
-  dealId    String
-  deal      Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   contactId String
-  contact   Contact     @relation(fields: [contactId], references: [id])
+  contact   Contact @relation(fields: [contactId], references: [id])
 
   @@unique([dealId, contactId])
 }
@@ -461,110 +463,110 @@ model DealContactRole {
 // are mirrored into SaleLineItem so Sales by Category picks them up the
 // same way historical sales do.
 model DealLineItem {
-  id          String   @id @default(cuid())
-  qty         Float
-  unitPrice   Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  qty       Float
+  unitPrice Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  dealId      String
-  deal        Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 // One row per product line within a historical sale, so sales value can be
 // broken down by product category and month/year - detail that collapses
 // away once summed into Deal.value. Populated by the Sales Register import.
 model SaleLineItem {
-  id          String    @id @default(cuid())
-  docDate     DateTime
-  month       DateTime // first-of-month
-  qty         Float
-  value       Float
+  id      String   @id @default(cuid())
+  docDate DateTime
+  month   DateTime // first-of-month
+  qty     Float
+  value   Float
 
   // Stable idempotency key from the import (txn no + item code + line
   // index), so re-running the import can't create duplicate line items.
-  sourceKey   String    @unique
+  sourceKey String @unique
 
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 
-  ownerId     String
-  owner       User      @relation("SaleLineItemOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("SaleLineItemOwner", fields: [ownerId], references: [id])
 
-  dealId      String?
-  deal        Deal?     @relation(fields: [dealId], references: [id])
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Activity {
-  id          String          @id @default(cuid())
+  id          String         @id @default(cuid())
   type        ActivityType
   subject     String
   description String?
   dueAt       DateTime?
   completedAt DateTime?
-  status      ActivityStatus  @default(PENDING)
+  status      ActivityStatus @default(PENDING)
   // Only set on CALL activities - see CallOutcome.
   callOutcome CallOutcome?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  ownerId     String
-  owner       User            @relation("ActivityOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("ActivityOwner", fields: [ownerId], references: [id])
 
-  leadId      String?
-  lead        Lead?           @relation(fields: [leadId], references: [id])
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
 
-  dealId      String?
-  deal        Deal?           @relation(fields: [dealId], references: [id])
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
 
-  contactId   String?
-  contact     Contact?        @relation(fields: [contactId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
 
   // Lets a standalone activity (logged from the Activities tab, not tied to
   // a specific Lead/Deal/Contact page) still be tagged with the account it's
   // actually about - e.g. a call attended alongside a sales manager for one
   // of their accounts.
-  accountId   String?
-  account     Account?        @relation(fields: [accountId], references: [id])
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
 }
 
 model Note {
-  id          String    @id @default(cuid())
-  body        String
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
 
-  authorId    String
-  author      User      @relation("NoteAuthor", fields: [authorId], references: [id])
+  authorId String
+  author   User   @relation("NoteAuthor", fields: [authorId], references: [id])
 
-  leadId      String?
-  lead        Lead?     @relation(fields: [leadId], references: [id])
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
 
-  dealId      String?
-  deal        Deal?     @relation(fields: [dealId], references: [id])
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
 
-  contactId   String?
-  contact     Contact?  @relation(fields: [contactId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
 }
 
 model Product {
-  id            String      @id @default(cuid())
-  code          String      @unique
-  brand         String
-  category      String
-  subCategory   String
-  model         String
-  capacityKw    Float?
+  id             String   @id @default(cuid())
+  code           String   @unique
+  brand          String
+  category       String
+  subCategory    String
+  model          String
+  capacityKw     Float?
   // Most a quotation may discount this item off its dealer's price, in %,
   // from the Stock & Price List upload; more needs the Head's approval.
   // Null = no limit recorded.
   maxDiscountPct Float?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   pricelistEntries Pricelist[]
   saleLineItems    SaleLineItem[]
@@ -590,19 +592,19 @@ model InTransitOrder {
   id          String          @id @default(cuid())
   quantity    Int
   receivedQty Int             @default(0)
-  eta         DateTime?       // tentative arrival date (UTC midnight)
+  eta         DateTime? // tentative arrival date (UTC midnight)
   orderedAt   DateTime?
-  reference   String?         // PO / proforma / container no.
+  reference   String? // PO / proforma / container no.
   note        String?
   status      InTransitStatus @default(IN_TRANSIT)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  productId   String
-  product     Product         @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 
   createdById String
-  createdBy   User            @relation("InTransitCreator", fields: [createdById], references: [id])
+  createdBy   User   @relation("InTransitCreator", fields: [createdById], references: [id])
 
   @@index([status])
 }
@@ -621,11 +623,11 @@ model StockReceipt {
   note        String?
   createdAt   DateTime @default(now())
 
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 
   createdById String
-  createdBy   User     @relation("StockReceiptCreator", fields: [createdById], references: [id])
+  createdBy   User   @relation("StockReceiptCreator", fields: [createdById], references: [id])
 
   @@index([productId, receivedAt])
 }
@@ -649,16 +651,16 @@ model PendingOrder {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  productId       String
-  product         Product            @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 
-  ownerId         String
-  owner           User               @relation("PendingOrderOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("PendingOrderOwner", fields: [ownerId], references: [id])
 
   // A balance order's products (see Deal.isBalance): fulfilled when it's
   // billed, cancelled when it's lost.
-  dealId          String?
-  deal            Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([dealId])
@@ -684,8 +686,8 @@ model Pricelist {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  productId     String
-  product       Product   @relation(fields: [productId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
 
   @@unique([productId, month])
 }
@@ -696,13 +698,13 @@ model Pricelist {
 // snapshot minus whatever's sold (Won) since asOfDate - see
 // getAvailableStockByProduct() in src/lib/pricing.ts.
 model ProductStock {
-  id          String   @id @default(cuid())
-  quantity    Int
-  asOfDate    DateTime
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  quantity  Int
+  asOfDate  DateTime
+  updatedAt DateTime @updatedAt
 
-  productId   String   @unique
-  product     Product  @relation(fields: [productId], references: [id])
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 // A standalone, quotable "model name -> tentative price" lookup, entirely
@@ -732,22 +734,22 @@ model AppSetting {
 // stock and product reports (they aren't product sales), but counted in a
 // sales person's incentive. Rebuilt with the register like SaleLineItem.
 model ProjectBilling {
-  id        String   @id @default(cuid())
-  sourceKey String   @unique // document + item + occurrence, like SaleLineItem
-  docKey    String
-  txnNo     Int
-  docDate   DateTime
-  month     DateTime // first-of-month
-  custName  String
-  itemCode  String
-  itemName  String
-  value     Float    // net, so returns come off
+  id             String   @id @default(cuid())
+  sourceKey      String   @unique // document + item + occurrence, like SaleLineItem
+  docKey         String
+  txnNo          Int
+  docDate        DateTime
+  month          DateTime // first-of-month
+  custName       String
+  itemCode       String
+  itemName       String
+  value          Float // net, so returns come off
   // Sakuragi / Somotex - from the register's billing entity, or set in the
   // CRM; null = not recorded.
   billingCompany String?
 
-  ownerId   String
-  owner     User     @relation("ProjectBillingOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("ProjectBillingOwner", fields: [ownerId], references: [id])
 
   createdAt DateTime @default(now())
 
@@ -762,23 +764,23 @@ model ProjectBilling {
 model Quotation {
   id           String   @id @default(cuid())
   ref          String   @unique
-  type         String   // quote / proforma / boq
+  type         String // quote / proforma / boq
   customerName String
   total        Float    @default(0)
   data         Json
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  dealId       String?
-  deal         Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   // The sales person the quote is for (picked by the Head / Coordinator
   // when they prepare it); createdBy is whoever prepared it.
-  ownerId      String
-  owner        User     @relation("QuotationOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("QuotationOwner", fields: [ownerId], references: [id])
 
-  createdById  String
-  createdBy    User     @relation("QuotationCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("QuotationCreator", fields: [createdById], references: [id])
 
   // Discounts over an item's permissible maximum: "pending" (download held
   // until the Head decides), "approved" or "rejected". discountRequest is
@@ -798,7 +800,7 @@ model Quotation {
   // it's followed up (next follow-up date) or marked lost.
   lastFollowUpAt DateTime?
   nextFollowUpAt DateTime?
-  outcome        String?  // "lost"
+  outcome        String? // "lost"
   outcomeNote    String?
 
   @@index([dealId])
@@ -811,17 +813,17 @@ model Quotation {
 // restored - the record and what went with it (products, Sales Register
 // lines, contact roles; activities, notes and quotations are re-linked).
 model DeletedRecord {
-  id          String   @id @default(cuid())
-  kind        String   // "deal" | "lead" | "leadBatch" | "billing" | "quotation"
-  recordId    String
-  label       String
-  ownerName   String?
-  value       Float    @default(0)
-  data        Json
-  deletedAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  kind      String // "deal" | "lead" | "leadBatch" | "billing" | "quotation"
+  recordId  String
+  label     String
+  ownerName String?
+  value     Float    @default(0)
+  data      Json
+  deletedAt DateTime @default(now())
 
   deletedById String
-  deletedBy   User     @relation("DeletedBy", fields: [deletedById], references: [id])
+  deletedBy   User   @relation("DeletedBy", fields: [deletedById], references: [id])
 
   @@index([deletedAt])
 }
@@ -832,14 +834,14 @@ model DeletedRecord {
 // outlives a deleted record.
 model AuditLog {
   id        String   @id @default(cuid())
-  entity    String   // "lead" | "deal"
+  entity    String // "lead" | "deal"
   entityId  String
-  action    String   // created / edited / stage / won / lost / converted / deleted / restored ...
+  action    String // created / edited / stage / won / lost / converted / deleted / restored ...
   details   String?
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User     @relation("AuditUser", fields: [userId], references: [id])
+  userId String
+  user   User   @relation("AuditUser", fields: [userId], references: [id])
 
   @@index([entity, entityId, createdAt])
 }
@@ -856,8 +858,8 @@ model ServiceInvoice {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdById  String
-  createdBy    User     @relation("ServiceInvoiceCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("ServiceInvoiceCreator", fields: [createdById], references: [id])
 
   @@index([createdById])
 }
@@ -867,10 +869,10 @@ model ServiceInvoice {
 // and the spares / consumables used (free in warranty, charged out of it).
 // Head, Sales Coordinator and the Service Manager.
 model ServiceComplaint {
-  id             String    @id @default(cuid())
-  ref            String    @unique // SC/2026/0001
-  registeredAt   DateTime  // date and time the customer complained
-  status         String    @default("OPEN") // OPEN, ASSIGNED, IN_PROGRESS, AWAITING_SPARES, RESOLVED, CLOSED, CANCELLED
+  id           String   @id @default(cuid())
+  ref          String   @unique // SC/2026/0001
+  registeredAt DateTime // date and time the customer complained
+  status       String   @default("OPEN") // OPEN, ASSIGNED, IN_PROGRESS, AWAITING_SPARES, RESOLVED, CLOSED, CANCELLED
 
   // The customer and the sale (invoice) the unit came from.
   customerName   String
@@ -883,13 +885,13 @@ model ServiceComplaint {
   deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
   invoiceNo      String?
   invoiceDate    DateTime?
-  billingCompany String?   // Sakuragi / Somotex
+  billingCompany String? // Sakuragi / Somotex
 
   // The unit.
-  productId      String?
-  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  model          String?
-  serialNo       String?
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  model     String?
+  serialNo  String?
 
   // Warranty: the invoice date + warrantyMonths (12 unless the sale has
   // other terms); inWarranty can be overridden with a note.
@@ -898,32 +900,32 @@ model ServiceComplaint {
   inWarranty     Boolean   @default(false)
   warrantyNote   String?
 
-  nature         String    // e.g. Not cooling, Water leakage
-  description    String?
-  priority       String    @default("NORMAL") // NORMAL, URGENT
+  nature      String // e.g. Not cooling, Water leakage
+  description String?
+  priority    String  @default("NORMAL") // NORMAL, URGENT
 
   // Attending.
-  technician     String?
-  assignedAt     DateTime?
-  attendedAt     DateTime? // first visit
-  visits         Int       @default(0)
-  resolvedAt     DateTime?
-  closedAt       DateTime?
-  rootCause      String?
-  resolution     String?
-  feedback       Int?      // customer rating 1-5
+  technician String?
+  assignedAt DateTime?
+  attendedAt DateTime? // first visit
+  visits     Int       @default(0)
+  resolvedAt DateTime?
+  closedAt   DateTime?
+  rootCause  String?
+  resolution String?
+  feedback   Int? // customer rating 1-5
 
   // Out of warranty: service charge and the invoice raised.
-  serviceCharge  Float     @default(0)
+  serviceCharge   Float   @default(0)
   chargeInvoiceNo String?
 
   registeredById String
-  registeredBy   User      @relation("ComplaintRegisteredBy", fields: [registeredById], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  registeredBy   User     @relation("ComplaintRegisteredBy", fields: [registeredById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  parts          ServiceComplaintPart[]
-  warrantyClaim  WarrantyClaim?
+  parts         ServiceComplaintPart[]
+  warrantyClaim WarrantyClaim?
 
   @@index([status])
   @@index([registeredAt])
@@ -932,18 +934,18 @@ model ServiceComplaint {
 
 // Spares and consumables used on a complaint.
 model ServiceComplaintPart {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   complaintId String
   complaint   ServiceComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-  kind        String   // SPARE, CONSUMABLE
+  kind        String // SPARE, CONSUMABLE
   name        String
   qty         Float
-  unit        String   @default("No.")
-  unitCost    Float    @default(0) // what it cost us
-  unitPrice   Float    @default(0) // charged to the customer (0 in warranty)
-  chargeable  Boolean  @default(false)
-  usedAt      DateTime @default(now())
-  createdAt   DateTime @default(now())
+  unit        String           @default("No.")
+  unitCost    Float            @default(0) // what it cost us
+  unitPrice   Float            @default(0) // charged to the customer (0 in warranty)
+  chargeable  Boolean          @default(false)
+  usedAt      DateTime         @default(now())
+  createdAt   DateTime         @default(now())
 
   @@index([complaintId])
 }
@@ -954,33 +956,33 @@ model ServiceComplaintPart {
 // date (the sale's months, else 12) - the list of warranties ending is where
 // AMCs are sold.
 model InstalledUnit {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   // The sale line it came from (SaleLineItem.sourceKey); none if added by hand.
-  saleKey        String?   @unique
+  saleKey        String?      @unique
   customerName   String
   accountId      String?
-  account        Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account        Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   dealId         String?
-  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  deal           Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
   invoiceNo      String?
   invoiceDate    DateTime?
   billingCompany String?
   productId      String?
-  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   model          String
   category       String?
-  qty            Int       @default(1)
-  serialNos      String[]  @default([])
+  qty            Int          @default(1)
+  serialNos      String[]     @default([])
   siteAddress    String?
   phone          String?
   installedAt    DateTime?
-  warrantyMonths Int       @default(12)
+  warrantyMonths Int          @default(12)
   warrantyUntil  DateTime?
   notes          String?
   amcId          String?
   amc            AmcContract? @relation(fields: [amcId], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([warrantyUntil])
   @@index([accountId])
@@ -991,44 +993,44 @@ model InstalledUnit {
 // value and planned visits. Complaints on covered units are free like in
 // warranty (spares too when comprehensive).
 model AmcContract {
-  id            String    @id @default(cuid())
-  ref           String    @unique // AMC/2026/0001
-  customerName  String
-  accountId     String?
-  account       Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  contactName   String?
-  phone         String?
-  siteAddress   String?
-  startDate     DateTime
-  endDate       DateTime
-  value         Float     @default(0) // excl. VAT, for the period
-  visitsPerYear Int       @default(4)
+  id             String          @id @default(cuid())
+  ref            String          @unique // AMC/2026/0001
+  customerName   String
+  accountId      String?
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactName    String?
+  phone          String?
+  siteAddress    String?
+  startDate      DateTime
+  endDate        DateTime
+  value          Float           @default(0) // excl. VAT, for the period
+  visitsPerYear  Int             @default(4)
   // Comprehensive: spares covered too; else labour / servicing only.
-  comprehensive Boolean   @default(false)
+  comprehensive  Boolean         @default(false)
   billingCompany String?
-  invoiceNo     String?
-  cancelled     Boolean   @default(false)
-  notes         String?
-  renewedFromId String?
-  createdById   String
-  createdBy     User      @relation("AmcCreatedBy", fields: [createdById], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  units         InstalledUnit[]
-  visits        AmcVisit[]
+  invoiceNo      String?
+  cancelled      Boolean         @default(false)
+  notes          String?
+  renewedFromId  String?
+  createdById    String
+  createdBy      User            @relation("AmcCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  units          InstalledUnit[]
+  visits         AmcVisit[]
 
   @@index([endDate])
 }
 
 model AmcVisit {
-  id          String    @id @default(cuid())
-  contractId  String
-  contract    AmcContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  dueDate     DateTime
-  doneAt      DateTime?
-  technician  String?
-  notes       String?
-  createdAt   DateTime  @default(now())
+  id         String      @id @default(cuid())
+  contractId String
+  contract   AmcContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  dueDate    DateTime
+  doneAt     DateTime?
+  technician String?
+  notes      String?
+  createdAt  DateTime    @default(now())
 
   @@index([contractId])
   @@index([dueDate])
@@ -1038,41 +1040,72 @@ model AmcVisit {
 // an in-warranty complaint, claimed back - one claim per complaint, from
 // draft to submitted, approved / rejected and credited.
 model WarrantyClaim {
-  id             String    @id @default(cuid())
-  ref            String    @unique // WC/2026/0001
-  complaintId    String    @unique
-  complaint      ServiceComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-  manufacturer   String    @default("Midea")
-  status         String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CREDITED
-  claimAmount    Float     @default(0) // the lines' total, at our cost
-  claimNo        String?   // the manufacturer's reference
-  submittedAt    DateTime?
-  decidedAt      DateTime?
-  approvedAmount Float?
-  creditedAmount Float?
-  creditedAt     DateTime?
-  creditNoteNo   String?
-  partsReturned  Boolean   @default(false) // faulty parts sent back
+  id              String              @id @default(cuid())
+  ref             String              @unique // WC/2026/0001
+  complaintId     String              @unique
+  complaint       ServiceComplaint    @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  manufacturer    String              @default("Midea")
+  status          String              @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, CREDITED
+  claimAmount     Float               @default(0) // the lines' total, at our cost
+  claimNo         String? // the manufacturer's reference
+  submittedAt     DateTime?
+  decidedAt       DateTime?
+  approvedAmount  Float?
+  creditedAmount  Float?
+  creditedAt      DateTime?
+  creditNoteNo    String?
+  partsReturned   Boolean             @default(false) // faulty parts sent back
   partsReturnedAt DateTime?
-  reason         String?   // why rejected
-  notes          String?
-  createdById    String
-  createdBy      User      @relation("ClaimCreatedBy", fields: [createdById], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  lines          WarrantyClaimLine[]
+  reason          String? // why rejected
+  notes           String?
+  createdById     String
+  createdBy       User                @relation("ClaimCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  lines           WarrantyClaimLine[]
 
   @@index([status])
 }
 
 model WarrantyClaimLine {
-  id        String  @id @default(cuid())
-  claimId   String
-  claim     WarrantyClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  name      String
-  qty       Float
-  unitCost  Float   @default(0)
-  partId    String? // the complaint's spare it came from
+  id       String        @id @default(cuid())
+  claimId  String
+  claim    WarrantyClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  name     String
+  qty      Float
+  unitCost Float         @default(0)
+  partId   String? // the complaint's spare it came from
 
   @@index([claimId])
+}
+
+// Supply + installation orders: the sales person hands the won deal over
+// to service (site, contact, preferred date, notes for the installer); the
+// Service Manager schedules it, assigns the team and commissions it,
+// recording each unit's serial no. on the installed base. Supply-only
+// sales (e.g. to contractors) have no job.
+model InstallationJob {
+  id             String    @id @default(cuid())
+  ref            String    @unique // INS/2026/0001
+  dealId         String    @unique
+  deal           Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  customerName   String
+  contactName    String?
+  phone          String?
+  siteAddress    String?
+  preferredDate  DateTime?
+  handoverNotes  String?
+  status         String    @default("PENDING") // PENDING, SCHEDULED, IN_PROGRESS, COMMISSIONED, CANCELLED
+  scheduledDate  DateTime?
+  team           String?
+  startedAt      DateTime?
+  commissionedAt DateTime?
+  notes          String?
+  cancelReason   String?
+  createdById    String
+  createdBy      User      @relation("InstallationCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
 }

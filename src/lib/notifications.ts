@@ -8,6 +8,7 @@ import { canUseService } from "@/lib/service-access";
 import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
 import { claimableWhere } from "@/lib/warranty-claims";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
+import { awaitingHandoverWhere } from "@/lib/installation";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
 export type NotificationGroup = { key: string; label: string; count: number; href: string; items: NotificationItem[] };
@@ -193,6 +194,24 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     });
   }
 
+  // Won supply + installation orders not handed over to service yet (the
+  // Service Manager sees these on the Installations tab instead).
+  const notHandedOver = await prisma.deal.findMany({
+    where: { ...own, ...awaitingHandoverWhere(now) },
+    orderBy: { closedAt: "desc" },
+    select: { id: true, title: true, owner: { select: { name: true } } },
+    take: 100,
+  });
+  if (notHandedOver.length) {
+    groups.push({
+      key: "handover",
+      label: "Won with installation - hand over to service",
+      count: notHandedOver.length,
+      href: `/deals/${notHandedOver[0].id}`,
+      items: notHandedOver.slice(0, SHOW).map((d) => ({ label: d.title, sub: team ? d.owner.name : undefined, href: `/deals/${d.id}` })),
+    });
+  }
+
   if (user.role === "HEAD") {
     // Discounts beyond the threshold, not yet approved.
     const [open, prices] = await Promise.all([
@@ -322,6 +341,37 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
         take: 200,
       }),
     ]);
+    // Installations: handed over and not scheduled; past their date.
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const installs = await prisma.installationJob.findMany({
+      where: { OR: [{ status: "PENDING" }, { status: { in: ["SCHEDULED", "IN_PROGRESS"] }, scheduledDate: { lt: startOfToday } }] },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, ref: true, customerName: true, status: true, scheduledDate: true, preferredDate: true, createdAt: true },
+      take: 200,
+    });
+    const toSchedule = installs.filter((j) => j.status === "PENDING");
+    const lateInstalls = installs.filter((j) => j.status !== "PENDING");
+    if (toSchedule.length)
+      groups.push({
+        key: "installSchedule",
+        label: "Installations to schedule",
+        count: toSchedule.length,
+        href: "/service/installations?status=PENDING",
+        items: toSchedule.slice(0, SHOW).map((j) => ({
+          label: `${j.ref} - ${j.customerName}`,
+          sub: j.preferredDate ? `Customer prefers ${fmt(j.preferredDate)}` : `Handed over ${fmt(j.createdAt)}`,
+          href: `/service/installations/${j.id}`,
+        })),
+      });
+    if (lateInstalls.length)
+      groups.push({
+        key: "installLate",
+        label: "Installations past their date - commission or reschedule",
+        count: lateInstalls.length,
+        href: "/service/installations",
+        items: lateInstalls.slice(0, SHOW).map((j) => ({ label: `${j.ref} - ${j.customerName}`, sub: `Scheduled ${fmt(j.scheduledDate!)}`, href: `/service/installations/${j.id}` })),
+      });
+
     const withSla = open.map((c) => ({ c, s: slaSummary(c, sla, now) }));
     const breached = withSla.filter((x) => x.s.state === "breached");
     const atRisk = withSla.filter((x) => x.s.state === "at_risk");
