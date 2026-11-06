@@ -95,7 +95,7 @@ async function logSent(user: SessionUser, q: NonNullable<Awaited<ReturnType<type
   const now = new Date();
   await prisma.activity.create({
     data: {
-      type: channel === "EMAIL" ? "EMAIL" : "NOTE",
+      type: channel,
       subject: `Quotation ${q.ref} sent by ${channel === "EMAIL" ? "email" : "WhatsApp"}${to ? ` to ${to}` : ""}`.slice(0, 200),
       description: note?.slice(0, 2000) || null,
       status: "COMPLETED",

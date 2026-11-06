@@ -10,6 +10,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
+import { formatNgPhone } from "@/lib/phone";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
 import { getLatestPriceByProduct } from "@/lib/pricing";
@@ -227,7 +228,7 @@ export async function createDeal(formData: FormData) {
     data: {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
-      customerPhone: toNullable(parsed.customerPhone),
+      customerPhone: formatNgPhone(parsed.customerPhone),
       customerEmail: toNullable(parsed.customerEmail),
       stage: parsed.stage,
       stageChangedAt: new Date(),
@@ -306,7 +307,7 @@ export async function updateDeal(dealId: string, formData: FormData) {
     data: {
       title: parsed.title,
       customerName: toNullable(parsed.customerName),
-      customerPhone: toNullable(parsed.customerPhone),
+      customerPhone: formatNgPhone(parsed.customerPhone),
       ...(formData.has("customerEmail") ? { customerEmail: toNullable(parsed.customerEmail) } : {}),
       stage,
       ...(stage !== existing.stage ? { stageChangedAt: new Date() } : {}),

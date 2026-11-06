@@ -62,7 +62,7 @@ export async function addActivity(
 
   await prisma.activity.create({
     data: {
-      type: type as "CALL" | "EMAIL" | "MEETING" | "TASK" | "NOTE",
+      type: type as ActivityType,
       subject,
       description: description || null,
       dueAt: dueAtRaw ? new Date(String(dueAtRaw)) : null,

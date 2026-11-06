@@ -7,8 +7,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { binLead } from "@/lib/recycle-bin";
+import { formatNgPhone } from "@/lib/phone";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
-import { DEAL_STAGE_LABELS, STAGE_DEFAULT_PROBABILITY } from "@/lib/constants";
+import { DEAL_STAGE_LABELS, STAGE_DEFAULT_PROBABILITY, QUICK_ADD_TAG } from "@/lib/constants";
 import { parseTagsInput } from "@/lib/tags";
 import type { EquipmentType, DealStage, Lead, PurchaseTimeframe } from "@prisma/client";
 
@@ -89,7 +90,7 @@ export async function createLead(formData: FormData) {
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: toNullable(parsed.phone),
+      phone: formatNgPhone(parsed.phone),
       notes: toNullable(parsed.notes),
       tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),
@@ -132,7 +133,7 @@ export async function updateLead(leadId: string, formData: FormData) {
       expectedPurchaseTimeframe: toPurchaseTimeframe(parsed.expectedPurchaseTimeframe),
       value: parsed.value ?? null,
       email: toNullable(parsed.email),
-      phone: toNullable(parsed.phone),
+      phone: formatNgPhone(parsed.phone),
       notes: toNullable(parsed.notes),
       tags: parseTagsInput(formData.get("tags")),
       accountId: toNullable(parsed.accountId),
@@ -271,4 +272,48 @@ export async function bulkConvertSelectedLeads(leadIds: string[]): Promise<BulkC
   revalidatePath("/deals");
 
   return { summary: { converted, skipped, totalValue } };
+}
+
+// Quick add (the + Lead button in the top bar): a lead in three fields -
+// who, their phone no., what they need - the rest filled in later (the bell
+// reminds, see "Quick add" leads in notifications.ts).
+export async function quickAddLead(input: { name: string; phone: string; need: string; ownerId?: string }): Promise<{ id?: string; error?: string }> {
+  const user = await requireUser();
+  const name = input.name.trim().slice(0, 200);
+  const need = input.need.trim().slice(0, 500);
+  if (!name) return { error: "Who is it? Enter the customer or company name." };
+  if (!need) return { error: "What do they need? (e.g. 4 x 2HP splits for an office)" };
+  const { formatNgPhone } = await import("@/lib/phone");
+  const phone = formatNgPhone(input.phone);
+  if (!phone && !isBackOffice(user)) return { error: "Enter their phone no." };
+  let ownerId = user.id;
+  if (isBackOffice(user)) {
+    ownerId = input.ownerId || (await backOfficeDefaultOwner(user));
+    const problem = await dealOwnerProblem(ownerId);
+    if (problem) return { error: problem };
+  }
+  const lead = await prisma.lead.create({
+    data: {
+      title: `${name} - ${need}`.slice(0, 200),
+      customerName: name,
+      company: name,
+      phone,
+      notes: need,
+      status: "NEW",
+      source: "DIRECT",
+      tags: [QUICK_ADD_TAG],
+      ownerId,
+    },
+  });
+  await audit("lead", lead.id, user.id, "created", "Quick add - details to be filled in.");
+  revalidatePath("/leads");
+  return { id: lead.id };
+}
+
+// The people a quick-added lead can be for (the Head / Coordinator pick).
+export async function quickAddOwners(): Promise<{ id: string; name: string }[]> {
+  const user = await requireUser();
+  if (!isBackOffice(user)) return [];
+  const { dealOwnerOptions } = await import("@/lib/deal-owner");
+  return dealOwnerOptions();
 }

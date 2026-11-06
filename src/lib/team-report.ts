@@ -11,7 +11,7 @@ import type { DealStage, LostReason } from "@prisma/client";
 const DAY = 86400000;
 const OPEN: DealStage[] = ["QUALIFICATION", "NEEDS_ANALYSIS", "PROPOSAL", "NEGOTIATION"];
 const STALE_DAYS = 14;
-const CONTACT = new Set(["CALL", "EMAIL", "MEETING"]);
+const CONTACT = new Set(["CALL", "WHATSAPP", "SITE_VISIT", "EMAIL", "MEETING"]);
 
 export type RepScore = {
   id: string;

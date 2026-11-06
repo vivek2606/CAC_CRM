@@ -9,6 +9,7 @@ import { RENEWAL_NOTICE_DAYS } from "@/lib/amc";
 import { claimableWhere } from "@/lib/warranty-claims";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { awaitingHandoverWhere } from "@/lib/installation";
+import { QUICK_ADD_TAG } from "@/lib/constants";
 import { getGoneQuiet } from "@/lib/win-back";
 import { STALE_DAYS, lastContact, stalledWhere } from "@/lib/stalled";
 
@@ -214,6 +215,28 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
       count: undelivered.length,
       href: `/deals/${undelivered[0].id}`,
       items: undelivered.slice(0, SHOW).map((d) => ({ label: d.title, sub: `Won ${fmt(d.closedAt!)}${who(d.owner.name)}`, href: `/deals/${d.id}` })),
+    });
+
+  // Leads quick-added (top bar) and still missing their details a few hours on.
+  const quickLeads = await prisma.lead.findMany({
+    where: {
+      ownerId: user.id,
+      tags: { has: QUICK_ADD_TAG },
+      status: { in: ["NEW", "CONTACTED", "QUALIFIED"] },
+      createdAt: { lt: new Date(now.getTime() - 3 * 3600000) },
+      OR: [{ equipmentType: null }, { value: null }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, title: true, createdAt: true },
+    take: 50,
+  });
+  if (quickLeads.length)
+    groups.push({
+      key: "quickLeads",
+      label: "Quick-added leads - fill in the details",
+      count: quickLeads.length,
+      href: `/leads/${quickLeads[0].id}/edit`,
+      items: quickLeads.slice(0, SHOW).map((l) => ({ label: l.title, sub: `Added ${fmt(l.createdAt)} - add the value and equipment`, href: `/leads/${l.id}/edit` })),
     });
 
   // Won supply + installation orders not handed over to service yet (the

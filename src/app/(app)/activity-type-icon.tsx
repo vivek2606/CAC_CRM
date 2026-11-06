@@ -1,4 +1,4 @@
-import { Phone, Mail, Users, CheckSquare, StickyNote } from "lucide-react";
+import { Phone, Mail, Users, CheckSquare, StickyNote, MapPin, MessageCircle } from "lucide-react";
 import type { ActivityType } from "@prisma/client";
 
 const ICONS: Record<ActivityType, typeof Phone> = {
@@ -7,6 +7,8 @@ const ICONS: Record<ActivityType, typeof Phone> = {
   MEETING: Users,
   TASK: CheckSquare,
   NOTE: StickyNote,
+  SITE_VISIT: MapPin,
+  WHATSAPP: MessageCircle,
 };
 
 export function ActivityTypeIcon({ type, className }: { type: ActivityType; className?: string }) {

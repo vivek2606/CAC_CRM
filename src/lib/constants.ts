@@ -262,7 +262,9 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   GOVERNMENT: "Government",
 };
 
-export const ACTIVITY_TYPES: ActivityType[] = ["CALL", "EMAIL", "MEETING", "TASK", "NOTE"];
+export const ACTIVITY_TYPES: ActivityType[] = ["CALL", "WHATSAPP", "SITE_VISIT", "EMAIL", "MEETING", "TASK", "NOTE"];
+// Activities that are contact with the customer (not tasks or notes).
+export const CONTACT_ACTIVITY_TYPES: ActivityType[] = ["CALL", "WHATSAPP", "SITE_VISIT", "EMAIL", "MEETING"];
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   CALL: "Call",
@@ -270,6 +272,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
   MEETING: "Meeting",
   TASK: "Task",
   NOTE: "Note",
+  SITE_VISIT: "Site visit",
+  WHATSAPP: "WhatsApp",
 };
 
 export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
@@ -341,3 +345,6 @@ export const COMPETITOR_BRANDS = [
   "Midea (Other Source)",
   "Others",
 ] as const;
+
+// The tag on a lead added with the top bar's quick add (details to fill in).
+export const QUICK_ADD_TAG = "Quick add";

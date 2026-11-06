@@ -16,6 +16,7 @@ import {
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENT_LABELS,
   PURCHASE_TIMEFRAME_LABELS,
+  CONTACT_ACTIVITY_TYPES,
 } from "@/lib/constants";
 import { RecordTimeline } from "../../record-timeline";
 import { TagChips } from "@/components/tag-chips";
@@ -46,7 +47,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   // "First contacted" (HubSpot's time-to-first-contact): the earliest
   // logged CALL/EMAIL/MEETING activity on this lead, distinct from any
   // TASK/NOTE which aren't actual outreach to the customer.
-  const contactActivities = lead.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+  const contactActivities = lead.activities.filter((a) => CONTACT_ACTIVITY_TYPES.includes(a.type));
   const firstContactAt =
     contactActivities.length > 0
       ? contactActivities.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contactActivities[0].createdAt)

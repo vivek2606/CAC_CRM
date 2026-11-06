@@ -18,6 +18,7 @@ import {
   EQUIPMENT_TYPE_LABELS,
   END_USE_SEGMENT_LABELS,
   PAYMENT_TERMS_LABELS,
+  CONTACT_ACTIVITY_TYPES,
 } from "@/lib/constants";
 import { RecordTimeline } from "../../record-timeline";
 import { TagChips } from "@/components/tag-chips";
@@ -82,7 +83,7 @@ export default async function DealDetailPage({
   // capital-goods business where enquiries mostly land directly as a Deal,
   // this is the number that reflects how fast the enquiry actually got a
   // response, not just when the deal record was created.
-  const contactActivities = deal.activities.filter((a) => a.type === "CALL" || a.type === "EMAIL" || a.type === "MEETING");
+  const contactActivities = deal.activities.filter((a) => CONTACT_ACTIVITY_TYPES.includes(a.type));
   const firstContactAt =
     contactActivities.length > 0
       ? contactActivities.reduce((min, a) => (a.createdAt < min ? a.createdAt : min), contactActivities[0].createdAt)

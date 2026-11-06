@@ -87,6 +87,8 @@ enum ActivityType {
   MEETING
   TASK
   NOTE
+  SITE_VISIT
+  WHATSAPP
 }
 
 enum ActivityStatus {

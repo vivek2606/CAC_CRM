@@ -11,7 +11,7 @@ const day = 86400000;
 export type FollowUpChannel = "CALL" | "WHATSAPP" | "EMAIL" | "MEETING";
 const CHANNEL: Record<FollowUpChannel, { type: ActivityType; label: string }> = {
   CALL: { type: "CALL", label: "Call" },
-  WHATSAPP: { type: "NOTE", label: "WhatsApp" },
+  WHATSAPP: { type: "WHATSAPP", label: "WhatsApp" },
   EMAIL: { type: "EMAIL", label: "Email" },
   MEETING: { type: "MEETING", label: "Meeting" },
 };

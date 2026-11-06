@@ -77,6 +77,8 @@ The Service Manager's Dashboard is the **Service Dashboard** instead: pending co
     for: SALES_SIDE,
     body: `A **lead** is any enquiry that isn't a firm requirement yet: a phone call, a walk-in, a referral, a tender notice. Log it the same day so it counts towards your conversion and nobody else chases the same customer.
 
+**On the phone? Quick add.** The **+ Lead** button at the top of every page adds a lead in three fields - who, their phone no., what they need. Fill in the rest (value, equipment, source) later; the bell reminds you a few hours on.
+
 **Add a lead:** Leads & Activities → **New Lead**. Fill in the title, customer name, contact number, company, estimated value, equipment type, source and expected purchase timeframe. Link it to the customer's **account** if they already buy from us. As you type the phone no. or company, the CRM warns if the customer is **already in the CRM** - and whose it is ("Rohan Verma's") - so check with them before adding it. The Head and the Coordinator can save a lead with only a title and fill in the rest later.
 
 **Move it along** by changing its status:
@@ -87,7 +89,7 @@ The Service Manager's Dashboard is the **Service Dashboard** instead: pending co
 4. **Converted** - click **Convert to Deal** when they ask for a quotation; the lead's details carry over.
 5. **Unqualified** - not a real prospect; say why in the notes.
 
-**Activities** are your diary: calls, emails, meetings, tasks and notes on a lead, deal or account. Add one each time you speak to the customer and set the next one with a due date. Due activities show under **Upcoming activities** on the Dashboard and in the bell.
+**Activities** are your diary: calls, **WhatsApp** messages, **site visits**, emails, meetings, tasks and notes on a lead, deal or account. Calls, WhatsApp, site visits, emails and meetings count as contact with the customer (a deal with none for 14 days is flagged as stalled). Nigerian phone numbers are saved as +234 803 123 4567 however they're typed, so WhatsApp links always work. Add one each time you speak to the customer and set the next one with a due date. Due activities show under **Upcoming activities** on the Dashboard and in the bell.
 
 You don't always need to create the lead by hand: a deal created directly gets its lead made automatically (dated 2 days before), and so does an equipment quotation downloaded without a deal (see Quotations).`,
   },

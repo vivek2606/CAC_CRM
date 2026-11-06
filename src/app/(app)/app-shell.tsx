@@ -10,6 +10,7 @@ import { SearchBox } from "./search-box";
 import { SakuragiMark } from "@/components/sakuragi-logo";
 import { CalculatorButton } from "@/components/calculator";
 import { NotificationBell } from "@/components/notification-bell";
+import { QuickAddLeadButton } from "@/components/quick-add-lead";
 
 // In-app tabs: the installed app has no browser tab strip, so each menu
 // section opens in a tab of its own here. The first tab is the normal page;
@@ -247,6 +248,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
                 <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
                 <span className="hidden sm:inline">{busy ? "Refreshing…" : "Refresh"}</span>
               </button>
+              {user.title !== "Service Manager" && <QuickAddLeadButton backOffice={user.role === "HEAD" || user.role === "COORDINATOR"} />}
               <NotificationBell onNavigate={() => setActive("main")} />
               <CalculatorButton />
             </div>
