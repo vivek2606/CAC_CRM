@@ -58,6 +58,8 @@ The search box at the top finds leads, accounts, products, contacts and deals by
 | Open Pipeline | Open deals, their value, and the weighted value (value × winning chance) |
 | New Leads This Month | New enquiries, compared with last month |
 | Lost This Month | Deals lost and their value - check the reasons |
+| Pipeline coverage | Open deals closing in the next 3 months ÷ target still to go. 3× or more is healthy, under 2× the target is at risk - build pipeline now |
+| Lead funnel | Last 90 days' leads: how many became deals, got a quote and were won. The smallest % is where leads are lost (▼ in the team table) |
 | Quotations to follow up | Quotes sent 7+ days ago with no follow-up (amber at 7 days, red at 14) |
 | Target vs sales, Pipeline movement, Pipeline by stage | Trends: are you filling the pipeline as fast as you close it? |
 | New leads by sales person | Each sales person's new and active leads and their lead-to-deal conversion |

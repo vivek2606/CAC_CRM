@@ -22,6 +22,8 @@ import { isServiceManager } from "@/lib/service-access";
 import { ServiceDashboard } from "./service-dashboard";
 import { getQuoteFollowUps, followUpItems, FOLLOW_UP_RED_DAYS } from "@/lib/quote-followups";
 import { FollowUpList } from "./quotations/follow-ups/follow-up-list";
+import { getCoverage, getFunnel, COVERAGE_MONTHS } from "@/lib/coverage-funnel";
+import { CoverageFunnelCard } from "./coverage-funnel-card";
 
 const TREND_MONTHS = 6;
 const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -147,6 +149,9 @@ export default async function DashboardPage() {
     .map((st) => ({ label: LEAD_STATUS_LABELS[st], count: leadCount.get(st) ?? 0, value: 0, fill: LEAD_STATUS_CHART_COLORS[st] }))
     .filter((row) => row.count > 0);
   const monthSales = await getMonthSales(ownerIds, thisMonth, nextMonth, repIds);
+  const [coverage, funnel] = await Promise.all([getCoverage(reps, now), getFunnel(reps, now)]);
+  const lastCoverMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + COVERAGE_MONTHS - 1, 1));
+  const coverWindow = `${thisMonth.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })}–${lastCoverMonth.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`;
   // Open / converted / won, this month, per sales person.
   const pipelineMonth = await getMonthlyPipeline(reps, [thisMonth], now);
   const monthLast = new Date(nextMonth.getTime() - 86400000).toISOString().slice(0, 10);
@@ -220,6 +225,8 @@ export default async function DashboardPage() {
             accent="rose"
           />
         </div>
+
+        <CoverageFunnelCard team={team} coverage={coverage} funnel={funnel} windowLabel={coverWindow} />
 
         {followUps.length > 0 && (
           <Card className="p-5">
