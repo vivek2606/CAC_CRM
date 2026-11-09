@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { formatCompactCurrency, formatDate } from "@/lib/format";
 import { ActivityRow } from "../activity-row";
@@ -12,6 +12,9 @@ import { canUseService, isServiceManager } from "@/lib/service-access";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { PENDING_STATUSES } from "@/lib/service";
 import { CheckInButton } from "./visit-ui";
+import { getStandards, weeklyCounts } from "@/lib/activity-standards";
+import { Scorecard, ScorecardLink } from "../standards/scorecard";
+
 
 // My Day: everything to do today in one list - activities due, quotations
 // to follow up, deals and customers to call; for the Service Manager also
@@ -183,6 +186,19 @@ export default async function MyDayPage() {
   }
 
   const todayLabel = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" });
+  // This week against the weekly minimums (sales people).
+  const standardsBlock =
+    sales && !isBackOffice(user)
+      ? await Promise.all([getStandards(), weeklyCounts([user.id], 1, now)]).then(([standards, { byUser }]) => (
+          <Section title="This week's activity standards">
+            <Scorecard counts={byUser[user.id][0]} standards={standards} compact />
+            <div className="mt-2 text-right">
+              <ScorecardLink />
+            </div>
+          </Section>
+        ))
+      : null;
+
   return (
     <div>
       <PageHeader
@@ -195,6 +211,7 @@ export default async function MyDayPage() {
         }
       />
       <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
+        {standardsBlock}
         {visitsToday.length > 0 && (
           <Section title="Visits today" count={visitsToday.length} href="/my-day/plan">
             <ul className="divide-y divide-slate-100 text-sm">

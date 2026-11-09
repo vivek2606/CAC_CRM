@@ -254,6 +254,7 @@ Most sales - to contractors - are supply only and need nothing here. When **we**
 | Menu | Use it to |
 | --- | --- |
 | Monthly review pack | One month for the division or one person: sales vs target, year to date, vs last year, each person's figures, wins and losses with reasons, the funnel, activities, forecast accuracy and service - print / save as PDF or download Excel (button on Team Reports; sales people get their own from the Dashboard) |
+| Activity Standards | Weekly minimums for each sales person (set by the Head; 25 calls, 5 site visits, 5 quotations, 3 new leads to start). Calls and visits count when marked done, quotations when issued, leads when created; the week runs Monday to Sunday. A sales person sees this week on My Day and their last 8 weeks on the page; the Head and the Coordinator see each person this week and how many of the 4 minimums each met over 8 weeks |
 | Team Reports | Target vs achievement, sales breakdown by person, category and month, pipeline, conversion, response times and activity, with Excel export |
 | Data Health | Duplicates, incomplete records and orphans to fix; each line links to the fix |
 | Recycle Bin | Restore anything deleted by mistake |
