@@ -116,12 +116,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // before the window (for the 3-month moving average).
   const lyStart = new Date(Date.UTC(trendStart.getUTCFullYear() - 1, trendStart.getUTCMonth(), 1));
   const preStart = new Date(Date.UTC(trendStart.getUTCFullYear(), trendStart.getUTCMonth() - 2, 1));
-  const [lyDeals, lyProjects, preDeals, preProjects] = await Promise.all([
+  const lyMonths = months.map((m) => new Date(Date.UTC(m.getUTCFullYear() - 1, m.getUTCMonth(), 1)));
+  const [lyDeals, lyProjects, preDeals, preProjects, lyTargets] = await Promise.all([
     prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: lyStart, lt: new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1)) } }, select: { value: true, closedAt: true } }),
     getProjectBillings({ in: repIds }, lyStart, new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1))),
     prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: preStart, lt: trendStart } }, select: { value: true, closedAt: true } }),
     getProjectBillings({ in: repIds }, preStart, trendStart),
+    prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: lyMonths } }, select: { month: true, targetValue: true } }),
   ]);
+  for (const t of lyTargets) targetBy.set(monthKey(t.month), (targetBy.get(monthKey(t.month)) ?? 0) + t.targetValue);
   for (const d of [...lyDeals, ...preDeals]) if (d.closedAt) salesBy.set(monthKey(d.closedAt), (salesBy.get(monthKey(d.closedAt)) ?? 0) + d.value);
   for (const p of [...lyProjects, ...preProjects]) salesBy.set(monthKey(p.docDate), (salesBy.get(monthKey(p.docDate)) ?? 0) + p.value);
   const salesAt = (y: number, m: number) => salesBy.get(monthKey(new Date(Date.UTC(y, m, 1)))) ?? 0;
@@ -134,6 +137,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       target: targetBy.get(monthKey(m)) ?? 0,
       actual: salesBy.get(monthKey(m)) ?? 0,
       lastYear: salesAt(y - 1, mo),
+      lastYearTarget: targetBy.get(monthKey(new Date(Date.UTC(y - 1, mo, 1)))) ?? 0,
       avg3: Math.round((salesAt(y, mo) + salesAt(y, mo - 1) + salesAt(y, mo - 2)) / 3),
     };
   });
@@ -187,6 +191,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Change on the same month(s) last year.
   const yoy = (now: number, before: number) => (before > 0 ? `${now >= before ? "+" : ""}${Math.round(((now - before) / before) * 100)}%` : "—");
   const trendSales = trend.reduce((s, r) => s + r.actual, 0);
+  const trendLastYear = trend.reduce((s, r) => s + (r.lastYear ?? 0), 0);
 
   return (
     <div>
@@ -319,7 +324,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <th className="font-medium text-right">Target</th>
                     <th className="font-medium text-right">Sales</th>
                     <th className="font-medium text-right">Achieved</th>
-                    <th className="font-medium text-right">vs last year</th>
+                    <th className="font-medium text-right">Last year</th>
+                    <th className="font-medium text-right">LY ach.</th>
+                    <th className="font-medium text-right">vs LY</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -328,11 +335,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     return (
                       <tr key={r.key} className="text-slate-700">
                         <td>{r.month}</td>
-                        <td className="text-right tabular-nums">{formatCurrency(r.target)}</td>
-                        <td className="text-right tabular-nums">{formatCurrency(r.actual)}</td>
+                        <td className="text-right tabular-nums">{formatCompactCurrency(r.target)}</td>
+                        <td className="text-right tabular-nums">{formatCompactCurrency(r.actual)}</td>
                         <td className={`text-right tabular-nums font-medium ${p == null ? "text-slate-400" : p >= 100 ? "text-emerald-700" : p >= 80 ? "text-amber-700" : "text-rose-700"}`}>
                           {pctText(p)}
                         </td>
+                        <td className="text-right tabular-nums text-slate-500">{formatCompactCurrency(r.lastYear ?? 0)}</td>
+                        <td className="text-right tabular-nums text-slate-500">{pctText(achievementPct(r.lastYear ?? 0, r.lastYearTarget ?? 0))}</td>
                         <td className="text-right tabular-nums text-slate-500">{yoy(r.actual, r.lastYear ?? 0)}</td>
                       </tr>
                     );
@@ -341,10 +350,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
                     <td>Total</td>
-                    <td className="text-right tabular-nums">{formatCurrency(trendTarget)}</td>
-                    <td className="text-right tabular-nums">{formatCurrency(trendSales)}</td>
+                    <td className="text-right tabular-nums">{formatCompactCurrency(trendTarget)}</td>
+                    <td className="text-right tabular-nums">{formatCompactCurrency(trendSales)}</td>
                     <td className="text-right tabular-nums">{pctText(achievementPct(trendSales, trendTarget))}</td>
-                    <td className="text-right tabular-nums">{yoy(trendSales, trend.reduce((t, r) => t + (r.lastYear ?? 0), 0))}</td>
+                    <td className="text-right tabular-nums">{formatCompactCurrency(trendLastYear)}</td>
+                    <td className="text-right tabular-nums">{pctText(achievementPct(trendLastYear, trend.reduce((t, r) => t + (r.lastYearTarget ?? 0), 0)))}</td>
+                    <td className="text-right tabular-nums">{yoy(trendSales, trendLastYear)}</td>
                   </tr>
                 </tfoot>
               </table>
