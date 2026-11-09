@@ -24,12 +24,18 @@ export type ModelFailure = {
   parts: { name: string; qty: number }[];
   partsCost: number;
 };
+// Failure rate by quarter of sale, per model: a bad production batch shows
+// as one quarter's units failing more than the others.
+export type CohortCell = { quarter: string; unitsSold: number; failures: number; ratePct: number | null };
+export type ModelCohorts = { model: string; cells: CohortCell[] };
+const quarterOf = (d: Date) => `${d.getUTCFullYear()} Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+
 export type PartFailure = { name: string; qty: number; complaints: number; models: { model: string; qty: number }[]; cost: number; inWarrantyQty: number };
 
 export async function failureAnalysis(from: Date, to: Date) {
   const end = new Date(to.getTime() + DAY);
   const [units, complaints] = await Promise.all([
-    prisma.installedUnit.findMany({ where: { invoiceDate: { gte: from, lt: end } }, select: { model: true, qty: true, category: true, product: { select: { model: true } } } }),
+    prisma.installedUnit.findMany({ where: { invoiceDate: { gte: from, lt: end } }, select: { model: true, qty: true, category: true, invoiceDate: true, product: { select: { model: true } } } }),
     prisma.serviceComplaint.findMany({
       where: { invoiceDate: { gte: from, lt: end }, status: { not: "CANCELLED" }, nature: { notIn: NOT_FAILURES } },
       select: {
@@ -101,14 +107,43 @@ export async function failureAnalysis(from: Date, to: Date) {
     }))
     .filter((m) => m.unitsSold > 0 || m.failures > 0)
     .sort((a, b) => (b.ratePct ?? -1) - (a.ratePct ?? -1) || b.failures - a.failures);
+  // Cohorts: units sold and complaints by model and quarter of sale.
+  const cohort = new Map<string, Map<string, { unitsSold: number; failures: number }>>();
+  const bump = (name: string, d: Date | null, k: "unitsSold" | "failures", n: number) => {
+    if (!d) return;
+    const m = cohort.get(key(name)) ?? new Map();
+    const q = quarterOf(d);
+    const c = m.get(q) ?? { unitsSold: 0, failures: 0 };
+    c[k] += n;
+    m.set(q, c);
+    cohort.set(key(name), m);
+  };
+  for (const u of units) bump(u.product?.model ?? u.model, u.invoiceDate, "unitsSold", u.qty);
+  for (const c of complaints) if (c.product?.model ?? c.model) bump((c.product?.model ?? c.model)!, c.invoiceDate, "failures", 1);
+  const quarters: string[] = [];
+  for (let d = new Date(Date.UTC(from.getUTCFullYear(), Math.floor(from.getUTCMonth() / 3) * 3, 1)); d < end; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 3, 1))) quarters.push(quarterOf(d));
+
   const byPart: PartFailure[] = [...parts.values()]
     .map(({ modelMap, ...p }) => ({ ...p, cost: Math.round(p.cost * 100) / 100, models: [...modelMap.entries()].map(([model, qty]) => ({ model, qty })).sort((a, b) => b.qty - a.qty) }))
     .sort((a, b) => b.qty - a.qty);
   const unitsSold = byModel.reduce((s, m) => s + m.unitsSold, 0);
   const failures = byModel.reduce((s, m) => s + m.failures, 0);
+  // The models sold most, by quarter of sale.
+  const cohorts: ModelCohorts[] = [...byModel]
+    .sort((a, b) => b.unitsSold - a.unitsSold)
+    .filter((m) => m.unitsSold > 0)
+    .map((m) => ({
+      model: m.model,
+      cells: quarters.map((q) => {
+        const c = cohort.get(key(m.model))?.get(q) ?? { unitsSold: 0, failures: 0 };
+        return { quarter: q, ...c, ratePct: c.unitsSold ? (c.failures / c.unitsSold) * 100 : null };
+      }),
+    }));
   return {
     byModel,
     byPart,
+    quarters,
+    cohorts,
     totals: {
       unitsSold,
       failures,

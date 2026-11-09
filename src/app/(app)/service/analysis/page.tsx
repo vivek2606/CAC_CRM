@@ -12,6 +12,10 @@ const parse = (s: string | undefined) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? n
 const pct = (p: number | null) => (p == null ? "-" : p === 0 ? "0%" : `${p < 10 ? p.toFixed(1) : Math.round(p)}%`);
 // Below this many units sold a rate says little.
 const SMALL = 10;
+const COHORT_MIN = 5;
+// One hue, light to dark, by failure rate.
+const heat = (p: number) =>
+  p === 0 ? "bg-rose-50 text-rose-900" : p < 5 ? "bg-rose-100 text-rose-900" : p < 10 ? "bg-rose-200 text-rose-900" : p < 20 ? "bg-rose-400 text-white" : "bg-rose-600 text-white";
 
 export default async function FailureAnalysisPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; cat?: string }> }) {
   await requireService();
@@ -138,6 +142,60 @@ export default async function FailureAnalysisPage({ searchParams }: { searchPara
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold text-slate-900">Failure rate by quarter of sale</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            For the 12 models sold most: of the units sold in a quarter, how many have had a complaint. One quarter much darker than the rest points to a
+            bad batch. Recent quarters have had less time to fail. Quarters with fewer than {COHORT_MIN} units are in grey.
+          </p>
+          {a.cohorts.length === 0 ? (
+            <p className="text-sm text-slate-500">No units sold in this period.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="py-1.5 pr-3 font-medium">Model</th>
+                    {a.quarters.map((q) => (
+                      <th key={q} className="px-1 py-1.5 text-center font-medium whitespace-nowrap">
+                        {q}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.cohorts.slice(0, 12).map((m) => (
+                    <tr key={m.model}>
+                      <td className="py-1 pr-3 whitespace-nowrap text-slate-800">{m.model}</td>
+                      {m.cells.map((c) => {
+                        const small = c.unitsSold < COHORT_MIN;
+                        return (
+                          <td key={c.quarter} className="p-0.5">
+                            <div
+                              title={`${m.model}, sold ${c.quarter}: ${c.failures} complaint(s) on ${c.unitsSold} unit(s)`}
+                              className={`min-w-[64px] rounded px-1.5 py-1 text-center text-xs tabular-nums ${c.unitsSold === 0 ? "text-slate-300" : small ? "bg-slate-50 text-slate-400" : heat(c.ratePct ?? 0)}`}
+                            >
+                              {c.unitsSold === 0 ? "-" : (
+                                <>
+                                  <div className="font-semibold">{pct(c.ratePct)}</div>
+                                  <div className="text-[10px] opacity-80">
+                                    {c.failures}/{c.unitsSold}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-xs text-slate-400">Shading: darker = higher failure rate (0%, under 5%, 5-10%, 10-20%, 20%+). Each cell: complaints / units sold.</p>
             </div>
           )}
         </Card>

@@ -3,12 +3,16 @@
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer, CartesianGrid } from "recharts";
 import { formatCompactCurrency, chartUnit } from "@/lib/format";
 
-export type TargetTrendRow = { month: string; target: number; actual: number };
+// lastYear: the same month a year before; avg3: the 3-month moving average
+// of sales - so a seasonal peak or dip isn't read as a trend.
+export type TargetTrendRow = { month: string; target: number; actual: number; lastYear?: number | null; avg3?: number | null };
 
 const labelStyle = { fontSize: 10, fontWeight: 700, fill: "#334155" };
 
 export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
-  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.target, r.actual]));
+  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.target, r.actual, r.lastYear ?? 0]));
+  const hasLastYear = data.some((r) => (r.lastYear ?? 0) > 0);
+  const hasAvg = data.some((r) => r.avg3 != null);
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -30,6 +34,10 @@ export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
         <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={28} animationDuration={900}>
           <LabelList dataKey="actual" position="top" style={labelStyle} formatter={label} />
         </Bar>
+        {hasLastYear && <Bar dataKey="lastYear" name="Same month last year" fill="#cbd5e1" radius={[5, 5, 0, 0]} maxBarSize={20} animationDuration={900} />}
+        {hasAvg && (
+          <Line dataKey="avg3" name="3-month average" type="monotone" stroke="#f59e0b" strokeWidth={2} dot={false} activeDot={{ r: 5 }} animationDuration={900} />
+        )}
         {/* The target as a line over the bars (months without one leave a gap). */}
         <Line
           dataKey="target"

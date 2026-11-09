@@ -135,6 +135,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const stageMax = Math.max(0, ...r.stages.map((s) => s.value));
   const lostTotal = r.lostReasons.reduce((s, x) => s + x.count, 0);
+  // Biggest value lost first; bars scaled to the biggest reason.
+  const lostValueTotal = r.lostReasons.reduce((s, x) => s + x.value, 0);
   const th = "px-2 py-1.5 font-medium";
 
   return (
@@ -364,21 +366,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide">
                       <th className={th}>Reason</th>
-                      <th className={`${th} text-right`}>Deals</th>
-                      <th className={`${th} text-right`}>Share</th>
                       <th className={`${th} text-right`}>Value lost</th>
+                      <th className={`${th} text-right`}>Share of value</th>
+                      <th className={`${th} text-right`}>Deals</th>
                     </tr>
                   </thead>
                   <tbody>
                     {r.lostReasons.map((x) => (
                       <tr key={x.reason} className="border-t border-slate-100">
                         <td className="px-2 py-1.5 text-slate-800">{x.reason === "UNSPECIFIED" ? "Not recorded" : LOST_REASON_LABELS[x.reason as LostReason]}</td>
-                        <td className="px-2 py-1.5 text-right">{x.count}</td>
-                        <td className="px-2 py-1.5 text-right w-32">
-                          {Math.round((x.count / lostTotal) * 100)}%
-                          <Bar value={x.count} max={lostTotal} color="bg-rose-400" />
-                        </td>
                         <td className="px-2 py-1.5 text-right">{money(x.value)}</td>
+                        <td className="px-2 py-1.5 text-right w-40">
+                          {lostValueTotal ? Math.round((x.value / lostValueTotal) * 100) : 0}%
+                          <Bar value={x.value} max={r.lostReasons[0]?.value || 1} color="bg-rose-400" />
+                        </td>
+                        <td className="px-2 py-1.5 text-right">{x.count}</td>
                       </tr>
                     ))}
                   </tbody>

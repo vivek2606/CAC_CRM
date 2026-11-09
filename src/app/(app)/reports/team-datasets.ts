@@ -72,7 +72,7 @@ export const DEALS: DatasetDef = {
     { name: "Quarter on quarter by sales person", cfg: { rows: ["owner"], col: "closedAt:quarter", values: ["wonValue"], chart: "clustered", top: 0, period: { field: "closedAt", preset: "last12m" } }, simple: false },
     { name: "Monthly target vs achievement", cfg: { rows: ["closedAt:month"], values: ["achieved", "target", "achPct", "toGo"], chart: "target", period: { field: "closedAt", preset: "thisYear" } } },
     { name: "Win rate by sales person", cfg: { rows: ["owner"], values: ["winRate", "won", "lost"], chart: "bar", top: 0, period: { field: "closedAt", preset: "last12m" } } },
-    { name: "Why we lose - donut", cfg: { rows: ["lostReason"], values: ["lost", "lostValue"], chart: "donut", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },
+    { name: "Why we lose - value lost", cfg: { rows: ["lostReason"], values: ["lostValue", "lost"], chart: "bar", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },
     { name: "Lost to which brand", cfg: { rows: ["lostTo"], values: ["lost", "lostValue"], chart: "bar", filters: [{ field: "status", include: ["Lost"] }], period: { field: "closedAt", preset: "last12m" } } },
     { name: "Deals by segment - treemap", cfg: { rows: ["segment"], values: ["value"], chart: "treemap" } },
     { name: "Forecast by expected close month", cfg: { rows: ["expectedClose:month"], col: "stage", values: ["weighted"], chart: "column", filters: [{ field: "status", include: ["Open"] }], period: { field: "createdAt", preset: "all" } }, simple: false },

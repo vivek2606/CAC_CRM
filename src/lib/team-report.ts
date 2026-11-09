@@ -220,7 +220,7 @@ export async function getTeamReport(from: Date, to: Date, now = new Date()): Pro
     g.value += d.value;
     reasonMap.set(k, g);
   }
-  const lostReasons = [...reasonMap.entries()].map(([reason, g]) => ({ reason: reason as LostReason | "UNSPECIFIED", ...g })).sort((a, b) => b.count - a.count);
+  const lostReasons = [...reasonMap.entries()].map(([reason, g]) => ({ reason: reason as LostReason | "UNSPECIFIED", ...g })).sort((a, b) => b.value - a.value || b.count - a.count);
   const brandMap = new Map<string, { brand: string; count: number }>();
   for (const d of lostIn) {
     const b = d.lostToBrand?.trim();

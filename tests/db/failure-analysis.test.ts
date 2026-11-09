@@ -35,6 +35,11 @@ describeDb("failure analysis", () => {
     expect(m.inWarranty).toBe(1);
     expect(m.parts).toEqual([{ name: "PCB", qty: 1 }]);
     expect(m.partsCost).toBe(100);
+    // By quarter of sale: all 20 sold in 2019 Q1, 2 complaints.
+    expect(a.quarters).toEqual(["2019 Q1", "2019 Q2", "2019 Q3", "2019 Q4"]);
+    const row = a.cohorts.find((c) => c.model === model)!;
+    expect(row.cells[0]).toMatchObject({ quarter: "2019 Q1", unitsSold: 20, failures: 2, ratePct: 10 });
+    expect(row.cells[1]).toMatchObject({ unitsSold: 0, ratePct: null });
     const pcb = a.byPart.find((p) => p.name === "PCB" && p.models.some((x) => x.model === model))!;
     expect(pcb.inWarrantyQty).toBeGreaterThanOrEqual(1);
   });

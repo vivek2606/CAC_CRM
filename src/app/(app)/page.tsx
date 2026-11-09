@@ -107,12 +107,31 @@ export default async function DashboardPage() {
   const salesBy = new Map<string, number>();
   for (const d of wonDeals) if (d.closedAt) salesBy.set(monthKey(d.closedAt), (salesBy.get(monthKey(d.closedAt)) ?? 0) + d.value);
   for (const p of projects) salesBy.set(monthKey(p.docDate), (salesBy.get(monthKey(p.docDate)) ?? 0) + p.value);
-  const trend: (TargetTrendRow & { key: string })[] = months.map((m) => ({
-    key: monthKey(m),
-    month: shortMonth(m),
-    target: targetBy.get(monthKey(m)) ?? 0,
-    actual: salesBy.get(monthKey(m)) ?? 0,
-  }));
+  // For comparison: the same months a year before, and the two months
+  // before the window (for the 3-month moving average).
+  const lyStart = new Date(Date.UTC(trendStart.getUTCFullYear() - 1, trendStart.getUTCMonth(), 1));
+  const preStart = new Date(Date.UTC(trendStart.getUTCFullYear(), trendStart.getUTCMonth() - 2, 1));
+  const [lyDeals, lyProjects, preDeals, preProjects] = await Promise.all([
+    prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: lyStart, lt: new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1)) } }, select: { value: true, closedAt: true } }),
+    getProjectBillings({ in: repIds }, lyStart, new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1))),
+    prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: preStart, lt: trendStart } }, select: { value: true, closedAt: true } }),
+    getProjectBillings({ in: repIds }, preStart, trendStart),
+  ]);
+  for (const d of [...lyDeals, ...preDeals]) if (d.closedAt) salesBy.set(monthKey(d.closedAt), (salesBy.get(monthKey(d.closedAt)) ?? 0) + d.value);
+  for (const p of [...lyProjects, ...preProjects]) salesBy.set(monthKey(p.docDate), (salesBy.get(monthKey(p.docDate)) ?? 0) + p.value);
+  const salesAt = (y: number, m: number) => salesBy.get(monthKey(new Date(Date.UTC(y, m, 1)))) ?? 0;
+  const trend: (TargetTrendRow & { key: string })[] = months.map((m) => {
+    const y = m.getUTCFullYear();
+    const mo = m.getUTCMonth();
+    return {
+      key: monthKey(m),
+      month: shortMonth(m),
+      target: targetBy.get(monthKey(m)) ?? 0,
+      actual: salesBy.get(monthKey(m)) ?? 0,
+      lastYear: salesAt(y - 1, mo),
+      avg3: Math.round((salesAt(y, mo) + salesAt(y, mo - 1) + salesAt(y, mo - 2)) / 3),
+    };
+  });
   const current = trend[trend.length - 1];
   const monthPct = achievementPct(current.actual, current.target);
   const ytdPct = achievementPct(ytd.actual, ytd.target);
@@ -160,6 +179,8 @@ export default async function DashboardPage() {
   const catTotal = monthSales.categories.reduce((t, c) => t + c.value, 0);
   const monthName = thisMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   const trendTarget = trend.reduce((s, r) => s + r.target, 0);
+  // Change on the same month(s) last year.
+  const yoy = (now: number, before: number) => (before > 0 ? `${now >= before ? "+" : ""}${Math.round(((now - before) / before) * 100)}%` : "—");
   const trendSales = trend.reduce((s, r) => s + r.actual, 0);
 
   return (
@@ -270,6 +291,7 @@ export default async function DashboardPage() {
                     <th className="font-medium text-right">Target</th>
                     <th className="font-medium text-right">Sales</th>
                     <th className="font-medium text-right">Achieved</th>
+                    <th className="font-medium text-right">vs last year</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -283,6 +305,7 @@ export default async function DashboardPage() {
                         <td className={`text-right tabular-nums font-medium ${p == null ? "text-slate-400" : p >= 100 ? "text-emerald-700" : p >= 80 ? "text-amber-700" : "text-rose-700"}`}>
                           {pctText(p)}
                         </td>
+                        <td className="text-right tabular-nums text-slate-500">{yoy(r.actual, r.lastYear ?? 0)}</td>
                       </tr>
                     );
                   })}
@@ -293,6 +316,7 @@ export default async function DashboardPage() {
                     <td className="text-right tabular-nums">{formatCurrency(trendTarget)}</td>
                     <td className="text-right tabular-nums">{formatCurrency(trendSales)}</td>
                     <td className="text-right tabular-nums">{pctText(achievementPct(trendSales, trendTarget))}</td>
+                    <td className="text-right tabular-nums">{yoy(trendSales, trend.reduce((t, r) => t + (r.lastYear ?? 0), 0))}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -300,6 +324,10 @@ export default async function DashboardPage() {
           </div>
         </Card>
 
+        {/* A sales person's dashboard stays short: target progress, coverage
+            and follow-ups above; the rest is on My Day and its own pages. */}
+        {team ? (
+          <>
         <Card className="p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-slate-900">
@@ -591,6 +619,33 @@ export default async function DashboardPage() {
             )}
           </Card>
         </div>
+          </>
+        ) : (
+          <Card className="p-4">
+            <p className="text-sm text-slate-600">
+              More:{" "}
+              <Link href="/my-day" className="font-medium text-indigo-600 hover:text-indigo-700">
+                My Day
+              </Link>{" "}
+              (today&apos;s calls, follow-ups and visits) ·{" "}
+              <Link href="/deals" className="font-medium text-indigo-600 hover:text-indigo-700">
+                Pipeline
+              </Link>{" "}
+              ·{" "}
+              <Link href="/leads" className="font-medium text-indigo-600 hover:text-indigo-700">
+                Leads
+              </Link>{" "}
+              ·{" "}
+              <Link href="/reports/sales-register" className="font-medium text-indigo-600 hover:text-indigo-700">
+                Sales Register
+              </Link>{" "}
+              (sales by product and month) ·{" "}
+              <Link href="/incentives" className="font-medium text-indigo-600 hover:text-indigo-700">
+                Incentives & Targets
+              </Link>
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );

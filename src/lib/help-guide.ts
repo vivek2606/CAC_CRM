@@ -49,7 +49,7 @@ The search box at the top finds leads, accounts, products, contacts and deals by
     id: "dashboard",
     title: "Dashboard and the bell",
     for: ALL,
-    body: `The Dashboard answers "how am I doing this month and what do I do today". Sales people see their own figures; the Head and the Coordinator see the whole team.
+    body: `The Dashboard answers "how am I doing this month and what do I do today". A sales person's Dashboard is kept short - their figures, pipeline coverage and funnel, quotations to follow up and target vs sales - with links to My Day, Pipeline, Leads and the Sales Register for the rest. The Head and the Coordinator see the whole team in more detail.
 
 | Card or chart | What it tells you |
 | --- | --- |
@@ -61,7 +61,8 @@ The search box at the top finds leads, accounts, products, contacts and deals by
 | Pipeline coverage | Open deals closing in the next 3 months ÷ target still to go. 3× or more is healthy, under 2× the target is at risk - build pipeline now |
 | Lead funnel | Last 90 days' leads: how many became deals, got a quote and were won. The smallest % is where leads are lost (▼ in the team table) |
 | Quotations to follow up | Quotes sent 7+ days ago with no follow-up (amber at 7 days, red at 14) |
-| Target vs sales, Pipeline movement, Pipeline by stage | Trends: are you filling the pipeline as fast as you close it? |
+| Target vs sales | Last 6 months: sales against target, with the same month last year (grey bar, and "vs last year" in the table) and a 3-month average line, so a seasonal peak or dip isn't mistaken for a trend |
+| Pipeline movement, Pipeline by stage (team) | Are we filling the pipeline as fast as we close it? |
 | New leads by sales person | Each sales person's new and active leads and their lead-to-deal conversion |
 | Upcoming activities | Calls, visits and meetings due - your to-do list |
 
@@ -232,7 +233,7 @@ Most sales - to contractors - are supply only and need nothing here. When **we**
 | Installed units & warranty | Every unit sold, with its serial numbers and warranty end date. Warranties ending in 30 days show in the bell, so you can offer an AMC |
 | AMC contracts | Maintenance contracts: units covered, visits, labour-only or comprehensive, renewal date. AMCs ending in 30 days show in the bell |
 | Warranty claims | Spares given free in warranty are claimed back from Midea. Raise the claim, send the faulty parts back, and chase until credited |
-| Failure analysis | Failure rate by model (complaints ÷ units sold), first-year failures, days to failure, top faults and spares used, and which spare parts fail most |
+| Failure analysis | Failure rate by model (complaints ÷ units sold), first-year failures, days to failure, top faults and spares used, which spare parts fail most, and failure rate **by quarter of sale** per model - a dark cell points to a bad batch |
 
 **Service and spares quotations.** Use Quotations → Servicing or Spare parts template, issued by Sakuragi or Somotex. These don't create sales deals. Service billing is entered under Project & Service Billing.
 
