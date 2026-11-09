@@ -11,6 +11,7 @@ import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { awaitingHandoverWhere } from "@/lib/installation";
 import { QUICK_ADD_TAG } from "@/lib/constants";
 import { getGoneQuiet } from "@/lib/win-back";
+import { feedbackToAsk, LOW_RATING } from "@/lib/feedback";
 import { STALE_DAYS, lastContact, stalledWhere } from "@/lib/stalled";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
@@ -335,6 +336,36 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
             href: `/deals/${r.dealId}`,
           };
         }),
+      });
+  }
+
+  // Customer feedback: orders delivered / installed to ask about (the sales
+  // person); unhappy ratings in the last 14 days (the Head, and the sales
+  // person for their own).
+  {
+    const [toAsk, unhappy] = await Promise.all([
+      team ? Promise.resolve([]) : feedbackToAsk([user.id], now),
+      prisma.customerFeedback.findMany({
+        where: { rating: { lte: LOW_RATING }, respondedAt: { gte: new Date(now.getTime() - 14 * day) }, ...(user.role === "HEAD" ? {} : { deal: { ownerId: user.id } }) },
+        orderBy: { respondedAt: "desc" },
+        select: { rating: true, comment: true, deal: { select: { id: true, title: true, owner: { select: { name: true } } } } },
+      }),
+    ]);
+    if (unhappy.length && (user.role === "HEAD" || !team))
+      groups.unshift({
+        key: "feedbackLow",
+        label: "Unhappy customers",
+        count: unhappy.length,
+        href: "/feedback",
+        items: unhappy.slice(0, SHOW).map((f) => ({ label: `${f.rating} star${f.rating === 1 ? "" : "s"} - ${f.deal.title}`, sub: `${f.comment ? `"${f.comment.slice(0, 60)}"` : "no comment"}${who(f.deal.owner.name)}`, href: `/deals/${f.deal.id}` })),
+      });
+    if (toAsk.length)
+      groups.push({
+        key: "feedbackAsk",
+        label: "Ask for customer feedback",
+        count: toAsk.length,
+        href: "/feedback",
+        items: toAsk.slice(0, SHOW).map((d) => ({ label: d.account?.name ?? d.customerName ?? d.title, sub: "delivered / installed - send the feedback link", href: `/deals/${d.id}` })),
       });
   }
 

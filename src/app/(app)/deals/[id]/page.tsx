@@ -38,6 +38,8 @@ import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
 import { WarrantyTerms } from "../../service/warranty-terms";
 import { InstallationHandover } from "../installation-handover";
 import { ClosingChecklist, type ChecklistStep } from "../closing-checklist";
+import { FeedbackCard } from "../../feedback/feedback-card";
+import { feedbackKindFor } from "@/lib/feedback";
 import { listReservations } from "../../stock/reservations/data";
 import { ReservationTable } from "../../stock/reservations/reservation-table";
 import { ReservationRequestForm } from "../../stock/reservations/reservation-ui";
@@ -69,6 +71,7 @@ export default async function DealDetailPage({
       items: { orderBy: { createdAt: "asc" }, include: { product: { select: { code: true, model: true, category: true } } } },
       lineItems: { orderBy: { docDate: "asc" }, include: { product: { select: { code: true, model: true } } } },
       discountApprovedBy: { select: { name: true } },
+      feedback: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, rating: true, comment: true, createdAt: true, respondedAt: true } },
       contactRoles: {
         orderBy: { createdAt: "asc" },
         include: { contact: { select: { id: true, firstName: true, lastName: true } } },
@@ -327,6 +330,17 @@ export default async function DealDetailPage({
             months={deal.warrantyMonths}
             until={warrantyUntil(deal.closedAt, deal.warrantyMonths ?? STANDARD_WARRANTY_MONTHS).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
           />
+        )}
+        {deal.stage === "WON" && deal.sourceTxnNo == null && (
+          <Card className="p-5">
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">Customer feedback</h2>
+            <FeedbackCard
+              dealId={deal.id}
+              feedback={deal.feedback.map((f) => ({ ...f, createdAt: f.createdAt.toISOString(), respondedAt: f.respondedAt?.toISOString() ?? null }))}
+              readyFor={feedbackKindFor(deal)}
+              canAsk={canAccessOwner(user, deal.ownerId)}
+            />
+          </Card>
         )}
         {checklist && <ClosingChecklist dealId={deal.id} steps={checklist} delivered={!!deal.deliveredAt} today={new Date().toISOString().slice(0, 10)} />}
         {deal.installationJob ? (

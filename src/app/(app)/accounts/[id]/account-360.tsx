@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Stars } from "../../feedback/feedback-card";
+import { FEEDBACK_KIND_LABEL } from "@/lib/feedback-labels";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/format";
@@ -13,7 +15,7 @@ const DAY = 86400000;
 
 export async function Account360({ accountId, canSeeService }: { accountId: string; canSeeService: boolean }) {
   const now = new Date();
-  const [lines, openDeals, units, amcs, complaints] = await Promise.all([
+  const [lines, openDeals, units, amcs, complaints, feedback] = await Promise.all([
     prisma.saleLineItem.findMany({
       where: { deal: { accountId } },
       orderBy: { docDate: "desc" },
@@ -23,7 +25,14 @@ export async function Account360({ accountId, canSeeService }: { accountId: stri
     prisma.installedUnit.findMany({ where: { accountId }, select: { qty: true, warrantyUntil: true, amcId: true } }),
     prisma.amcContract.findMany({ where: { accountId }, select: { id: true, ref: true, startDate: true, endDate: true, cancelled: true } }),
     prisma.serviceComplaint.findMany({ where: { accountId }, select: { id: true, status: true, registeredAt: true } }),
+    prisma.customerFeedback.findMany({
+      where: { deal: { accountId }, respondedAt: { not: null } },
+      orderBy: { respondedAt: "desc" },
+      take: 20,
+      select: { rating: true, comment: true, kind: true, respondedAt: true, dealId: true },
+    }),
   ]);
+  const avgRating = feedback.length ? feedback.reduce((s, f) => s + (f.rating ?? 0), 0) / feedback.length : null;
 
   const yearAgo = new Date(now.getTime() - 365 * DAY);
   const lifetime = lines.reduce((s, l) => s + l.value, 0);
@@ -128,6 +137,25 @@ export async function Account360({ accountId, canSeeService }: { accountId: stri
           )}
         </div>
       </div>
+
+      {feedback.length > 0 && (
+        <div className="mt-4 text-sm">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Feedback - {avgRating!.toFixed(1)} / 5 from {feedback.length} order{feedback.length === 1 ? "" : "s"}
+          </h3>
+          <ul className="space-y-1">
+            {feedback.slice(0, 3).map((f, i) => (
+              <li key={i} className="flex flex-wrap items-baseline gap-2">
+                <Stars n={f.rating ?? 0} />
+                <span className="text-xs text-slate-500">
+                  {FEEDBACK_KIND_LABEL[f.kind]}, {formatDate(f.respondedAt)}
+                </span>
+                {f.comment && <span className="text-slate-700">&ldquo;{f.comment}&rdquo;</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {canSeeService && (complaints.length > 0 || amcs.length > 0 || units.length > 0) && (
         <p className="mt-4 text-xs text-slate-500">
