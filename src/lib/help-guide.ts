@@ -68,6 +68,8 @@ The search box at the top finds leads, accounts, products, contacts and deals by
 
 The Service Manager's Dashboard is the **Service Dashboard** instead: pending complaints, complaints past their service level, response times, AMCs and warranty claims.
 
+**Plan my week** (button on My Day): plan your customer and site visits Monday to Saturday - pick the day, time, customer or deal and the purpose, or add a suggestion in one click (customers gone quiet, stalled deals, deals not visited in 60 days). On the day the visit shows on My Day: **Check in** with a note of what happened; with your permission the phone adds where you were. The Head and the Coordinator see each person's planned vs done visits.
+
 **My Day** (second in the menu) is your to-do list for today: activities due or overdue (tick them off there), quotations to follow up, a "Call these" list of stalled deals and regular customers gone quiet, and what's coming this week. The Service Manager's My Day shows complaints past or near their service level, installations and AMC visits due.
 
 **The bell** collects everything that needs action, with a count: follow-ups due, deals past their close date, discounts waiting for approval, won deals missing an invoice number, stock arrived for balance orders, complaints past their service level, AMCs to renew, warranty claims to raise. Click an item to go straight to it. Clear the bell every day and nothing slips.`,

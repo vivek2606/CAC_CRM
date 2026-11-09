@@ -11,6 +11,7 @@ import { getGoneQuiet } from "@/lib/win-back";
 import { canUseService, isServiceManager } from "@/lib/service-access";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { PENDING_STATUSES } from "@/lib/service";
+import { CheckInButton } from "./visit-ui";
 
 // My Day: everything to do today in one list - activities due, quotations
 // to follow up, deals and customers to call; for the Service Manager also
@@ -83,6 +84,9 @@ export default async function MyDayPage() {
       : Promise.resolve([]),
     sales ? getGoneQuiet([user.id], now) : Promise.resolve([]),
   ]);
+  // Visits due today (or missed) - with Check in; the rest of the list without them.
+  const visitsToday = dueNow.filter((a) => a.type === "SITE_VISIT");
+  const otherDue = dueNow.filter((a) => a.type !== "SITE_VISIT");
   const stalledSorted = stalled.map((d) => ({ d, last: lastContact(d) })).sort((a, b) => a.last.getTime() - b.last.getTime());
 
   // Service: complaints against their service levels, installations, AMC visits.
@@ -181,14 +185,53 @@ export default async function MyDayPage() {
   const todayLabel = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" });
   return (
     <div>
-      <PageHeader title="My Day" description={`${todayLabel} - what to do today`} />
+      <PageHeader
+        title="My Day"
+        description={`${todayLabel} - what to do today`}
+        action={
+          <Link href="/my-day/plan" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Plan my week
+          </Link>
+        }
+      />
       <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
-        <Section title="Due today and overdue" count={dueNow.length} href="/leads?tab=activities">
-          {dueNow.length === 0 ? (
+        {visitsToday.length > 0 && (
+          <Section title="Visits today" count={visitsToday.length} href="/my-day/plan">
+            <ul className="divide-y divide-slate-100 text-sm">
+              {visitsToday.map((v) => {
+                const rel = related(v);
+                return (
+                  <li key={v.id} className="flex flex-wrap items-center gap-2 py-2">
+                    <span className="text-xs tabular-nums text-slate-500">
+                      {v.dueAt ? v.dueAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" }) : ""}
+                    </span>
+                    {rel ? (
+                      <Link href={rel.href} className="font-medium text-slate-800 hover:text-indigo-700">
+                        {v.subject.replace(/^Visit: /, "")}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-slate-800">{v.subject}</span>
+                    )}
+                    {v.dueAt && v.dueAt < new Date(endOfToday.getTime() - DAY) && (
+                      <Badge bg="bg-amber-100" text="text-amber-800">
+                        Missed - check in or cancel
+                      </Badge>
+                    )}
+                    <span className="ml-auto">
+                      <CheckInButton id={v.id} />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+        )}
+        <Section title="Due today and overdue" count={otherDue.length} href="/leads?tab=activities">
+          {otherDue.length === 0 ? (
             <Nothing text="Nothing due - plan your next calls and visits from your deals and leads." />
           ) : (
             <div className="divide-y divide-slate-100">
-              {dueNow.map((a) => (
+              {otherDue.map((a) => (
                 <ActivityRow key={a.id} activity={a} path="/my-day" related={related(a)} />
               ))}
             </div>
