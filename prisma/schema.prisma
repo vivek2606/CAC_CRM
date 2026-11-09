@@ -185,6 +185,8 @@ model User {
   serviceInvoices       ServiceInvoice[]   @relation("ServiceInvoiceCreator")
   ownedQuotations       Quotation[]        @relation("QuotationOwner")
   deletedRecords        DeletedRecord[]    @relation("DeletedBy")
+  reservationsRequested StockReservation[] @relation("ReservationRequestedBy")
+  reservationsDecided   StockReservation[] @relation("ReservationDecidedBy")
 }
 
 model Target {
@@ -272,6 +274,12 @@ model Contact {
   // Set only for contacts brought in via the Leads sheet import, so
   // re-running the import can safely replace its own rows.
   importKey String? @unique
+
+  // Reminders (My Day, bell): birthday, and one other date to remember
+  // (wedding / company anniversary...) - the year is ignored.
+  birthday         DateTime?
+  specialDate      DateTime?
+  specialDateLabel String?
 }
 
 model Lead {
@@ -443,6 +451,11 @@ model Deal {
   installedUnits  InstalledUnit[]
   installationJob InstallationJob?
 
+  // The Head's note when approving the deal's discount (approval log).
+  discountApprovalNote String?
+  reservations         StockReservation[]
+  feedback             CustomerFeedback[]
+
   @@index([sourceTxnNo])
   @@index([orderDealId])
 }
@@ -586,6 +599,7 @@ model Product {
   complaints       ServiceComplaint[]
   installedUnits   InstalledUnit[]
   inTransitOrders  InTransitOrder[]
+  reservations     StockReservation[]
 }
 
 enum InTransitStatus {
@@ -811,6 +825,11 @@ model Quotation {
   nextFollowUpAt DateTime?
   outcome        String? // "lost"
   outcomeNote    String?
+
+  // Approval log: why the sales person asked for the discount, and the
+  // Head's note on deciding.
+  discountReason       String?
+  discountDecisionNote String?
 
   @@index([dealId])
   @@index([ownerId])
@@ -1117,4 +1136,52 @@ model InstallationJob {
   updatedAt      DateTime  @updatedAt
 
   @@index([status])
+}
+
+// Stock reservation requests: a sales person asks for units to be held for
+// a deal; the Head approves (they come off "available") or rejects. An
+// approved reservation ends when the deal is invoiced or lost, when
+// released, or when it expires (14 days by default, extendable).
+model StockReservation {
+  id            String    @id @default(cuid())
+  dealId        String
+  deal          Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  qty           Int
+  status        String    @default("REQUESTED") // REQUESTED, APPROVED, REJECTED, RELEASED, EXPIRED, FULFILLED
+  reason        String?
+  requestedById String
+  requestedBy   User      @relation("ReservationRequestedBy", fields: [requestedById], references: [id])
+  requestedAt   DateTime  @default(now())
+  decidedById   String?
+  decidedBy     User?     @relation("ReservationDecidedBy", fields: [decidedById], references: [id])
+  decidedAt     DateTime?
+  decisionNote  String?
+  expiresAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([productId])
+  @@index([dealId])
+}
+
+// Customer feedback after delivery (supply only) or commissioning (we
+// installed): a link the customer opens without logging in - a 1-5 rating
+// and a comment.
+model CustomerFeedback {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  dealId      String
+  deal        Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  kind        String // DELIVERY, INSTALLATION
+  rating      Int?
+  comment     String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  @@index([dealId])
 }
