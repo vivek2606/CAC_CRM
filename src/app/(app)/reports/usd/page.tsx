@@ -1,16 +1,14 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { formatUsdCompact, formatNumber } from "@/lib/format";
-import { SALES_TITLE_IN } from "@/lib/team-titles";
 import { getStudioViews } from "@/lib/studio-views";
 import { getUsdSales } from "@/lib/usd-sales";
 import { TeamTabs } from "../team-tabs";
 import { TargetTrendChart } from "../../targets/target-trend-chart";
 
-// Sales in USD: the month and the year to date against target and the same
-// period last year, the last 12 months, each sales person and each product
+// Billing in USD: the month and the year to date against target and the
+// same period last year, month by month from January, and each product
 // category - converted at each month's exchange rate.
 
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
@@ -39,8 +37,7 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const now = new Date();
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const reps = await prisma.user.findMany({ where: { isActive: true, title: SALES_TITLE_IN }, orderBy: { name: "asc" }, select: { id: true, name: true } });
-  const [u, tabs] = await Promise.all([getUsdSales(month, reps), getStudioViews("team", user.id)]);
+  const [u, tabs] = await Promise.all([getUsdSales(month), getStudioViews("team", user.id)]);
   const c = u.current;
   const y = Number(month.slice(0, 4));
   const th = "py-1.5 pr-3 text-xs font-medium uppercase tracking-wide text-slate-400";
@@ -56,12 +53,12 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Team Reports" description={`Sales in USD - ${u.monthLabel}`} />
+      <PageHeader title="Team Reports" description={`Billing in USD - January to ${u.monthLabel}`} />
       <TeamTabs tabs={tabs} active="usd" />
       <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
         <form action="/reports/usd" className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-medium text-slate-500">
-            <span className="mb-1 block">Month</span>
+            <span className="mb-1 block">Up to</span>
             <input type="month" name="month" defaultValue={month} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
           </label>
           <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
@@ -100,7 +97,7 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
             <Card className="p-5">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {tile(
-                  `Sales, ${u.monthLabel}`,
+                  `Billing, ${u.monthLabel}`,
                   formatUsdCompact(c.sales),
                   <span className={achTone(pct(c.sales, c.target))}>
                     {pctText(pct(c.sales, c.target))} of {formatUsdCompact(c.target)} target
@@ -131,15 +128,15 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
                 )}
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                {u.monthLabel} at ₦{c.rate ? formatNumber(c.rate) : "—"} to the dollar{c.provisional ? " (provisional)" : ""}; same month last year at ₦{c.lyRate ? formatNumber(c.lyRate) : "—"}. Sales = won deals + project billing, excl. VAT, sales team only.
+                {u.monthLabel} at ₦{c.rate ? formatNumber(c.rate) : "—"} to the dollar{c.provisional ? " (provisional)" : ""}; same month last year at ₦{c.lyRate ? formatNumber(c.lyRate) : "—"}. Billing as in the Sales Register (invoiced products, project and service billing, won deals with no products), excl. VAT; target is the whole team&apos;s.
               </p>
             </Card>
 
             <Card className="p-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">Last 12 months in USD</h2>
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">Month by month, {y} vs {y - 1}</h2>
               <div className="grid grid-cols-1 items-center gap-5 xl:grid-cols-5">
                 <div className="xl:col-span-3">
-                  <TargetTrendChart currency="USD" data={u.trend.map((r) => ({ month: r.label, target: r.target, actual: r.sales, lastYear: r.lySales, lastYearTarget: r.lyTarget }))} />
+                  <TargetTrendChart currency="USD" data={u.months.map((r) => ({ month: r.label, target: r.target, actual: r.sales, lastYear: r.lySales, lastYearTarget: r.lyTarget }))} />
                 </div>
                 <div className="overflow-x-auto xl:col-span-2">
                   <table className="w-full text-xs">
@@ -148,14 +145,14 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
                         <th className={th}>Month</th>
                         <th className={`${th} text-right`}>₦/$</th>
                         <th className={`${th} text-right`}>Target</th>
-                        <th className={`${th} text-right`}>Sales</th>
+                        <th className={`${th} text-right`}>Billing</th>
                         <th className={`${th} text-right`}>Ach.</th>
                         <th className={`${th} text-right`}>Last yr</th>
                         <th className={`${th} text-right`}>vs LY</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {u.trend.map((r) => {
+                      {u.months.map((r) => {
                         const a = pct(r.sales, r.target);
                         const g = growth(r.sales, r.lySales);
                         return (
@@ -171,61 +168,19 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-300 font-semibold">
+                        <td className="py-1.5 pr-3">YTD</td>
+                        <td className={num} />
+                        <td className={num}>{formatUsdCompact(u.ytd.target)}</td>
+                        <td className={num}>{formatUsdCompact(u.ytd.sales)}</td>
+                        <td className={`${num} ${achTone(pct(u.ytd.sales, u.ytd.target))}`}>{pctText(pct(u.ytd.sales, u.ytd.target))}</td>
+                        <td className={num}>{formatUsdCompact(u.ytd.lySales)}</td>
+                        <td className={`${num} ${growthTone(growth(u.ytd.sales, u.ytd.lySales))}`}>{growthText(growth(u.ytd.sales, u.ytd.lySales))}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              </div>
-            </Card>
-
-            <Card className="p-5">
-              <h2 className="mb-2 text-sm font-semibold text-slate-900">Each sales person</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left">
-                      <th className={th} />
-                      <th className={`${th} text-center`} colSpan={5}>
-                        {u.monthLabel}
-                      </th>
-                      <th className={`${th} text-center`} colSpan={5}>
-                        Year to date
-                      </th>
-                    </tr>
-                    <tr className="border-b border-slate-200 text-left">
-                      <th className={th}>Sales person</th>
-                      {[0, 1].flatMap((i) =>
-                        ["Target", "Sales", "Ach.", "Last yr", "vs LY"].map((h) => (
-                          <th key={`${h}${i}`} className={`${th} text-right`}>
-                            {h}
-                          </th>
-                        )),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {u.people.map((p) => {
-                      const cells = (t: number, s: number, l: number) => {
-                        const a = pct(s, t);
-                        const g = growth(s, l);
-                        return (
-                          <>
-                            <td className={num}>{formatUsdCompact(t)}</td>
-                            <td className={num}>{formatUsdCompact(s)}</td>
-                            <td className={`${num} font-medium ${achTone(a)}`}>{pctText(a)}</td>
-                            <td className={`${num} text-slate-500`}>{formatUsdCompact(l)}</td>
-                            <td className={`${num} ${growthTone(g)}`}>{growthText(g)}</td>
-                          </>
-                        );
-                      };
-                      return (
-                        <tr key={p.id}>
-                          <td className="py-1.5 pr-3 text-slate-800">{p.name}</td>
-                          {cells(p.target, p.sales, p.ly)}
-                          {cells(p.ytdTarget, p.ytdSales, p.ytdLy)}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
             </Card>
 
@@ -278,7 +233,7 @@ export default async function UsdSalesPage({ searchParams }: { searchParams: Pro
                     </tbody>
                   </table>
                   <p className="mt-2 text-xs text-slate-500">
-                    Categories come from invoiced product lines (Sales Register), plus project / service billing and won deals with no products listed - so the total can differ a little from sales above.
+                    Categories as in the Sales Register; project and service billing and won deals with no products listed show on their own lines.
                   </p>
                 </div>
               )}

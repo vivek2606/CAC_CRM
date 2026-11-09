@@ -36,7 +36,7 @@ export function TeamTabs({ tabs, active }: { tabs: StudioView[]; active: string 
         active === "usd",
         <>
           <DollarSign className="h-4 w-4" />
-          Sales in USD
+          Billing in USD
         </>,
       )}
       {tabs.map((t) => (
