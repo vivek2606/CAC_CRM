@@ -104,6 +104,11 @@ export default async function DealDetailPage({
     prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }).then(attachAccounts),
     getOrderInvoices(deal.id),
   ]);
+  // An open deal with a quotation takes its products from the latest one.
+  const productQuote =
+    deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null && quotations.length
+      ? [...quotations].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
+      : null;
   // Part-billed orders: the order's balance still to bill (awaiting stock).
   const openBalances = await prisma.deal.findMany({
     where: { orderDealId: deal.orderDealId ?? deal.id, isBalance: true, stage: { notIn: ["WON", "LOST"] }, id: { not: deal.id } },
@@ -372,10 +377,20 @@ export default async function DealDetailPage({
               </>
             ) : (
               <>
-                <p className="text-xs text-slate-400 mb-3">
-                  What&apos;s being quoted on this deal. Feeds the Sales Register once it&apos;s won.
-                </p>
-                <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} readOnly={deal.stage === "WON" && !isBackOffice(user)} />
+                {productQuote ? (
+                  <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                    Products and rates come from quotation{" "}
+                    <Link href={`/quotations?quote=${productQuote.id}`} className="font-semibold underline">
+                      {productQuote.ref}
+                    </Link>{" "}
+                    (last downloaded {formatDate(productQuote.updatedAt)}). To change them, revise that quotation - the deal follows its latest quotation.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 mb-3">
+                    What&apos;s being quoted on this deal. Feeds the Sales Register once it&apos;s won.
+                  </p>
+                )}
+                <DealItemsSection dealId={deal.id} items={deal.items} products={productOptions} readOnly={(deal.stage === "WON" && !isBackOffice(user)) || !!productQuote} />
                 {deal.stage === "NEGOTIATION" && (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <ReorderFlag

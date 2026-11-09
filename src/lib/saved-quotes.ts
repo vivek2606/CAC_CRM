@@ -123,6 +123,8 @@ export async function saveQuotation(
     linked = deal != null;
   }
   // A deal with no products yet takes the quote's.
-  if (linked) await applyQuoteToDeal(quoteId, true);
+  // The deal's products follow its latest quotation (an open deal; a quote
+  // with only custom lines leaves them as they are).
+  if (linked) await applyQuoteToDeal(quoteId, false);
   return null;
 }

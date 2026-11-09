@@ -124,7 +124,7 @@ export async function linkQuotationDeal(quoteId: string, dealId: string | null):
   }
   await prisma.quotation.update({ where: { id: q.id }, data: { dealId } });
   // A deal with no products yet takes the quote's.
-  if (dealId) await applyQuoteToDeal(q.id, true);
+  if (dealId) await applyQuoteToDeal(q.id, false);
   revalidatePath("/quotations/saved");
   if (dealId) revalidatePath(`/deals/${dealId}`);
   return {};

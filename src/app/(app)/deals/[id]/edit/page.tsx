@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, visibleOwnerIds, canAccessOwner, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
 import { DealForm } from "../../deal-form";
+import { NOT_DRAFT } from "@/lib/quote-draft";
 import { updateDeal } from "../../actions";
 import { getAvailableStockByProduct, getInTransitByProduct, getLatestPriceByProduct, getQuotableProducts, inTransitLabel } from "@/lib/pricing";
 
@@ -31,7 +32,13 @@ export default async function EditDealPage({
   // Products can be edited here too - except on a deal imported from the
   // Sales Register, whose lines come from the register.
   // Once Won, only the Head / Coordinator change them.
-  const editableProducts = deal.sourceTxnNo == null && (deal.stage !== "WON" || isBackOffice(user));
+  // An open deal with a quotation takes its products from its latest
+  // quotation - not edited here.
+  const productQuote =
+    deal.stage !== "WON" && deal.stage !== "LOST"
+      ? await prisma.quotation.findFirst({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { updatedAt: "desc" }, select: { id: true, ref: true } })
+      : null;
+  const editableProducts = deal.sourceTxnNo == null && (deal.stage !== "WON" || isBackOffice(user)) && !productQuote;
   const [products, prices, stock, inTransit] = editableProducts
     ? await Promise.all([getQuotableProducts(), getLatestPriceByProduct(), getAvailableStockByProduct(), getInTransitByProduct()])
     : [[], new Map<string, number>(), new Map<string, number>(), new Map<string, { qty: number; eta: Date | null }>()];
@@ -116,6 +123,7 @@ export default async function EditDealPage({
             productsTotal={deal.items.length ? Math.round(deal.items.reduce((t, i) => t + i.qty * i.unitPrice, 0) * 100) / 100 : null}
             products={productOptions}
             requireItems={deal.stage === "WON"}
+            productsFromQuote={productQuote ?? undefined}
             dealId={deal.id}
             initialItems={deal.items.map((i) => ({ productId: i.productId, qty: String(i.qty), unitPrice: String(i.unitPrice) }))}
             submitLabel="Save Changes"

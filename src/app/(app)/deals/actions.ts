@@ -10,6 +10,7 @@ import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { notifyDiscountIfNeeded, notifyDiscountApproved } from "@/lib/push-events";
 import { prisma } from "@/lib/prisma";
+import { NOT_DRAFT as NOT_DRAFT_QUOTE } from "@/lib/quote-draft";
 import { formatNgPhone } from "@/lib/phone";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice, requireHead, type SessionUser } from "@/lib/rbac";
 import { STAGE_DEFAULT_PROBABILITY, DEAL_STAGE_LABELS } from "@/lib/constants";
@@ -345,7 +346,8 @@ export async function updateDeal(dealId: string, formData: FormData) {
   const convertedOn = (await prisma.deal.findUnique({ where: { id: dealId }, select: { createdAt: true } }))!.createdAt;
   await prisma.lead.updateMany({ where: { convertedDealId: dealId, createdAt: { gt: convertedOn } }, data: { createdAt: convertedOn } });
   // Products edited in the form (sent whenever the form shows the editor).
-  if (formData.get("lineItemsPresent") === "1" && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
+  const quoteLed = existing.stage !== "WON" && existing.stage !== "LOST" && (await prisma.quotation.count({ where: { dealId, ...NOT_DRAFT_QUOTE } })) > 0;
+  if (formData.get("lineItemsPresent") === "1" && !quoteLed && existing.sourceTxnNo == null && (existing.stage !== "WON" || isBackOffice(user))) {
     const next = parseLineItems(formData.get("lineItems") ?? undefined).filter((i) => i.qty !== 0);
     const current = await prisma.dealLineItem.findMany({ where: { dealId }, select: { productId: true, qty: true, unitPrice: true } });
     const key = (rows: { productId: string; qty: number; unitPrice: number }[]) =>
@@ -568,11 +570,20 @@ function assertCanEditItems(user: { role: SessionUser["role"] }, stage: DealStag
   if (stage === "WON" && !isBackOffice(user)) throw new Error(WON_ITEMS_LOCKED);
 }
 
+// An open deal with a quotation takes its products from its latest
+// quotation (applyQuoteToDeal) - not edited by hand.
+async function assertNotQuoteLed(deal: { id: string; stage: DealStage }) {
+  if (deal.stage === "WON" || deal.stage === "LOST") return;
+  if (await prisma.quotation.count({ where: { dealId: deal.id, ...NOT_DRAFT_QUOTE } }))
+    throw new Error("This deal's products come from its quotation - revise the quotation to change them.");
+}
+
 export async function addDealLineItem(dealId: string, formData: FormData) {
   const user = await requireUser();
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   assertCanEditItems(user, deal.stage);
+  await assertNotQuoteLed(deal);
 
   const parsed = dealLineItemSchema.parse(Object.fromEntries(formData.entries()));
 
@@ -592,6 +603,7 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   const deal = await prisma.deal.findUniqueOrThrow({ where: { id: dealId } });
   if (!canAccessOwner(user, deal.ownerId)) throw new Error("You do not have access to this deal.");
   assertCanEditItems(user, deal.stage);
+  await assertNotQuoteLed(deal);
 
   await prisma.dealLineItem.delete({ where: { id: lineItemId } });
   await syncDealValueFromItems(dealId);

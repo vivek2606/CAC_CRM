@@ -45,6 +45,7 @@ function DealFormFields({
   defaultValues,
   submitLabel,
   productsTotal = null,
+  productsFromQuote,
   initialItems = [],
   requireItems = false,
   canEditCompany = false,
@@ -92,6 +93,8 @@ function DealFormFields({
   // Total of the deal's saved products (edit form) - when set, the value is
   // taken from them and can't be typed over.
   productsTotal?: number | null;
+  // An open deal with a quotation: its products come from the latest one.
+  productsFromQuote?: { id: string; ref: string };
   // Edit form: the deal's current products, editable here.
   initialItems?: LineItemRow[];
   // A won deal must keep at least one product billed.
@@ -518,6 +521,15 @@ function DealFormFields({
           />
         </div>
 
+        {productsFromQuote && (
+          <div id="products" className="sm:col-span-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+            <span className="font-medium">Products, rates and value come from quotation {productsFromQuote.ref}.</span> To change them, revise{" "}
+            <a href={`/quotations?quote=${productsFromQuote.id}`} className="font-semibold underline">
+              that quotation
+            </a>{" "}
+            - the deal follows its latest quotation.
+          </div>
+        )}
         {products && (
           <div id="products" className="sm:col-span-2 scroll-mt-24">
             <label className="block text-sm font-medium text-slate-700 mb-1">Products (model, quantity, rate)</label>
