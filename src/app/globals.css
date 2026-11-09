@@ -58,6 +58,10 @@ table {
   @page {
     margin: 12mm;
   }
+  /* Printing a page (e.g. the monthly review): no menu or top bar. */
+  .app-chrome {
+    display: none !important;
+  }
 }
 
 /* Height of the app's top bar (+ tab strip when tabs are open) that page

@@ -679,6 +679,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               (sales by product and month) ·{" "}
               <Link href="/incentives" className="font-medium text-indigo-600 hover:text-indigo-700">
                 Incentives & Targets
+              </Link>{" "}
+              ·{" "}
+              <Link href="/review" className="font-medium text-indigo-600 hover:text-indigo-700">
+                Monthly review
               </Link>
             </p>
           </Card>

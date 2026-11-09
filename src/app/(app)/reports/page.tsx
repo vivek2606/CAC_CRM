@@ -68,7 +68,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const active = tab ? tab.id : "new";
     return (
       <div>
-        <PageHeader title="Team Reports" description={tab ? tab.name : "New tab - build a chart or table, then save it as a tab"} />
+        <PageHeader
+          title="Team Reports"
+          description={tab ? tab.name : "New tab - build a chart or table, then save it as a tab"}
+          action={
+            <Link href="/review" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Monthly review pack
+            </Link>
+          }
+        />
         <TeamTabs tabs={tabs} active={active} />
         <div className="p-6">
           <TeamStudio key={active} data={await getTeamStudioData()} tab={tab} />
