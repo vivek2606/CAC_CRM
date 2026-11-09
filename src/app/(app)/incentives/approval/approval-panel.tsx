@@ -62,7 +62,7 @@ export function ApprovalPanel({
   let title = `${monthLabel} - not yet submitted for approval`;
   let detail = isHead
     ? "The Sales Coordinator prepares and submits the month; you can also approve it directly."
-    : "Check the figures below, then submit them to the Head of Sales for approval. The PDF for finance is available once approved.";
+    : "Check the figures below, then submit them to the Head of Sales for approval. The PDF and Excel for finance are available once approved.";
   if (!payable) {
     title = `${monthLabel} - not ready for sign-off`;
     detail = notPayableReason;
@@ -103,6 +103,12 @@ export function ApprovalPanel({
               <a href={`/incentives/statement?month=${month}`} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-500`}>
                 <FileDown className="h-4 w-4" />
                 Download PDF for finance
+              </a>
+            )}
+            {status === "APPROVED" && (
+              <a href={`/incentives/report?month=${month}&format=finance`} download className={`${btn} bg-emerald-600 text-white hover:bg-emerald-500`}>
+                <FileDown className="h-4 w-4" />
+                Download Excel for finance
               </a>
             )}
             {(status === "NONE" || status === "RETURNED") && !isHead && (

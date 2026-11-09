@@ -3,24 +3,26 @@ import { getIncentiveApproval, snapshotOf } from "@/lib/incentive-approval";
 import { computeMonthIncentives } from "@/lib/incentive-month";
 import { getCompanySettings, pickCompany } from "@/lib/company-profile";
 import { renderIncentiveStatementPdf } from "@/lib/pdf/incentive-statement-pdf";
-import { buildIncentiveReportXlsx } from "@/lib/incentive-report-xlsx";
+import { buildIncentiveReportXlsx, buildIncentiveFinanceXlsx } from "@/lib/incentive-report-xlsx";
 
-// /incentives/report?month=YYYY-MM&format=pdf|xlsx - the month's incentive
+// /incentives/report?month=YYYY-MM&format=pdf|xlsx|finance - the month's incentive
 // report. Once the Head has approved the month it's the approved figures
 // (Head and Sales Coordinator); before that only the Head can download it,
-// from live figures, marked DRAFT.
+// from live figures, marked DRAFT. finance: the payment list (Excel), approved
+// months only.
 export async function GET(request: Request) {
   const user = await requireBackOffice();
   const params = new URL(request.url).searchParams;
   const raw = params.get("month") ?? "";
-  const format = params.get("format") === "xlsx" ? "xlsx" : "pdf";
+  const f = params.get("format");
+  const format = f === "xlsx" || f === "finance" ? f : "pdf";
   const m = raw.match(/^(\d{4})-(\d{2})$/);
   if (!m) return new Response("Pick a month.", { status: 400 });
   const month = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
 
   const approval = await getIncentiveApproval(month);
   const approved = approval?.status === "APPROVED" && !!approval.snapshot;
-  if (!approved && user.role !== "HEAD") {
+  if (!approved && (user.role !== "HEAD" || format === "finance")) {
     return new Response("This month's incentives haven't been approved by the Head of Sales yet.", { status: 403 });
   }
   let snapshot = approved ? approval!.snapshot! : null;
@@ -34,6 +36,15 @@ export async function GET(request: Request) {
   const label = month.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   const name = `${approved ? "Incentive-Statement" : "Incentive-Report-DRAFT"}-${raw}`;
 
+  if (format === "finance") {
+    const buf = await buildIncentiveFinanceXlsx({ monthLabel: label, companyName: company.name, approval: { ...approval!, snapshot } });
+    return new Response(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="Incentive-Payment-List-${raw}.xlsx"`,
+      },
+    });
+  }
   if (format === "xlsx") {
     const buf = await buildIncentiveReportXlsx({ monthLabel: label, companyName: company.name, approval: report, draft: !approved });
     return new Response(new Uint8Array(buf), {

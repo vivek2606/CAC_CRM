@@ -268,7 +268,7 @@ Most sales - to contractors - are supply only and need nothing here. When **we**
 
 **Entering for others.** The Head and the Coordinator can create leads, deals and quotes for any sales person: pick them in **Owner** or **Sales person**. Branch sales are entered under the person's name and show as "Others".
 
-**Approvals.** The Head approves discounts beyond the limit (Quotations → Approvals) and each month's incentives.`,
+**Approvals.** The Head approves discounts beyond the limit (Quotations → Approvals) and each month's incentives. Once a month is approved, the Head and the Coordinator download it from **Incentives & Targets**: **PDF** and **Excel** (the full calculation), and for finance **Download PDF for finance** and **Download Excel for finance** (a payment list: each person, their incentive, salary support and amount payable, with the total). Before approval only the Head can download, marked DRAFT; the finance files need approval.`,
   },
   {
     id: "routine",
