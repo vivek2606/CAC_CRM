@@ -148,15 +148,20 @@ export type SalesDocument = {
 export async function buildDocument(input: DocumentInput): Promise<SalesDocument> {
   const settings = await getCompanySettings();
   const sns = serialNumbers(input.rows);
+  // Rates inclusive of VAT are rounded up to the whole naira (like Excel's
+  // CEILING.MATH(rate, 1)): the rate, the net rate after discount and the
+  // installation rate.
+  const ceilIncl = (n: number) => (input.vatMode === "inclusive" ? ceilNaira(n) : n);
   const rows: DocRow[] = input.rows
     .map((r, i): DocRow | null => {
       if (r.kind === "section") return r.label ? { kind: "section", label: r.label, sn: sns[i] } : null;
       if (!r.description && r.qty === 0) return null;
       const detail = !input.showAvailability && isAvailabilityNote(r.detail) ? "" : r.detail;
-      const installRate = input.withInstallation ? r.installRate : 0;
+      const installRate = input.withInstallation ? ceilIncl(r.installRate) : 0;
       const discountPct = round2(r.discountPct);
-      const netRate = netOf(r.unitPrice, discountPct);
-      return { ...r, detail, installRate, discountPct, netRate, sn: sns[i], amount: round2(r.qty * (netRate + installRate)) };
+      const unitPrice = ceilIncl(r.unitPrice);
+      const netRate = ceilIncl(netOf(unitPrice, discountPct));
+      return { ...r, unitPrice, detail, installRate, discountPct, netRate, sn: sns[i], amount: round2(r.qty * (netRate + installRate)) };
     })
     .filter((r): r is DocRow => r != null);
   const vatInclusive = input.vatMode === "inclusive";
@@ -210,6 +215,12 @@ function addDays(d: Date, n: number) {
 // A rate less a discount %, to the kobo.
 export function netOf(rate: number, discountPct: number): number {
   return round2(rate * (1 - discountPct / 100));
+}
+
+// Up to the next whole naira (CEILING.MATH(n, 1)), ignoring floating-point
+// dust (1075.0000001 stays 1075).
+export function ceilNaira(n: number): number {
+  return Math.ceil(Math.round(n * 100) / 100);
 }
 
 function round2(n: number) {

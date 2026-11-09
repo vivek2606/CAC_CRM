@@ -132,7 +132,7 @@ You don't always need to create the lead by hand: a deal created directly gets i
 2. Pick the document: Quotation, Proforma Invoice or BOQ.
 3. **Sales person:** the Head and the Coordinator pick who the quote is for. The quote, its deal and its lead go to that person. Left on "None", it is saved under your own name.
 4. Fill in the customer (To, Kind attention, contact number) and add products from the list. Prices come from the current price list. Use "Custom item" for anything not in the list.
-5. Choose "Rates inclusive of VAT" or "Show VAT separately", installation rates if needed, and the validity.
+5. Choose "Rates inclusive of VAT" or "Show VAT separately", installation rates if needed, and the validity. Rates inclusive of VAT are always **whole naira, rounded up** (like Excel's CEILING.MATH(rate, 1)) - after any discount or commission.
 6. **Sales commission:** tick 5% or 10% when the customer's buyer gets a commission. Every rate is divided by 0.95 or 0.9; this isn't printed.
 7. **Download PDF** or **Download Excel**. The first download issues the unique reference number. The final total is rounded off.
 

@@ -9,6 +9,19 @@ const input = (rows: unknown[], extra: Partial<DocumentInput> = {}): DocumentInp
 const item = (o: Record<string, unknown>) => ({ kind: "item", description: "Item", qty: 1, unitPrice: 0, ...o });
 
 describeDb("quotation totals", () => {
+  it("rounds VAT-inclusive rates up to the whole naira (CEILING.MATH(rate, 1))", async () => {
+    const doc = await buildDocument(
+      input([item({ qty: 2, unitPrice: 1075.1 }), item({ qty: 1, unitPrice: 1075 }), item({ qty: 3, unitPrice: 2000, discountPct: 2.5 })], { vatMode: "inclusive" }),
+    );
+    const rates = doc.rows.filter((r) => r.kind === "item").map((r) => (r.kind === "item" ? [r.unitPrice, r.netRate] : null));
+    // 1075.10 -> 1076; 1075 stays; 2000 less 2.5% = 1950 (whole already).
+    expect(rates).toEqual([[1076, 1076], [1075, 1075], [2000, 1950]]);
+    expect(doc.subtotal).toBe(2 * 1076 + 1075 + 3 * 1950);
+    // Rates excl. VAT keep their decimals.
+    const sep = await buildDocument(input([item({ qty: 1, unitPrice: 1075.1 })]));
+    expect(sep.rows[0].kind === "item" && sep.rows[0].netRate).toBe(1075.1);
+  });
+
   it("adds VAT (7.5%) on the subtotal of net rates", async () => {
     const doc = await buildDocument(input([item({ qty: 2, unitPrice: 1_000_000, discountPct: 10 }), item({ description: "Pipes", qty: 3, unitPrice: 50_000 })]));
     // 2 x 900,000 + 3 x 50,000 = 1,950,000; VAT 146,250.
@@ -44,10 +57,13 @@ describeDb("quotation totals", () => {
     expect(up.total).toBe(1075);
     expect(up.roundOff).toBe(0.01);
     expect(up.totalInWords).toBe("One Thousand and Seventy-Five Naira Only");
-    // VAT-inclusive 1,234.40 -> 1,234 (-0.40).
-    const down = await buildDocument(input([item({ qty: 1, unitPrice: 1234.4 })], { vatMode: "inclusive" }));
+    // 1,148.28 + VAT 86.12 = 1,234.40 -> 1,234 (-0.40).
+    const down = await buildDocument(input([item({ qty: 1, unitPrice: 1148.28 })]));
     expect(down.total).toBe(1234);
     expect(down.roundOff).toBe(-0.4);
+    // VAT-inclusive rates are whole naira already (rounded up): no round off.
+    const incl = await buildDocument(input([item({ qty: 1, unitPrice: 1234.4 })], { vatMode: "inclusive" }));
+    expect([incl.total, incl.roundOff]).toEqual([1235, 0]);
     // Already whole: no round off.
     expect((await buildDocument(input([item({ qty: 1, unitPrice: 1000 })]))).roundOff).toBe(0);
   });

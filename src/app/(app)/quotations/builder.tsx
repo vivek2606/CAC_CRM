@@ -650,11 +650,14 @@ export function QuotationBuilder({
   const inclusive = d.vatMode === "inclusive";
   const vatFactor = 1 + vatRatePct / 100;
   const round2 = (n: number) => Math.round(n * 100) / 100;
+  // Rates inclusive of VAT are whole naira, rounded up (CEILING.MATH(x, 1)).
+  const ceilIncl = (n: number) => Math.ceil(round2(n));
+  const rateRound = (n: number) => (inclusive ? ceilIncl(n) : round2(n));
   // The suggested dealer rate is ex-VAT; in inclusive mode it's shown with VAT.
-  const suggested = (rate: number) => (inclusive ? round2(rate * vatFactor) : rate);
+  const suggested = (rate: number) => (inclusive ? ceilIncl(rate * vatFactor) : rate);
   // Sales commission built into the rate: price-list rate (excl. VAT) / (1 - commission).
   const commission = Math.min(50, Math.max(0, num(d.commissionPct ?? "")));
-  const quoteRate = (rate: number) => round2((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
+  const quoteRate = (rate: number) => rateRound((inclusive ? rate * vatFactor : rate) / (1 - commission / 100));
   // Change the commission: every rate filled (product or custom, typed by
   // hand or suggested, supply and installation) is re-priced by
   // (1 - old) / (1 - new) - turning on 10% divides it by 0.9, 5% by 0.95,
@@ -663,14 +666,14 @@ export function QuotationBuilder({
   const setCommission = (value: string) => {
     const next = Math.min(50, Math.max(0, num(value)));
     const f = (1 - commission / 100) / (1 - next / 100);
-    const scale = (v: string | undefined) => (v != null && v.trim() !== "" ? String(round2(num(v) * f)) : v);
+    const scale = (v: string | undefined) => (v != null && v.trim() !== "" ? String(rateRound(num(v) * f)) : v);
     update({
       commissionPct: value,
       rows: d.rows.map((r) => {
         if (r.kind !== "item" || f === 1) return r;
         // A modular outdoor's modules are product rates too.
         if (r.modules?.length) {
-          const modules = r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) }));
+          const modules = r.modules.map((m) => ({ ...m, rate: String(rateRound(num(m.rate) * f)) }));
           return { ...r, modules, unitPrice: String(round2(modules.reduce((t, m) => t + num(m.rate), 0))), ...(has(r.costInstall) ? {} : { installRate: scale(r.installRate) }) };
         }
         return {
@@ -700,9 +703,12 @@ export function QuotationBuilder({
   // Not in stock at the tentative rate: no discount at all.
   const discOf = (r: Extract<Row, { kind: "item" }>) =>
     noDiscount(r.productId ? optionById.get(r.productId) : undefined) ? 0 : Math.min(100, Math.max(0, num(r.discountPct ?? "")));
-  const netRate = (r: Extract<Row, { kind: "item" }>) => round2(num(r.unitPrice) * (1 - discOf(r) / 100));
+  // Inclusive of VAT: the rate and the net rate are whole naira, rounded up
+  // (as on the document - sales-document.ts).
+  const netRate = (r: Extract<Row, { kind: "item" }>) => rateRound((inclusive ? ceilIncl(num(r.unitPrice)) : num(r.unitPrice)) * (1 - discOf(r) / 100));
+  const installOf = (r: Extract<Row, { kind: "item" }>) => (inclusive ? ceilIncl(num(r.installRate ?? "")) : num(r.installRate ?? ""));
   // Line amount: qty x net rate, plus installation on supply & installation quotes.
-  const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? num(r.installRate ?? "") : 0)) * 100) / 100;
+  const lineAmount = (r: Extract<Row, { kind: "item" }>) => Math.round(num(r.qty) * (netRate(r) + (withInstallation ? installOf(r) : 0)) * 100) / 100;
   const subtotal = d.rows.reduce((s, r) => s + (r.kind === "item" ? lineAmount(r) : 0), 0);
   // Costed lines: our cost, and our price for the costed parts (excl. VAT).
   const costOf = (r: Extract<Row, { kind: "item" }>) =>
@@ -1136,8 +1142,11 @@ export function QuotationBuilder({
                           ? reprice(
                               {
                                 ...r,
-                                unitPrice: r.unitPrice.trim() !== "" ? String(round2(num(r.unitPrice) * f)) : r.unitPrice,
-                                installRate: (r.installRate ?? "").trim() !== "" ? String(round2(num(r.installRate ?? "") * f)) : r.installRate,
+                                unitPrice: r.unitPrice.trim() !== "" ? String(mode === "inclusive" ? ceilIncl(num(r.unitPrice) * f) : round2(num(r.unitPrice) * f)) : r.unitPrice,
+                                installRate:
+                                  (r.installRate ?? "").trim() !== ""
+                                    ? String(mode === "inclusive" ? ceilIncl(num(r.installRate ?? "") * f) : round2(num(r.installRate ?? "") * f))
+                                    : r.installRate,
                                 ...(r.modules ? { modules: r.modules.map((m) => ({ ...m, rate: String(round2(num(m.rate) * f)) })) } : {}),
                               },
                               defaultMargin,
