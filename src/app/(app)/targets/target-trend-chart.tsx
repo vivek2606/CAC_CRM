@@ -1,7 +1,7 @@
 "use client";
 
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, LabelList, ResponsiveContainer, CartesianGrid } from "recharts";
-import { formatCompactCurrency, chartUnit } from "@/lib/format";
+import { formatCompactCurrency, formatUsdCompact, chartUnit } from "@/lib/format";
 
 // lastYear: the same month a year before; avg3: the 3-month moving average
 // of sales - so a seasonal peak or dip isn't read as a trend.
@@ -10,32 +10,34 @@ export type TargetTrendRow = { month: string; target: number; actual: number; la
 const ach = (a: number, t: number | null | undefined) => (t ? ` (${Math.round((a / t) * 100)}% of target)` : "");
 
 // Hover: sales and achievement this year and the same month last year.
-function TrendTooltip({ active, payload }: { active?: boolean; payload?: { payload: TargetTrendRow }[] }) {
+function TrendTooltip({ active, payload, money = formatCompactCurrency }: { active?: boolean; payload?: { payload: TargetTrendRow }[]; money?: (v: number) => string }) {
   const r = payload?.[0]?.payload;
   if (!active || !r) return null;
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
       <p className="mb-1 font-semibold text-slate-900">{r.month}</p>
       <p className="text-emerald-700">
-        Sales {formatCompactCurrency(r.actual)}
+        Sales {money(r.actual)}
         {ach(r.actual, r.target)}
       </p>
-      {r.target ? <p className="text-indigo-600">Target {formatCompactCurrency(r.target)}</p> : null}
+      {r.target ? <p className="text-indigo-600">Target {money(r.target)}</p> : null}
       {r.lastYear != null && (
         <p className="text-slate-500">
-          Same month last year {formatCompactCurrency(r.lastYear)}
+          Same month last year {money(r.lastYear)}
           {ach(r.lastYear, r.lastYearTarget)}
         </p>
       )}
-      {r.avg3 != null && <p className="text-amber-600">3-month average {formatCompactCurrency(r.avg3)}</p>}
+      {r.avg3 != null && <p className="text-amber-600">3-month average {money(r.avg3)}</p>}
     </div>
   );
 }
 
 const labelStyle = { fontSize: 10, fontWeight: 700, fill: "#334155" };
 
-export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
-  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.target, r.actual, r.lastYear ?? 0]));
+// currency: USD shows dollars (the USD sales report).
+export function TargetTrendChart({ data, currency = "NGN" }: { data: TargetTrendRow[]; currency?: "NGN" | "USD" }) {
+  const usd = currency === "USD";
+  const { label, axisTick } = chartUnit(data.flatMap((r) => [r.target, r.actual, r.lastYear ?? 0]), usd ? "$" : "₦");
   const hasLastYear = data.some((r) => (r.lastYear ?? 0) > 0);
   const hasAvg = data.some((r) => r.avg3 != null);
 
@@ -51,7 +53,7 @@ export function TargetTrendChart({ data }: { data: TargetTrendRow[] }) {
           tickFormatter={axisTick}
           width={64}
         />
-        <Tooltip content={<TrendTooltip />} />
+        <Tooltip content={<TrendTooltip money={usd ? formatUsdCompact : formatCompactCurrency} />} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="actual" name="Actual" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={28} animationDuration={900}>
           <LabelList dataKey="actual" position="top" style={labelStyle} formatter={label} />

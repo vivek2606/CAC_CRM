@@ -42,7 +42,7 @@ export function formatAxisCurrency(value: number): string {
 // For bar charts that label bars with bare numbers: one unit for the whole
 // chart, picked from its largest value, so the labels (e.g. "452") always
 // read in the same unit as the Y axis ("₦400M").
-export function chartUnit(values: number[]): {
+export function chartUnit(values: number[], symbol = "₦"): {
   label: (v: unknown) => string;
   axisTick: (v: unknown) => string;
   inUnit: (v: number) => string;
@@ -52,7 +52,7 @@ export function chartUnit(values: number[]): {
   const inUnit = (v: number) => Math.round(v / divisor).toLocaleString("en-NG");
   return {
     label: (v) => (Number(v) > 0 ? inUnit(Number(v)) : ""),
-    axisTick: (v) => (Number(v) === 0 ? "₦0" : `₦${inUnit(Number(v))}${suffix}`),
+    axisTick: (v) => (Number(v) === 0 ? `${symbol}0` : `${symbol}${inUnit(Number(v))}${suffix}`),
     inUnit,
   };
 }
@@ -120,4 +120,11 @@ export function relativeDueLabel(date: Date | string | null | undefined): string
   if (diffDays === -1) return "Yesterday";
   if (diffDays > 1) return `In ${diffDays} days`;
   return `${Math.abs(diffDays)} days overdue`;
+}
+
+// US dollars, short: $1.25M, $830.0K, $950.
+export function formatUsdCompact(v: number): string {
+  const a = Math.abs(v);
+  const s = a >= 1e6 ? `${(a / 1e6).toFixed(2)}M` : a >= 1e3 ? `${(a / 1e3).toFixed(1)}K` : a.toFixed(0);
+  return `${v < 0 ? "-" : ""}$${s}`;
 }
