@@ -33,12 +33,17 @@ const shortMonth = (d: Date) => d.toLocaleDateString("en-US", { month: "short", 
 // months, new leads by sales person, and what's coming up. Detailed
 // reports live in their own tabs (Incentives & Targets, Sales Register,
 // Team Reports).
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const user = await requireUser();
   // The Service Manager has his own (service) dashboard.
   if (await isServiceManager(user)) return <ServiceDashboard name={user.name ?? ""} />;
-  const team = isBackOffice(user);
-  const ownerIds = await visibleOwnerIds(user);
+  const backOffice = isBackOffice(user);
+  // A sales person can switch to the whole division's performance: the
+  // team figures and each person's sales vs target - but not others'
+  // activities, customers or records (no links into them).
+  const division = !backOffice && (await searchParams).view === "division";
+  const team = backOffice || division;
+  const ownerIds = division ? (await prisma.user.findMany({ select: { id: true } })).map((u) => u.id) : await visibleOwnerIds(user);
 
   const now = new Date();
   const thisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -70,7 +75,7 @@ export default async function DashboardPage() {
     getYtdSummary(team ? { kind: "department" } : { kind: "rep", userId: user.id }, thisMonth),
     getLeadStats(ownerIds, now),
     prisma.activity.findMany({
-      where: { ownerId: team ? { in: ownerIds } : user.id, status: "PENDING" },
+      where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING" },
       orderBy: { dueAt: "asc" },
       take: 6,
       include: {
@@ -80,7 +85,7 @@ export default async function DashboardPage() {
         account: { select: { name: true } },
       },
     }),
-    prisma.activity.count({ where: { ownerId: team ? { in: ownerIds } : user.id, status: "PENDING", dueAt: { lt: startOfToday } } }),
+    prisma.activity.count({ where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING", dueAt: { lt: startOfToday } } }),
     team
       ? Promise.resolve([])
       : prisma.lead.findMany({
@@ -186,8 +191,20 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title={team ? "Team Dashboard" : "My Dashboard"}
+        title={division ? "Division Dashboard" : team ? "Team Dashboard" : "My Dashboard"}
         description={now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
+        action={
+          backOffice ? undefined : (
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm">
+              <Link href="/" className={`rounded-md px-3 py-1 font-medium ${division ? "text-slate-500 hover:text-slate-800" : "bg-white text-slate-900 shadow-sm"}`}>
+                Mine
+              </Link>
+              <Link href="/?view=division" className={`rounded-md px-3 py-1 font-medium ${division ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+                Division
+              </Link>
+            </div>
+          )
+        }
       />
 
       <div className="p-6 space-y-5">
@@ -236,10 +253,16 @@ export default async function DashboardPage() {
             value={String(leadStats.lostThisMonth)}
             sub={
               <>
-                {formatCompactCurrency(leadStats.lostThisMonthValue)} ·{" "}
-                <Link href={`/deals/closed?stage=LOST&month=${monthKey(thisMonth)}`} className="text-indigo-600 hover:text-indigo-700">
-                  view
-                </Link>
+                {formatCompactCurrency(leadStats.lostThisMonthValue)}
+                {!division && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <Link href={`/deals/closed?stage=LOST&month=${monthKey(thisMonth)}`} className="text-indigo-600 hover:text-indigo-700">
+                      view
+                    </Link>
+                  </>
+                )}
               </>
             }
             icon={<XCircle className="h-4 w-4 text-rose-500" />}
@@ -372,9 +395,13 @@ export default async function DashboardPage() {
                       return (
                         <tr key={r.userId} className="text-slate-700">
                           <td>
-                            <Link href={registerLink({ rep: r.userId })} className="font-medium text-indigo-700 hover:underline">
-                              {r.name}
-                            </Link>
+                            {division ? (
+                              <span className="font-medium text-slate-800">{r.name}</span>
+                            ) : (
+                              <Link href={registerLink({ rep: r.userId })} className="font-medium text-indigo-700 hover:underline">
+                                {r.name}
+                              </Link>
+                            )}
                           </td>
                           <td className="text-right tabular-nums">{formatCurrency(r.target)}</td>
                           <td className="text-right tabular-nums">{formatCurrency(r.productSales)}</td>
@@ -433,9 +460,13 @@ export default async function DashboardPage() {
                     {monthSales.categories.map((c) => (
                       <tr key={c.category} className="text-slate-700">
                         <td>
-                          <Link href={registerLink({ category: c.category })} className="font-medium text-indigo-700 hover:underline">
-                            {c.category}
-                          </Link>
+                          {division ? (
+                            <span className="font-medium text-slate-800">{c.category}</span>
+                          ) : (
+                            <Link href={registerLink({ category: c.category })} className="font-medium text-indigo-700 hover:underline">
+                              {c.category}
+                            </Link>
+                          )}
                         </td>
                         <td className="text-right tabular-nums">{c.qty ? c.qty.toLocaleString("en-NG", { maximumFractionDigits: 2 }) : "—"}</td>
                         <td className="text-right tabular-nums">{formatCurrency(c.value)}</td>
@@ -512,9 +543,13 @@ export default async function DashboardPage() {
                       {leadStats.byPerson.map((r) => (
                         <tr key={r.userId} className="text-slate-700">
                           <td>
-                            <Link href={`/deals?owner=${r.userId}`} className="font-medium text-indigo-700 hover:underline">
-                              {r.name}
-                            </Link>
+                            {division ? (
+                              <span className="font-medium text-slate-800">{r.name}</span>
+                            ) : (
+                              <Link href={`/deals?owner=${r.userId}`} className="font-medium text-indigo-700 hover:underline">
+                                {r.name}
+                              </Link>
+                            )}
                           </td>
                           <td className="text-right tabular-nums font-semibold text-slate-900">{r.newThisMonth}</td>
                           <td className="text-right tabular-nums text-slate-500">{r.newLastMonth}</td>
@@ -579,6 +614,7 @@ export default async function DashboardPage() {
             )}
           </Card>
 
+          {!division && (
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -618,6 +654,7 @@ export default async function DashboardPage() {
               </ul>
             )}
           </Card>
+          )}
         </div>
           </>
         ) : (

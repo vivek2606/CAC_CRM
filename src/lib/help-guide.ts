@@ -49,7 +49,7 @@ The search box at the top finds leads, accounts, products, contacts and deals by
     id: "dashboard",
     title: "Dashboard and the bell",
     for: ALL,
-    body: `The Dashboard answers "how am I doing this month and what do I do today". A sales person's Dashboard is kept short - their figures, pipeline coverage and funnel, quotations to follow up and target vs sales - with links to My Day, Pipeline, Leads and the Sales Register for the rest. The Head and the Coordinator see the whole team in more detail.
+    body: `The Dashboard answers "how am I doing this month and what do I do today". A sales person's Dashboard is kept short - their figures, pipeline coverage and funnel, quotations to follow up and target vs sales - with links to My Day, Pipeline, Leads and the Sales Register for the rest. The Head and the Coordinator see the whole team in more detail. **Mine / Division** at the top of a sales person's Dashboard switches to the whole division's performance: the team's sales, target and pipeline, coverage and funnel per person, and each person's sales against target - without anyone's customers, deals, activities or incentives.
 
 | Card or chart | What it tells you |
 | --- | --- |
