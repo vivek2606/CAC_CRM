@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getReservedByProduct } from "@/lib/reservations";
 
 // Each product's current reference price - the latest Pricelist entry in
 // effect today (its "effective from" date, else the 1st of its month; one
@@ -77,7 +78,10 @@ export function priceChangesIn(history: Map<string, PricePoint[]>, lines: { prod
 // day's billing and arrivals adjust it. A product with no opening stock
 // starts from its first receipt. A product with neither is left out of the
 // map (stock untracked for it), rather than reading as zero.
-export async function getAvailableStockByProduct(): Promise<Map<string, number>> {
+// Units free to sell: stock less billing, less units the Head has reserved
+// for a deal (reservations.ts). gross: leave the reservations in;
+// exceptDealId: leave that deal's own reservations in (they're for it).
+export async function getAvailableStockByProduct(opts: { gross?: boolean; exceptDealId?: string } = {}): Promise<Map<string, number>> {
   const [snapshots, receipts] = await Promise.all([
     prisma.productStock.findMany({ select: { productId: true, quantity: true, asOfDate: true } }),
     prisma.stockReceipt.findMany({ select: { productId: true, quantity: true, receivedAt: true } }),
@@ -114,8 +118,9 @@ export async function getAvailableStockByProduct(): Promise<Map<string, number>>
     if (li.docDate >= b.from) b.qty -= li.qty;
   }
 
+  const reserved = opts.gross ? new Map<string, number>() : await getReservedByProduct({ exceptDealId: opts.exceptDealId });
   const map = new Map<string, number>();
-  for (const [productId, b] of base) map.set(productId, Math.max(0, Math.round(b.qty)));
+  for (const [productId, b] of base) map.set(productId, Math.max(0, Math.round(b.qty) - (reserved.get(productId) ?? 0)));
   return map;
 }
 

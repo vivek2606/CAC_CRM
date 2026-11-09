@@ -38,6 +38,9 @@ import { STANDARD_WARRANTY_MONTHS, warrantyUntil } from "@/lib/service";
 import { WarrantyTerms } from "../../service/warranty-terms";
 import { InstallationHandover } from "../installation-handover";
 import { ClosingChecklist, type ChecklistStep } from "../closing-checklist";
+import { listReservations } from "../../stock/reservations/data";
+import { ReservationTable } from "../../stock/reservations/reservation-table";
+import { ReservationRequestForm } from "../../stock/reservations/reservation-ui";
 import { INSTALL_LABEL, INSTALL_TONE, quotedWithInstallation, type InstallStatus } from "@/lib/installation";
 
 export default async function DealDetailPage({
@@ -95,7 +98,7 @@ export default async function DealDetailPage({
   const [products, latestPriceByProduct, availableStockByProduct, inTransitByProduct, contacts, quotations, orderInvoices] = await Promise.all([
     getQuotableProducts(),
     getLatestPriceByProduct(),
-    getAvailableStockByProduct(),
+    getAvailableStockByProduct({ exceptDealId: deal.id }),
     getInTransitByProduct(),
     prisma.contact.findMany({
       where: { ownerId: { in: ownerIds } },
@@ -104,6 +107,15 @@ export default async function DealDetailPage({
     prisma.quotation.findMany({ where: { dealId: deal.id, ...NOT_DRAFT }, orderBy: { createdAt: "desc" }, select: savedQuoteSelect }).then(attachAccounts),
     getOrderInvoices(deal.id),
   ]);
+  // Stock reservations on this deal (and what's free to reserve).
+  const reservations = deal.sourceTxnNo == null ? await listReservations({ dealId: deal.id, status: ["REQUESTED", "APPROVED", "REJECTED", "RELEASED", "EXPIRED", "FULFILLED"] }) : [];
+  const heldHere = new Map<string, number>();
+  for (const r of reservations) if (r.status === "REQUESTED" || r.status === "APPROVED") heldHere.set(r.productId, (heldHere.get(r.productId) ?? 0) + r.qty);
+  const freeFor = (productId: string) => Math.max(0, (availableStockByProduct.get(productId) ?? 0) - (heldHere.get(productId) ?? 0));
+  const reserveOptions = products.filter((p) => freeFor(p.id) > 0).map((p) => ({ productId: p.id, label: `${p.model} (${p.code})`, free: freeFor(p.id) }));
+  const reserveStart = deal.items.filter((i) => freeFor(i.productId) > 0).map((i) => ({ productId: i.productId, label: i.product.model, free: freeFor(i.productId), qty: Math.round(i.qty) }));
+  const canReserve = deal.sourceTxnNo == null && deal.stage !== "LOST" && canAccessOwner(user, deal.ownerId);
+
   // An open deal with a quotation takes its products from the latest one.
   const productQuote =
     deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null && quotations.length
@@ -420,6 +432,27 @@ export default async function DealDetailPage({
                 canDelete={user.role === "HEAD"}
                 dealProducts={deal.stage !== "WON" && deal.stage !== "LOST" && deal.sourceTxnNo == null ? { hasProducts: deal.items.length > 0 } : undefined}
               />
+            </Card>
+          )}
+
+          {(reservations.length > 0 || canReserve) && (
+            <Card className="p-5">
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Stock reservation</h2>
+                <Link href="/stock/reservations" className="ml-auto text-xs text-indigo-600 hover:text-indigo-700">
+                  All reservations
+                </Link>
+              </div>
+              {reservations.length > 0 && <ReservationTable rows={reservations} viewer={user} showDeal={false} />}
+              {canReserve && (
+                <div className="mt-3">
+                  {reserveOptions.length ? (
+                    <ReservationRequestForm dealId={deal.id} start={reserveStart} products={reserveOptions} />
+                  ) : (
+                    <p className="text-xs text-slate-500">No stock free to reserve.</p>
+                  )}
+                </div>
+              )}
             </Card>
           )}
 

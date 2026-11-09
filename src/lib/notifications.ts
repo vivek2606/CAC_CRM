@@ -292,6 +292,52 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
     }
   }
 
+  // Stock reservations: requests for the Head; for the sales person,
+  // decisions this week and holds ending within 3 days.
+  if (user.role === "HEAD") {
+    const asked = await prisma.stockReservation.findMany({
+      where: { status: "REQUESTED" },
+      orderBy: { requestedAt: "asc" },
+      select: { qty: true, product: { select: { model: true } }, deal: { select: { title: true, owner: { select: { name: true } } } } },
+    });
+    if (asked.length)
+      groups.unshift({
+        key: "reservationAsk",
+        label: "Stock reservations waiting for your approval",
+        count: asked.length,
+        href: "/stock/reservations",
+        items: asked.slice(0, SHOW).map((r) => ({ label: `${r.qty} x ${r.product.model}`, sub: `${r.deal.title} · ${r.deal.owner.name}`, href: "/stock/reservations" })),
+      });
+  }
+  {
+    const mine = await prisma.stockReservation.findMany({
+      where: {
+        deal: team ? undefined : { ownerId: user.id },
+        OR: [
+          { status: "APPROVED", expiresAt: { gt: now, lt: new Date(now.getTime() + 3 * day) } },
+          ...(team ? [] : [{ status: { in: ["APPROVED", "REJECTED"] }, decidedAt: { gte: new Date(now.getTime() - 7 * day) } }]),
+        ],
+      },
+      orderBy: { expiresAt: "asc" },
+      select: { status: true, qty: true, expiresAt: true, decidedAt: true, decisionNote: true, dealId: true, product: { select: { model: true } }, deal: { select: { owner: { select: { name: true } } } } },
+    });
+    if (mine.length)
+      groups.push({
+        key: "reservations",
+        label: "Stock reservations",
+        count: mine.length,
+        href: "/stock/reservations",
+        items: mine.slice(0, SHOW).map((r) => {
+          const ending = r.status === "APPROVED" && r.expiresAt && r.expiresAt.getTime() - now.getTime() < 3 * day;
+          return {
+            label: `${r.qty} x ${r.product.model}`,
+            sub: `${ending ? `held until ${fmt(r.expiresAt!)} - invoice it, or ask the Head to extend` : r.status === "APPROVED" ? "Reserved by the Head" : `Rejected${r.decisionNote ? `: ${r.decisionNote}` : ""}`}${who(r.deal.owner.name)}`,
+            href: `/deals/${r.dealId}`,
+          };
+        }),
+      });
+  }
+
   // Quotation discounts over an item's maximum: the Head approves them;
   // whoever the quote is for / made it hears back for a week.
   if (user.role === "HEAD") {

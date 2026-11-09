@@ -39,7 +39,7 @@ const itemRows = (doc: SalesDocument) =>
 // model as the line's description.
 async function tentativeRates(doc: SalesDocument): Promise<{ byProduct: Map<string, number>; byModel: Map<string, number> }> {
   const rows = itemRows(doc);
-  const [stock, tentative] = await Promise.all([getAvailableStockByProduct(), getAllTentativePrices()]);
+  const [stock, tentative] = await Promise.all([getAvailableStockByProduct({ gross: true }), getAllTentativePrices()]);
   const byModel = new Map(tentative.map((t) => [t.model.trim().toLowerCase(), t.dealerPrice]));
   const ids = [...new Set(rows.map((r) => r.productId).filter((x): x is string => !!x))].filter((id) => (stock.get(id) ?? 0) <= 0);
   const products = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, model: true } }) : [];
