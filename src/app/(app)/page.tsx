@@ -195,13 +195,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         description={now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
         action={
           backOffice ? undefined : (
-            <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm">
+            <div className="flex items-center gap-3">
+              <Link href="/review" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                Monthly review
+              </Link>
+              <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm">
               <Link href="/" className={`rounded-md px-3 py-1 font-medium ${division ? "text-slate-500 hover:text-slate-800" : "bg-white text-slate-900 shadow-sm"}`}>
                 Mine
               </Link>
               <Link href="/?view=division" className={`rounded-md px-3 py-1 font-medium ${division ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                 Division
               </Link>
+              </div>
             </div>
           )
         }
@@ -347,10 +352,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         </Card>
 
-        {/* A sales person's dashboard stays short: target progress, coverage
-            and follow-ups above; the rest is on My Day and its own pages. */}
-        {team ? (
-          <>
         <Card className="p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-slate-900">
@@ -656,37 +657,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Card>
           )}
         </div>
-          </>
-        ) : (
-          <Card className="p-4">
-            <p className="text-sm text-slate-600">
-              More:{" "}
-              <Link href="/my-day" className="font-medium text-indigo-600 hover:text-indigo-700">
-                My Day
-              </Link>{" "}
-              (today&apos;s calls, follow-ups and visits) ·{" "}
-              <Link href="/deals" className="font-medium text-indigo-600 hover:text-indigo-700">
-                Pipeline
-              </Link>{" "}
-              ·{" "}
-              <Link href="/leads" className="font-medium text-indigo-600 hover:text-indigo-700">
-                Leads
-              </Link>{" "}
-              ·{" "}
-              <Link href="/reports/sales-register" className="font-medium text-indigo-600 hover:text-indigo-700">
-                Sales Register
-              </Link>{" "}
-              (sales by product and month) ·{" "}
-              <Link href="/incentives" className="font-medium text-indigo-600 hover:text-indigo-700">
-                Incentives & Targets
-              </Link>{" "}
-              ·{" "}
-              <Link href="/review" className="font-medium text-indigo-600 hover:text-indigo-700">
-                Monthly review
-              </Link>
-            </p>
-          </Card>
-        )}
       </div>
     </div>
   );
