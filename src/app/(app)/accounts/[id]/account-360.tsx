@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Stars } from "../../feedback/feedback-card";
 import { FEEDBACK_KIND_LABEL } from "@/lib/feedback-labels";
+import { dayMonthLabel } from "@/lib/key-dates-shared";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/format";
@@ -31,6 +32,10 @@ export async function Account360({ accountId, canSeeService }: { accountId: stri
       take: 20,
       select: { rating: true, comment: true, kind: true, respondedAt: true, dealId: true },
     }),
+  ]);
+  const contactDates = (await prisma.contact.findMany({ where: { accountId, OR: [{ birthday: { not: null } }, { specialDate: { not: null } }] }, select: { id: true, firstName: true, lastName: true, birthday: true, specialDate: true, specialDateLabel: true } })).flatMap((c) => [
+    ...(c.birthday ? [{ id: c.id, name: `${c.firstName} ${c.lastName}`.trim(), kind: "Birthday", date: c.birthday }] : []),
+    ...(c.specialDate ? [{ id: c.id, name: `${c.firstName} ${c.lastName}`.trim(), kind: c.specialDateLabel ?? "Anniversary", date: c.specialDate }] : []),
   ]);
   const avgRating = feedback.length ? feedback.reduce((s, f) => s + (f.rating ?? 0), 0) / feedback.length : null;
 
@@ -137,6 +142,24 @@ export async function Account360({ accountId, canSeeService }: { accountId: stri
           )}
         </div>
       </div>
+
+      {contactDates.length > 0 && (
+        <div className="mt-4 text-sm">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Dates to remember</h3>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1">
+            {contactDates.map((c, i) => (
+              <li key={i}>
+                <Link href={`/contacts/${c.id}`} className="text-slate-800 hover:text-indigo-700">
+                  {c.name}
+                </Link>{" "}
+                <span className="text-xs text-slate-500">
+                  {c.kind} {dayMonthLabel(c.date)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {feedback.length > 0 && (
         <div className="mt-4 text-sm">

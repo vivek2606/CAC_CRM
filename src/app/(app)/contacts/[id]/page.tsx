@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { dayMonthLabel } from "@/lib/key-dates-shared";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
@@ -133,6 +134,18 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                 <div className="flex justify-between">
                   <dt className="text-slate-500">WhatsApp</dt>
                   <dd className="text-slate-700">{contact.whatsappNumber}</dd>
+                </div>
+              )}
+              {contact.birthday && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">Birthday</dt>
+                  <dd className="text-slate-700">{dayMonthLabel(contact.birthday)}</dd>
+                </div>
+              )}
+              {contact.specialDate && (
+                <div className="flex justify-between">
+                  <dt className="text-slate-500">{contact.specialDateLabel ?? "Anniversary"}</dt>
+                  <dd className="text-slate-700">{dayMonthLabel(contact.specialDate)}</dd>
                 </div>
               )}
               {contact.account && (

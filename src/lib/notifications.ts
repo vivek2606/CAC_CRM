@@ -12,6 +12,7 @@ import { awaitingHandoverWhere } from "@/lib/installation";
 import { QUICK_ADD_TAG } from "@/lib/constants";
 import { getGoneQuiet } from "@/lib/win-back";
 import { feedbackToAsk, LOW_RATING } from "@/lib/feedback";
+import { upcomingKeyDates, whenLabel } from "@/lib/key-dates";
 import { STALE_DAYS, lastContact, stalledWhere } from "@/lib/stalled";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
@@ -336,6 +337,19 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
             href: `/deals/${r.dealId}`,
           };
         }),
+      });
+  }
+
+  // Your contacts' birthdays and anniversaries, today to 3 days ahead.
+  {
+    const dates = await upcomingKeyDates([user.id], 3, now);
+    if (dates.length)
+      groups.push({
+        key: "keyDates",
+        label: "Birthdays and anniversaries",
+        count: dates.length,
+        href: "/my-day",
+        items: dates.slice(0, SHOW).map((k) => ({ label: `${k.name}${k.account ? ` (${k.account})` : ""}`, sub: `${k.kind} ${whenLabel(k.daysAway)} - send a greeting from My Day`, href: "/my-day" })),
       });
   }
 

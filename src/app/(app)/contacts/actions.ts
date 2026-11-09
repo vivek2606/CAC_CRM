@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, isBackOffice } from "@/lib/rbac";
+import { fromDayMonth } from "@/lib/key-dates-shared";
 
 const contactSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -16,7 +17,22 @@ const contactSchema = z.object({
   department: z.string().optional(),
   accountId: z.string().optional(),
   ownerId: z.string().min(1),
+  birthdayDay: z.string().optional(),
+  birthdayMonth: z.string().optional(),
+  specialDay: z.string().optional(),
+  specialMonth: z.string().optional(),
+  specialDateLabel: z.string().optional(),
 });
+
+// Birthday and one other date (day and month only).
+function keyDates(p: z.infer<typeof contactSchema>) {
+  const specialDate = fromDayMonth(p.specialDay, p.specialMonth);
+  return {
+    birthday: fromDayMonth(p.birthdayDay, p.birthdayMonth),
+    specialDate,
+    specialDateLabel: specialDate ? toNullable(p.specialDateLabel?.trim()) ?? "Anniversary" : null,
+  };
+}
 
 function toNullable(value: string | undefined) {
   return value && value.trim() !== "" ? value : null;
@@ -39,6 +55,7 @@ export async function createContact(formData: FormData) {
       department: toNullable(parsed.department),
       accountId: toNullable(parsed.accountId),
       ownerId,
+      ...keyDates(parsed),
     },
   });
 
@@ -67,6 +84,7 @@ export async function updateContact(contactId: string, formData: FormData) {
       department: toNullable(parsed.department),
       accountId: toNullable(parsed.accountId),
       ownerId,
+      ...keyDates(parsed),
     },
   });
 

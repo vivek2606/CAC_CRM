@@ -1,6 +1,32 @@
 "use client";
 
 import { SearchableSelect } from "@/components/searchable-select";
+import { MONTHS, SPECIAL_LABELS, dayMonth } from "@/lib/key-dates-shared";
+
+const sel = "rounded-lg border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+function DayMonth({ prefix, value }: { prefix: string; value: Date | null | undefined }) {
+  const dm = dayMonth(value);
+  return (
+    <div className="flex gap-2">
+      <select name={`${prefix}Day`} defaultValue={dm?.day ?? ""} className={sel} aria-label="Day">
+        <option value="">Day</option>
+        {Array.from({ length: 31 }, (_, i) => (
+          <option key={i + 1} value={i + 1}>
+            {i + 1}
+          </option>
+        ))}
+      </select>
+      <select name={`${prefix}Month`} defaultValue={dm?.month ?? ""} className={`${sel} flex-1`} aria-label="Month">
+        <option value="">Month</option>
+        {MONTHS.map((m, i) => (
+          <option key={m} value={i + 1}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 type Option = { id: string; label: string };
 
@@ -26,6 +52,9 @@ export function ContactForm({
     department?: string | null;
     accountId?: string | null;
     ownerId?: string;
+    birthday?: Date | null;
+    specialDate?: Date | null;
+    specialDateLabel?: string | null;
   };
   submitLabel: string;
 }) {
@@ -119,6 +148,30 @@ export function ContactForm({
           </div>
         )}
         {!isHead && <input type="hidden" name="ownerId" value={defaultValues?.ownerId ?? ""} />}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4">
+        <p className="sm:col-span-2 text-xs text-slate-500">Dates to remember - you&apos;ll be reminded on My Day 3 days before, with a WhatsApp greeting ready.</p>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Birthday</label>
+          <DayMonth prefix="birthday" value={defaultValues?.birthday} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Other date</label>
+          <DayMonth prefix="special" value={defaultValues?.specialDate} />
+          <input
+            name="specialDateLabel"
+            list="special-labels"
+            placeholder="e.g. Wedding anniversary"
+            defaultValue={defaultValues?.specialDateLabel ?? ""}
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <datalist id="special-labels">
+            {SPECIAL_LABELS.map((l) => (
+              <option key={l} value={l} />
+            ))}
+          </datalist>
+        </div>
       </div>
 
       <div className="flex gap-3">

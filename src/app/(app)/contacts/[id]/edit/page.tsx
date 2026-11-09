@@ -43,6 +43,9 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
               department: contact.department,
               accountId: contact.accountId,
               ownerId: contact.ownerId,
+              birthday: contact.birthday,
+              specialDate: contact.specialDate,
+              specialDateLabel: contact.specialDateLabel,
             }}
             submitLabel="Save Changes"
           />

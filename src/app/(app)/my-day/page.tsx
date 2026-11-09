@@ -12,6 +12,9 @@ import { canUseService, isServiceManager } from "@/lib/service-access";
 import { getSla, slaSummary, STAGE_LABEL } from "@/lib/service-sla";
 import { PENDING_STATUSES } from "@/lib/service";
 import { CheckInButton } from "./visit-ui";
+import { upcomingKeyDates } from "@/lib/key-dates";
+import { getCompanySettings, pickCompany } from "@/lib/company-profile";
+import { KeyDatesList } from "../key-dates-list";
 import { getStandards, weeklyCounts } from "@/lib/activity-standards";
 import { Scorecard, ScorecardLink } from "../standards/scorecard";
 
@@ -199,6 +202,14 @@ export default async function MyDayPage() {
         ))
       : null;
 
+  // Birthdays and anniversaries of your contacts, today to 3 days ahead.
+  const [keyDates, companySettings] = await Promise.all([upcomingKeyDates([user.id], 3, now), getCompanySettings()]);
+  const keyDatesBlock = keyDates.length ? (
+    <Section title="Birthdays and anniversaries" count={keyDates.length}>
+      <KeyDatesList items={keyDates} from={user.name ?? ""} company={pickCompany(companySettings, undefined).name} />
+    </Section>
+  ) : null;
+
   return (
     <div>
       <PageHeader
@@ -211,6 +222,7 @@ export default async function MyDayPage() {
         }
       />
       <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6">
+        {keyDatesBlock}
         {standardsBlock}
         {visitsToday.length > 0 && (
           <Section title="Visits today" count={visitsToday.length} href="/my-day/plan">
