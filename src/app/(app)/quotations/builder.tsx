@@ -8,7 +8,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, FileDown, GripVertical, FileSpreadsheet, FileUp, Heading, PackagePlus, PenLine, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
-import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft } from "./actions";
+import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft, customerPriceHistory, type PricePoint } from "./actions";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 import { combinedOutdoorIn, kW, vrfModelName, DEFAULT_VRF_SERIES } from "@/lib/modular-outdoor";
 import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
@@ -346,6 +346,24 @@ export function QuotationBuilder({
   // The modular-outdoor dialog: for which line, and the model typed.
   const [modular, setModular] = useState<{ uid: string; series: string | null; code: number; modules?: ModularModule[] } | null>(null);
   const hasSavedDraft = useHasSavedDraft();
+
+  // What this customer was last quoted / invoiced for each product.
+  const [history, setHistory] = useState<Record<string, { quoted?: PricePoint; invoiced?: PricePoint }>>({});
+  const customerKey = `${d.accountId ?? ""}|${d.to.split("\n")[0]?.trim() ?? ""}`;
+  useEffect(() => {
+    let live = true;
+    const [accountId, name] = customerKey.split("|");
+    const t = setTimeout(() => {
+      if (!accountId && name.length < 3) return setHistory({});
+      customerPriceHistory(accountId, name, isIssuedQuoteRef(d.ref) ? d.ref : undefined)
+        .then((h) => live && setHistory(h))
+        .catch(() => {});
+    }, 700);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [customerKey, d.ref]);
 
   // Keep the work in the browser so leaving the page doesn't lose it.
   useEffect(() => {
@@ -1467,6 +1485,23 @@ export function QuotationBuilder({
                         onChange={(e) => setRow(r.uid, { unitPrice: e.target.value })}
                         className={`${input} text-right read-only:bg-amber-50`}
                       />
+                      {(() => {
+                        const h = (r.productId ? history[r.productId] : undefined) ?? (r.description ? history[`m:${r.description.toUpperCase().replace(/[^A-Z0-9]/g, "")}`] : undefined);
+                        if (!h) return null;
+                        // In this quote's terms (incl. VAT rounded up, or excl.).
+                        const shown = (rate: number) => naira(inclusive ? Math.ceil(round2(rate * vatFactor)) : rate);
+                        const ours = inclusive ? netRate(r) / vatFactor : netRate(r);
+                        const higher = h.invoiced && ours > h.invoiced.rate + 0.5;
+                        const dmyShort = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit", timeZone: "UTC" });
+                        return (
+                          <p className={`mt-1 text-right text-[11px] ${higher ? "font-medium text-amber-700" : "text-slate-500"}`} title="This customer's last rates for this model, after discount">
+                            {h.quoted && `Last quoted ${shown(h.quoted.rate)} (${dmyShort(h.quoted.date)})`}
+                            {h.quoted && h.invoiced && " · "}
+                            {h.invoiced && `last bought at ${shown(h.invoiced.rate)} (${dmyShort(h.invoiced.date)})`}
+                            {higher && " - higher now"}
+                          </p>
+                        );
+                      })()}
                       {opt?.rate != null && Math.abs(num(r.unitPrice) - quoteRate(opt.rate)) >= 0.01 && (
                         <p className="mt-1 text-right text-[11px] text-amber-700">
                           {num(r.unitPrice) < quoteRate(opt.rate) ? "Below" : "Above"} suggested by{" "}

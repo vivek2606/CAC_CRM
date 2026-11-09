@@ -300,3 +300,62 @@ export async function deleteQuotation(id: string): Promise<{ error?: string }> {
   if (q.dealId) revalidatePath(`/deals/${q.dealId}`);
   return {};
 }
+
+// Customer price history: per product, what this customer was last quoted
+// and last invoiced (rates excl. VAT, after discount), for the quote
+// builder - so a regular buyer isn't quoted above what they paid last.
+export type PricePoint = { rate: number; date: string; ref: string };
+export async function customerPriceHistory(accountId: string, customerName: string, excludeRef?: string): Promise<Record<string, { quoted?: PricePoint; invoiced?: PricePoint }>> {
+  await requireUser();
+  const name = customerName.trim();
+  if (!accountId && name.length < 3) return {};
+  const { documentInputSchema, netOf } = await import("@/lib/sales-document");
+  const { getCompanySettings } = await import("@/lib/company-profile");
+  const vat = 1 + (await getCompanySettings()).vatRatePct / 100;
+  const [quotes, lines] = await Promise.all([
+    prisma.quotation.findMany({
+      where: {
+        type: { not: "draft" },
+        ...(excludeRef ? { ref: { not: excludeRef } } : {}),
+        OR: [...(accountId ? [{ data: { path: ["accountId"], equals: accountId } }, { deal: { accountId } }] : []), ...(name.length >= 3 ? [{ customerName: { equals: name, mode: "insensitive" as const } }] : [])],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 60,
+      select: { ref: true, updatedAt: true, data: true },
+    }),
+    accountId
+      ? prisma.saleLineItem.findMany({
+          where: { deal: { accountId }, qty: { gt: 0 } },
+          orderBy: { docDate: "desc" },
+          take: 500,
+          select: { productId: true, qty: true, value: true, docDate: true, product: { select: { model: true } }, deal: { select: { invoiceNo: true, sourceTxnNo: true } } },
+        })
+      : [],
+  ]);
+  // Keyed by product id, and by "m:" + model (older quotes kept only the model).
+  const out: Record<string, { quoted?: PricePoint; invoiced?: PricePoint }> = {};
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const mk = (model: string) => `m:${model.toUpperCase().replace(/[^A-Z0-9]/g, "")}`;
+  for (const q of quotes) {
+    const parsed = documentInputSchema.safeParse(q.data);
+    if (!parsed.success) continue;
+    const f = parsed.data.vatMode === "inclusive" ? vat : 1;
+    for (const r of parsed.data.rows) {
+      if (r.kind !== "item" || r.unitPrice <= 0 || (!r.productId && !r.description)) continue;
+      const point = { rate: Math.round((netOf(r.unitPrice, r.discountPct) / f) * 100) / 100, date: day(q.updatedAt), ref: q.ref };
+      for (const k of [r.productId, r.description ? mk(r.description) : null]) {
+        if (!k) continue;
+        const e = (out[k] ??= {});
+        if (!e.quoted) e.quoted = point;
+      }
+    }
+  }
+  for (const l of lines) {
+    const point = { rate: Math.round((l.value / l.qty) * 100) / 100, date: day(l.docDate), ref: l.deal?.invoiceNo ?? (l.deal?.sourceTxnNo != null ? String(l.deal.sourceTxnNo) : "") };
+    for (const k of [l.productId, mk(l.product.model)]) {
+      const e = (out[k] ??= {});
+      if (!e.invoiced) e.invoiced = point;
+    }
+  }
+  return out;
+}

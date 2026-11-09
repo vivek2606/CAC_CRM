@@ -137,6 +137,8 @@ You don't always need to create the lead by hand: a deal created directly gets i
 6. **Sales commission:** tick 5% or 10% when the customer's buyer gets a commission. Every rate is divided by 0.95 or 0.9; this isn't printed.
 7. **Download PDF** or **Download Excel**. The first download issues the unique reference number. The final total is rounded off.
 
+**Customer price history.** Once the customer is filled in, each product line shows what that customer was **last quoted** and **last bought at** for that model (after discount, in this quote's VAT terms) - in amber if you're now quoting higher than they last paid.
+
 **Discounts.** The "Disc. %" and "Our cost" columns are not printed. A discount beyond the product's permissible limit goes to the Head for approval (Approvals tab) before the quote can be sent. Items not in stock get a tentative rate and no discount.
 
 **Deal and lead made for you.** An equipment quote downloaded without a deal creates its lead and deal straight away, at the Quotation stage. You're then asked to link the customer's account. Servicing and spares quotes don't create deals. To put a quote on an existing deal, start it from the deal, or use **Link deal** in Saved quotations.
