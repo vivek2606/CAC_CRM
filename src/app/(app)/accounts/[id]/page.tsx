@@ -15,6 +15,8 @@ import {
 import { DeleteAccountButton } from "../delete-account-button";
 import { TagChips } from "@/components/tag-chips";
 import { Pencil, Trash2 } from "lucide-react";
+import { Account360 } from "./account-360";
+import { canUseService } from "@/lib/service-access";
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -90,6 +92,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
       <div className="p-6 space-y-6">
         {account.tags.length > 0 && <TagChips tags={account.tags} />}
+        {isOwner && <Account360 accountId={account.id} canSeeService={await canUseService(user)} />}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="p-5">
