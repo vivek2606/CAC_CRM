@@ -4,12 +4,12 @@ import { withChangeReason } from "@/lib/change-log";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireHead } from "@/lib/rbac";
+import { requireHead, requireUser, isBackOffice } from "@/lib/rbac";
 import { notifyQuoteDiscountDecided } from "@/lib/push-events";
 
 // The Head approves (the discounts asked for become the approved ones - a
 // download within them goes ahead) or rejects a quotation's discount.
-async function decideQuoteDiscountUnlabelled(quoteId: string, approve: boolean): Promise<{ error?: string }> {
+async function decideQuoteDiscountUnlabelled(quoteId: string, approve: boolean, note = ""): Promise<{ error?: string }> {
   const head = await requireHead();
   const q = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { discountStatus: true, discountRequest: true } });
   if (!q || q.discountStatus !== "pending") return { error: "This request has already been dealt with." };
@@ -20,6 +20,7 @@ async function decideQuoteDiscountUnlabelled(quoteId: string, approve: boolean):
       ...(approve ? { discountApproved: (q.discountRequest ?? []) as Prisma.InputJsonValue } : {}),
       discountDecidedAt: new Date(),
       discountDecidedById: head.id,
+      discountDecisionNote: note.trim().slice(0, 500) || null,
     },
   });
   await notifyQuoteDiscountDecided(quoteId, approve);
@@ -32,4 +33,17 @@ async function decideQuoteDiscountUnlabelled(quoteId: string, approve: boolean):
 // Its changes go into the change history marked as "Head's discount decision".
 export async function decideQuoteDiscount(...args: Parameters<typeof decideQuoteDiscountUnlabelled>): ReturnType<typeof decideQuoteDiscountUnlabelled> {
   return withChangeReason("Head's discount decision", () => decideQuoteDiscountUnlabelled(...args));
+}
+
+// The sales person's reason for a quote held for the Head (approval log).
+export async function setDiscountReason(ref: string, reason: string): Promise<{ error?: string }> {
+  const user = await requireUser();
+  const r = reason.trim();
+  if (!r) return { error: "Write the reason." };
+  const q = await prisma.quotation.findUnique({ where: { ref }, select: { id: true, ownerId: true, createdById: true, discountStatus: true } });
+  if (!q || (q.ownerId !== user.id && q.createdById !== user.id && !isBackOffice(user))) return { error: "Quotation not found." };
+  if (q.discountStatus !== "pending") return { error: "This quote isn't waiting for approval any more." };
+  await prisma.quotation.update({ where: { id: q.id }, data: { discountReason: r.slice(0, 500) } });
+  revalidatePath("/quotations/approvals");
+  return {};
 }

@@ -21,6 +21,8 @@ export default async function QuoteApprovalsPage() {
     discountRequest: true,
     discountRequestedAt: true,
     discountDecidedAt: true,
+    discountReason: true,
+    discountDecisionNote: true,
     owner: { select: { name: true } },
     createdBy: { select: { name: true } },
     deal: { select: { id: true, title: true } },
@@ -70,6 +72,10 @@ export default async function QuoteApprovalsPage() {
                   <DecideButtons quoteId={q.id} />
                 </div>
               </div>
+              <p className="text-sm text-slate-700">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Reason: </span>
+                {q.discountReason ?? <span className="text-slate-400">not given yet</span>}
+              </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -109,7 +115,16 @@ export default async function QuoteApprovalsPage() {
                       {kind[q.type] ?? q.type} {q.ref} · {q.customerName}
                     </td>
                     <td className="py-1.5 pr-3 text-slate-600">{q.owner.name}</td>
-                    <td className="py-1.5 pr-3 text-slate-600">{lines(q).map((l) => `${l.description} ${l.discountPct}%`).join(", ")}</td>
+                    <td className="py-1.5 pr-3 text-slate-600">
+                      {lines(q).map((l) => `${l.description} ${l.discountPct}%`).join(", ")}
+                      {(q.discountReason || q.discountDecisionNote) && (
+                        <div className="text-xs text-slate-500">
+                          {q.discountReason && `Why: ${q.discountReason}`}
+                          {q.discountReason && q.discountDecisionNote && " · "}
+                          {q.discountDecisionNote && `Note: ${q.discountDecisionNote}`}
+                        </div>
+                      )}
+                    </td>
                     <td className={`py-1.5 pr-3 font-medium ${q.discountStatus === "approved" ? "text-emerald-700" : "text-rose-700"}`}>
                       {q.discountStatus === "approved" ? "Approved" : "Rejected"}
                     </td>

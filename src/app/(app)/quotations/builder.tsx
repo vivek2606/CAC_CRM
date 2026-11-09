@@ -9,6 +9,7 @@ import { ArrowDown, ArrowUp, FileDown, GripVertical, FileSpreadsheet, FileUp, He
 import { SearchableSelect } from "@/components/searchable-select";
 import { nairaInWords, serialNumbers, isAvailabilityNote, isIssuedQuoteRef, nameInitials } from "@/lib/document-format";
 import { reserveQuoteRef, importQuoteSheet, createDealForQuote, saveQuoteDraft, discardQuoteDraft, customerPriceHistory, type PricePoint } from "./actions";
+import { HeldReason } from "./held-reason";
 import type { DocumentInput, DocumentType } from "@/lib/sales-document";
 import { combinedOutdoorIn, kW, vrfModelName, DEFAULT_VRF_SERIES } from "@/lib/modular-outdoor";
 import { ModularOutdoorDialog, type ModularModule } from "./modular-outdoor-dialog";
@@ -1867,7 +1868,12 @@ export function QuotationBuilder({
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {draftNote && !error && <p className="text-sm text-emerald-700">{draftNote}</p>}
-        {held && <p className="basis-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 order-last">{held}</p>}
+        {held && (
+          <div className="basis-full order-last rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p>{held}</p>
+            <HeldReason quoteRef={d.ref} />
+          </div>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           {/* Save the work as a draft any time (a quotation already issued
               keeps its number); throw away one not issued yet. */}

@@ -23,7 +23,7 @@ import {
   Receipt,
   Landmark,
   TableProperties,
-  FileText, HeartPulse, Trash2, History, LifeBuoy, CircleHelp, CalendarCheck, Gauge, Star } from "lucide-react";
+  FileText, HeartPulse, Trash2, History, LifeBuoy, CircleHelp, CalendarCheck, Gauge, Star, ShieldCheck } from "lucide-react";
 import type { SessionUser } from "@/lib/rbac";
 import { SignOutButton } from "./sign-out-button";
 import { SakuragiMark } from "@/components/sakuragi-logo";
@@ -119,6 +119,7 @@ const NAV_GROUPS: { title: string | null; items: NavItem[] }[] = [
       { href: "/admin/import", label: "Import Data", icon: Upload, color: "lime", backOffice: true },
       { href: "/admin/data-health", label: "Data Health", icon: HeartPulse, color: "red", backOffice: true },
       { href: "/admin/recycle-bin", label: "Recycle Bin", icon: Trash2, color: "pink", backOffice: true },
+      { href: "/admin/approval-log", label: "Approval Log", icon: ShieldCheck, color: "emerald", headOnly: true },
       { href: "/admin/change-history", label: "Change History", icon: History, color: "sky", headOnly: true },
       { href: "/admin/exchange-rate", label: "Exchange Rate", icon: DollarSign, color: "yellow", headOnly: true },
       { href: "/admin/company", label: "Company Details", icon: Landmark, color: "violet", headOnly: true },

@@ -613,15 +613,16 @@ export async function deleteDealLineItem(lineItemId: string, dealId: string) {
   revalidatePath(`/deals/${dealId}`);
 }
 
-export async function approveDealDiscount(dealId: string) {
+export async function approveDealDiscount(dealId: string, formData?: FormData) {
   // Approving a discount stays with the Head of Sales only.
   const head = await requireHead();
+  const note = String(formData?.get("note") ?? "").trim().slice(0, 500) || null;
 
   await prisma.deal.update({
     where: { id: dealId },
-    data: { discountApprovedAt: new Date(), discountApprovedById: head.id },
+    data: { discountApprovedAt: new Date(), discountApprovedById: head.id, discountApprovalNote: note },
   });
-  await audit("deal", dealId, head.id, "edited", "Discount approved.");
+  await audit("deal", dealId, head.id, "edited", `Discount approved.${note ? ` ${note}` : ""}`);
   await notifyDiscountApproved(dealId);
 
   revalidatePath(`/deals/${dealId}`);

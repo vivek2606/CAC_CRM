@@ -482,7 +482,8 @@ export default async function DealDetailPage({
               </p>
               {discount.needsApproval ? (
                 user.role === "HEAD" ? (
-                  <form action={approveDealDiscount.bind(null, deal.id)} className="mt-3">
+                  <form action={approveDealDiscount.bind(null, deal.id)} className="mt-3 flex flex-wrap items-center gap-2">
+                    <input name="note" placeholder="Note for the approval log (optional)" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                     <button
                       type="submit"
                       className="rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-3.5 py-2 transition-colors"
@@ -496,6 +497,7 @@ export default async function DealDetailPage({
               ) : deal.discountApprovedAt ? (
                 <p className="mt-2 text-sm text-emerald-600">
                   Approved by {deal.discountApprovedBy?.name ?? "Head"} on {formatDate(deal.discountApprovedAt)}.
+                  {deal.discountApprovalNote && <span className="text-slate-600"> {deal.discountApprovalNote}</span>}
                 </p>
               ) : null}
             </Card>
