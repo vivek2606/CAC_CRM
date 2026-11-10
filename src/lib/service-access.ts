@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { isBackOffice, requireUser, type SessionUser } from "@/lib/rbac";
@@ -6,9 +7,13 @@ import { isBackOffice, requireUser, type SessionUser } from "@/lib/rbac";
 // Manager (Sikiru) - not the sales people.
 export const SERVICE_MANAGER = "Service Manager";
 
+// The signed-in user's title, looked up once per request however many
+// checks ask.
+const userTitle = cache((id: string) => prisma.user.findUnique({ where: { id }, select: { title: true, isActive: true } }));
+
 export async function canUseService(user: SessionUser): Promise<boolean> {
   if (isBackOffice(user)) return true;
-  const u = await prisma.user.findUnique({ where: { id: user.id }, select: { title: true, isActive: true } });
+  const u = await userTitle(user.id);
   return !!u?.isActive && u.title === SERVICE_MANAGER;
 }
 
@@ -23,7 +28,7 @@ export async function requireService(): Promise<SessionUser> {
 // incentives (his billing is entered by the Head / Coordinator).
 export async function isServiceManager(user: SessionUser): Promise<boolean> {
   if (user.role !== "SALES_MANAGER") return false;
-  const u = await prisma.user.findUnique({ where: { id: user.id }, select: { title: true } });
+  const u = await userTitle(user.id);
   return u?.title === SERVICE_MANAGER;
 }
 export async function blockServiceManager(): Promise<void> {

@@ -5,6 +5,7 @@ import { HistoryCard } from "@/components/history-card";
 import { NOT_DRAFT, attachAccounts } from "@/lib/saved-quotes";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { early } from "@/lib/early";
 import { requireUser, canAccessOwner, visibleOwnerIds, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { getLatestPriceByProduct, getAvailableStockByProduct, getQuotableProducts, getInTransitByProduct, inTransitLabel } from "@/lib/pricing";
@@ -83,8 +84,25 @@ export default async function DealDetailPage({
   if (!canAccessOwner(user, deal.ownerId)) redirect("/deals");
 
   const colors = DEAL_STAGE_COLORS[deal.stage];
+  // Everything else the page needs depends only on the deal: start it all
+  // now, so the queries run together rather than one after another.
+  const open = deal.stage !== "WON" && deal.stage !== "LOST";
   // Invoices from a products sheet still waiting to be applied (Mark Won opens with them).
-  const wonPlan = deal.stage !== "WON" && deal.stage !== "LOST" ? await getWonPlan(deal.id) : null;
+  const wonPlanP = early(open ? getWonPlan(deal.id) : null);
+  const reservationsP = early(deal.sourceTxnNo == null ? listReservations({ dealId: deal.id, status: ["REQUESTED", "APPROVED", "REJECTED", "RELEASED", "EXPIRED", "FULFILLED"] }) : []);
+  const openBalancesP = early(
+    prisma.deal.findMany({
+      where: { orderDealId: deal.orderDealId ?? deal.id, isBalance: true, stage: { notIn: ["WON", "LOST"] }, id: { not: deal.id } },
+      select: { id: true, title: true, value: true, items: { select: { qty: true, product: { select: { model: true } } } } },
+    }),
+  );
+  const balancePendingP = early(deal.isBalance ? prisma.pendingOrder.findMany({ where: { dealId: deal.id, status: "OPEN" }, select: { paymentReceived: true } }) : []);
+  const quotedInstallP = early(deal.stage === "WON" && !deal.installationJob ? quotedWithInstallation(deal.id) : false);
+  const unitsP = early(deal.stage === "WON" && deal.sourceTxnNo == null ? prisma.installedUnit.findMany({ where: { dealId: deal.id }, select: { qty: true, serialNos: true } }) : []);
+  // Every account, for linking one when the deal has none (Mark Won).
+  const allAccountsP = early(!deal.accountId && open ? prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }) : []);
+  const serviceP = early(canUseService(user));
+  const wonPlan = await wonPlanP;
   // "First contacted" (see Lead detail page for the same idea) - for a
   // capital-goods business where enquiries mostly land directly as a Deal,
   // this is the number that reflects how fast the enquiry actually got a
@@ -111,7 +129,7 @@ export default async function DealDetailPage({
     getOrderInvoices(deal.id),
   ]);
   // Stock reservations on this deal (and what's free to reserve).
-  const reservations = deal.sourceTxnNo == null ? await listReservations({ dealId: deal.id, status: ["REQUESTED", "APPROVED", "REJECTED", "RELEASED", "EXPIRED", "FULFILLED"] }) : [];
+  const reservations = await reservationsP;
   const heldHere = new Map<string, number>();
   for (const r of reservations) if (r.status === "REQUESTED" || r.status === "APPROVED") heldHere.set(r.productId, (heldHere.get(r.productId) ?? 0) + r.qty);
   const freeFor = (productId: string) => Math.max(0, (availableStockByProduct.get(productId) ?? 0) - (heldHere.get(productId) ?? 0));
@@ -125,18 +143,10 @@ export default async function DealDetailPage({
       ? [...quotations].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
       : null;
   // Part-billed orders: the order's balance still to bill (awaiting stock).
-  const openBalances = await prisma.deal.findMany({
-    where: { orderDealId: deal.orderDealId ?? deal.id, isBalance: true, stage: { notIn: ["WON", "LOST"] }, id: { not: deal.id } },
-    select: { id: true, title: true, value: true, items: { select: { qty: true, product: { select: { model: true } } } } },
-  });
-  const balancePending = deal.isBalance
-    ? await prisma.pendingOrder.findMany({ where: { dealId: deal.id, status: "OPEN" }, select: { paymentReceived: true } })
-    : [];
+  const [openBalances, balancePending, quotedInstall, units, allAccounts, service] = await Promise.all([openBalancesP, balancePendingP, quotedInstallP, unitsP, allAccountsP, serviceP]);
   // Closing checklist for a won order (entered in the CRM).
   let checklist: ChecklistStep[] | null = null;
-  const quotedInstall = deal.stage === "WON" && !deal.installationJob ? await quotedWithInstallation(deal.id) : false;
   if (deal.stage === "WON" && deal.sourceTxnNo == null) {
-    const units = await prisma.installedUnit.findMany({ where: { dealId: deal.id }, select: { qty: true, serialNos: true } });
     const totalUnits = units.reduce((t, u) => t + u.qty, 0);
     const knownSerials = units.reduce((t, u) => t + u.serialNos.filter((x) => x.trim()).length, 0);
     const job = deal.installationJob;
@@ -172,11 +182,6 @@ export default async function DealDetailPage({
   }));
 
   const discount = computeDealDiscount(deal.items, latestPriceByProduct, deal.discountApprovedAt);
-  // Every account, for linking one when the deal has none (Mark Won).
-  const allAccounts =
-    !deal.accountId && deal.stage !== "WON" && deal.stage !== "LOST"
-      ? await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } })
-      : [];
   // A missing account isn't a block - Mark Won asks for it (pick or create).
   const stageActionsBlockReason = discount?.needsApproval
       ? `Discounted ${discount.discountPct.toFixed(1)}% below list - needs Head approval before this can be marked Won.`
@@ -324,7 +329,7 @@ export default async function DealDetailPage({
             {sp.wonError ?? wonPlan?.error} Once that&apos;s sorted, press Mark Won - the invoices are already filled in.
           </div>
         )}
-        {deal.stage === "WON" && deal.closedAt && (await canUseService(user)) && (
+        {deal.stage === "WON" && deal.closedAt && service && (
           <WarrantyTerms
             dealId={deal.id}
             months={deal.warrantyMonths}
@@ -360,7 +365,7 @@ export default async function DealDetailPage({
                       ? `Customer prefers ${formatDate(deal.installationJob.preferredDate)} - waiting to be scheduled`
                       : "Waiting to be scheduled"}
             </span>
-            {(await canUseService(user)) && (
+            {service && (
               <Link href={`/service/installations/${deal.installationJob.id}`} className="ml-auto text-indigo-600 hover:text-indigo-700">
                 Open
               </Link>

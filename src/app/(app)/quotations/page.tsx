@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { early } from "@/lib/early";
 import { requireUser, canAccessOwner, isBackOffice, canDownloadQuoteExcel } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui";
 import { getCompanySettings, defaultTermsLines } from "@/lib/company-profile";
@@ -35,6 +36,11 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   const { deal: dealId, quote: quoteParam, revise, draft, complaint: complaintId, amc: amcId } = await searchParams;
   // A saved draft opens like a saved quotation, still without its number.
   const quoteId = quoteParam ?? draft;
+  // The builder's lists, started now and read at the bottom.
+  const serviceOnlyP = early(isServiceManager(user));
+  const dealOwnersP = early(isBackOffice(user) ? dealOwnerOptions() : null);
+  const salesPeopleP = early(isBackOffice(user) ? quoteSalesPeople() : null);
+  const accountsP = early(prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true, address: true, city: true, state: true, phone: true } }));
   const [settings, products, prices, stock, inTransit, tentative, me] = await Promise.all([
     getCompanySettings(),
     getQuotableProducts(),
@@ -226,7 +232,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   // own sales person is always in the list.
   let salesPeople: { id: string; name: string }[] | null = null;
   if (isBackOffice(user)) {
-    salesPeople = await quoteSalesPeople();
+    salesPeople = (await salesPeopleP) ?? [];
     const current = fromQuote?.ownerId ?? fromDeal?.ownerId;
     if (current && !salesPeople.some((p) => p.id === current)) {
       const u = await prisma.user.findUnique({ where: { id: current }, select: { id: true, name: true } });
@@ -274,15 +280,13 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           fromDeal={fromQuote ? null : fromDeal}
           fromQuote={fromQuote}
           priceChanges={priceChanges}
-          serviceOnly={await isServiceManager(user)}
+          serviceOnly={await serviceOnlyP}
           salesPeople={salesPeople}
-          dealOwners={isBackOffice(user) ? await dealOwnerOptions() : null}
+          dealOwners={await dealOwnersP}
           myId={user.id}
           isHead={user.role === "HEAD"}
           canExcel={canDownloadQuoteExcel(user)}
-          customerAccounts={(
-            await prisma.account.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true, address: true, city: true, state: true, phone: true } })
-          ).map((a) => ({
+          customerAccounts={(await accountsP).map((a) => ({
             id: a.id,
             name: a.name,
             code: a.code,

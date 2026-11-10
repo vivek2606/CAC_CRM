@@ -59,52 +59,76 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     : [{ id: user.id, name: user.name ?? "Me" }];
   const repIds = reps.map((r) => r.id);
 
-  // A sales person's quotations due a follow-up (the Head / Coordinator get
-  // the team's in their notifications and the Follow-ups tab).
-  const followUps = team ? [] : await getQuoteFollowUps([user.id]);
-  const followUpRed = followUps.filter((q) => q.level === "red").length;
-
-  const [targets, wonDeals, projects, openDeals, ytd, leadStats, upcoming, overdueCount, myLeads, leadStatusGroups, pipeStart, pipeNew, pipeLost, pipeWon] = await Promise.all([
-    prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: months } }, select: { month: true, targetValue: true } }),
-    prisma.deal.findMany({
-      where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: trendStart, lt: nextMonth } },
-      select: { value: true, closedAt: true },
-    }),
-    getProjectBillings({ in: repIds }, trendStart, nextMonth),
-    prisma.deal.findMany({ where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } }, select: { value: true, probability: true, stage: true } }),
-    getYtdSummary(team ? { kind: "department" } : { kind: "rep", userId: user.id }, thisMonth),
-    getLeadStats(ownerIds, now),
-    prisma.activity.findMany({
-      where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING" },
-      orderBy: { dueAt: "asc" },
-      take: 6,
-      include: {
-        deal: { select: { title: true } },
-        lead: { select: { title: true } },
-        contact: { select: { firstName: true, lastName: true } },
-        account: { select: { name: true } },
-      },
-    }),
-    prisma.activity.count({ where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING", dueAt: { lt: startOfToday } } }),
-    team
-      ? Promise.resolve([])
-      : prisma.lead.findMany({
-          where: { ownerId: user.id, createdAt: { gte: prevMonth } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-          select: { id: true, title: true, company: true, value: true, status: true, createdAt: true },
-        }),
-    prisma.lead.groupBy({ by: ["status"], where: { ownerId: { in: ownerIds } }, _count: true }),
-    // Pipeline movement this month: a deal created before the month was in
-    // the starting pipeline if it's still open, or was closed this month.
-    prisma.deal.aggregate({
-      where: { ownerId: { in: ownerIds }, createdAt: { lt: thisMonth }, OR: [{ stage: { in: OPEN_DEAL_STAGES } }, { closedAt: { gte: thisMonth, lt: nextMonth } }] },
-      _sum: { value: true },
-    }),
-    prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, createdAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
-    prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, stage: "LOST", closedAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
-    prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
+  // For comparison: the same months a year before, and the two months
+  // before the window (for the 3-month moving average).
+  const lyStart = new Date(Date.UTC(trendStart.getUTCFullYear() - 1, trendStart.getUTCMonth(), 1));
+  const preStart = new Date(Date.UTC(trendStart.getUTCFullYear(), trendStart.getUTCMonth() - 2, 1));
+  const lyMonths = months.map((m) => new Date(Date.UTC(m.getUTCFullYear() - 1, m.getUTCMonth(), 1)));
+  // Everything below loads at the same time: one wait, not several.
+  const [
+    [targets, wonDeals, projects, openDeals, ytd, leadStats, upcoming, overdueCount, myLeads, leadStatusGroups, pipeStart, pipeNew, pipeLost, pipeWon],
+    followUps,
+    [lyDeals, lyProjects, preDeals, preProjects, lyTargets],
+    monthSales,
+    [coverage, funnel],
+    pipelineMonth,
+  ] = await Promise.all([
+    Promise.all([
+      prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: months } }, select: { month: true, targetValue: true } }),
+      prisma.deal.findMany({
+        where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: trendStart, lt: nextMonth } },
+        select: { value: true, closedAt: true },
+      }),
+      getProjectBillings({ in: repIds }, trendStart, nextMonth),
+      prisma.deal.findMany({ where: { ownerId: { in: ownerIds }, stage: { in: OPEN_DEAL_STAGES } }, select: { value: true, probability: true, stage: true } }),
+      getYtdSummary(team ? { kind: "department" } : { kind: "rep", userId: user.id }, thisMonth),
+      getLeadStats(ownerIds, now),
+      prisma.activity.findMany({
+        where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING" },
+        orderBy: { dueAt: "asc" },
+        take: 6,
+        include: {
+          deal: { select: { title: true } },
+          lead: { select: { title: true } },
+          contact: { select: { firstName: true, lastName: true } },
+          account: { select: { name: true } },
+        },
+      }),
+      prisma.activity.count({ where: { ownerId: backOffice ? { in: ownerIds } : user.id, status: "PENDING", dueAt: { lt: startOfToday } } }),
+      team
+        ? Promise.resolve([])
+        : prisma.lead.findMany({
+            where: { ownerId: user.id, createdAt: { gte: prevMonth } },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: { id: true, title: true, company: true, value: true, status: true, createdAt: true },
+          }),
+      prisma.lead.groupBy({ by: ["status"], where: { ownerId: { in: ownerIds } }, _count: true }),
+      // Pipeline movement this month: a deal created before the month was in
+      // the starting pipeline if it's still open, or was closed this month.
+      prisma.deal.aggregate({
+        where: { ownerId: { in: ownerIds }, createdAt: { lt: thisMonth }, OR: [{ stage: { in: OPEN_DEAL_STAGES } }, { closedAt: { gte: thisMonth, lt: nextMonth } }] },
+        _sum: { value: true },
+      }),
+      prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, createdAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
+      prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, stage: "LOST", closedAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
+      prisma.deal.aggregate({ where: { ownerId: { in: ownerIds }, stage: "WON", closedAt: { gte: thisMonth, lt: nextMonth } }, _sum: { value: true } }),
+    ]),
+    // A sales person's quotations due a follow-up (the Head / Coordinator
+    // get the team's in their notifications and the Follow-ups tab).
+    team ? Promise.resolve([]) : getQuoteFollowUps([user.id]),
+    Promise.all([      prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: lyStart, lt: new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1)) } }, select: { value: true, closedAt: true } }),
+      getProjectBillings({ in: repIds }, lyStart, new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1))),
+      prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: preStart, lt: trendStart } }, select: { value: true, closedAt: true } }),
+      getProjectBillings({ in: repIds }, preStart, trendStart),
+      prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: lyMonths } }, select: { month: true, targetValue: true } }),
+    ]),
+    getMonthSales(ownerIds, thisMonth, nextMonth, repIds),
+    Promise.all([getCoverage(reps, now), getFunnel(reps, now)]),
+    // Open / converted / won, this month, per sales person.
+    getMonthlyPipeline(reps, [thisMonth], now),
   ]);
+  const followUpRed = followUps.filter((q) => q.level === "red").length;
 
   // Target vs sales by month (sales = won deals + project billing, as on Targets).
   const targetBy = new Map<string, number>();
@@ -112,18 +136,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const salesBy = new Map<string, number>();
   for (const d of wonDeals) if (d.closedAt) salesBy.set(monthKey(d.closedAt), (salesBy.get(monthKey(d.closedAt)) ?? 0) + d.value);
   for (const p of projects) salesBy.set(monthKey(p.docDate), (salesBy.get(monthKey(p.docDate)) ?? 0) + p.value);
-  // For comparison: the same months a year before, and the two months
-  // before the window (for the 3-month moving average).
-  const lyStart = new Date(Date.UTC(trendStart.getUTCFullYear() - 1, trendStart.getUTCMonth(), 1));
-  const preStart = new Date(Date.UTC(trendStart.getUTCFullYear(), trendStart.getUTCMonth() - 2, 1));
-  const lyMonths = months.map((m) => new Date(Date.UTC(m.getUTCFullYear() - 1, m.getUTCMonth(), 1)));
-  const [lyDeals, lyProjects, preDeals, preProjects, lyTargets] = await Promise.all([
-    prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: lyStart, lt: new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1)) } }, select: { value: true, closedAt: true } }),
-    getProjectBillings({ in: repIds }, lyStart, new Date(Date.UTC(nextMonth.getUTCFullYear() - 1, nextMonth.getUTCMonth(), 1))),
-    prisma.deal.findMany({ where: { ownerId: { in: repIds }, stage: "WON", closedAt: { gte: preStart, lt: trendStart } }, select: { value: true, closedAt: true } }),
-    getProjectBillings({ in: repIds }, preStart, trendStart),
-    prisma.target.findMany({ where: { userId: { in: repIds }, month: { in: lyMonths } }, select: { month: true, targetValue: true } }),
-  ]);
   for (const t of lyTargets) targetBy.set(monthKey(t.month), (targetBy.get(monthKey(t.month)) ?? 0) + t.targetValue);
   for (const d of [...lyDeals, ...preDeals]) if (d.closedAt) salesBy.set(monthKey(d.closedAt), (salesBy.get(monthKey(d.closedAt)) ?? 0) + d.value);
   for (const p of [...lyProjects, ...preProjects]) salesBy.set(monthKey(p.docDate), (salesBy.get(monthKey(p.docDate)) ?? 0) + p.value);
@@ -176,12 +188,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const leadMix: ShareBarRow[] = (["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "UNQUALIFIED"] as LeadStatus[])
     .map((st) => ({ label: LEAD_STATUS_LABELS[st], count: leadCount.get(st) ?? 0, value: 0, fill: LEAD_STATUS_CHART_COLORS[st] }))
     .filter((row) => row.count > 0);
-  const monthSales = await getMonthSales(ownerIds, thisMonth, nextMonth, repIds);
-  const [coverage, funnel] = await Promise.all([getCoverage(reps, now), getFunnel(reps, now)]);
   const lastCoverMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + COVERAGE_MONTHS - 1, 1));
   const coverWindow = `${thisMonth.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })}–${lastCoverMonth.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`;
-  // Open / converted / won, this month, per sales person.
-  const pipelineMonth = await getMonthlyPipeline(reps, [thisMonth], now);
   const monthLast = new Date(nextMonth.getTime() - 86400000).toISOString().slice(0, 10);
   const registerLink = (extra: Record<string, string>) =>
     `/reports/sales-register?${new URLSearchParams({ from: thisMonth.toISOString().slice(0, 10), to: monthLast, ...extra })}`;

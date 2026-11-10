@@ -32,9 +32,13 @@ export const holdUntil = (from: Date) => new Date(from.getTime() + RESERVATION_D
 // released; the item invoiced on the deal since it was approved ->
 // fulfilled. Cheap enough to run before reading reservations.
 export async function tidyReservations(now = new Date()) {
-  await prisma.stockReservation.updateMany({ where: { status: "APPROVED", expiresAt: { lt: now } }, data: { status: "EXPIRED", endedAt: now } });
-  await prisma.stockReservation.updateMany({ where: { status: { in: ACTIVE_RESERVATION }, deal: { stage: "LOST" } }, data: { status: "RELEASED", endedAt: now } });
-  const approved = await prisma.stockReservation.findMany({ where: { status: "APPROVED" }, select: { id: true, dealId: true, productId: true, decidedAt: true, requestedAt: true } });
+  // The three checks run together (an invoiced hold counts as fulfilled
+  // even if its date ran out at the same moment).
+  const [, , approved] = await Promise.all([
+    prisma.stockReservation.updateMany({ where: { status: "APPROVED", expiresAt: { lt: now } }, data: { status: "EXPIRED", endedAt: now } }),
+    prisma.stockReservation.updateMany({ where: { status: { in: ACTIVE_RESERVATION }, deal: { stage: "LOST" } }, data: { status: "RELEASED", endedAt: now } }),
+    prisma.stockReservation.findMany({ where: { status: "APPROVED" }, select: { id: true, dealId: true, productId: true, requestedAt: true } }),
+  ]);
   if (!approved.length) return;
   const billed = await prisma.saleLineItem.findMany({
     where: { dealId: { in: [...new Set(approved.map((r) => r.dealId))] }, productId: { in: [...new Set(approved.map((r) => r.productId))] } },

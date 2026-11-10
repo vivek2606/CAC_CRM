@@ -10,6 +10,7 @@ import { InvoiceEntry } from "../../deals/invoice-entry";
 import { DeletePeriodSalesButton } from "./delete-period-sales-button";
 import { DeleteOrphanLinesButton } from "./delete-orphan-lines-button";
 import { clearOrphanCrmLines } from "../../deals/actions";
+import { early } from "@/lib/early";
 import { formatCurrency, formatDate } from "@/lib/format";
 import Link from "next/link";
 import { ResyncCategoryButton } from "../resync-category-button";
@@ -68,6 +69,53 @@ export default async function SalesRegisterPage({
 
   // Lines left behind by deals deleted before deleting took them along.
   await clearOrphanCrmLines();
+  // Started now, read further down (they don't depend on each other).
+  const bareDealsP = early(category && category !== "No products listed"
+      ? []
+      : prisma.deal.findMany({
+          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: listFrom, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
+          take: MAX_ROWS,
+          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true, title: true } }, account: { select: { name: true, code: true } } },
+        }));
+  const targetRowsP = early(prisma.target.findMany({
+    where: {
+      month: { gte: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1)), lt: end },
+      ...(repId ? { userId: repId } : others ? { userId: { in: [] } } : {}),
+    },
+    select: { month: true, targetValue: true, user: { select: { name: true } } },
+  }));
+  const missingInvoiceP = early(prisma.deal.findMany({
+    // Won in the CRM with the invoice no. or the products billed missing.
+    where: { stage: "WON", sourceTxnNo: null, OR: [{ invoiceNo: null }, { items: { none: {} } }], ...(all ? {} : { ownerId: user.id }) },
+    orderBy: { closedAt: "desc" },
+    take: 200,
+    select: {
+      id: true,
+      title: true,
+      value: true,
+      closedAt: true,
+      invoiceNo: true,
+      billingCompany: true,
+      accountId: true,
+      _count: { select: { items: true } },
+      owner: { select: { name: true, title: true } },
+      account: { select: { name: true } },
+    },
+  }));
+  const crmSalesP = early(user.role === "HEAD" && repId
+      ? prisma.deal.aggregate({
+          where: { ownerId: repId, stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end } },
+          _count: true,
+          _sum: { value: true },
+        })
+      : null);
+  const orphanLinesP = early(user.role === "HEAD"
+      ? prisma.saleLineItem.aggregate({
+          where: { dealId: null, docDate: { gte: listFrom, lt: end }, ...ownerWhere },
+          _count: true,
+          _sum: { value: true },
+        })
+      : null);
 
   const [lines, billings, categories] = await Promise.all([
     category === "Project & Service" || category === "No products listed"
@@ -100,24 +148,11 @@ export default async function SalesRegisterPage({
 
   // Deals won in the CRM with no product lines still belong in the register -
   // one line at the deal's value.
-  const bareDeals =
-    category && category !== "No products listed"
-      ? []
-      : await prisma.deal.findMany({
-          where: { stage: "WON", sourceTxnNo: null, closedAt: { gte: listFrom, lt: end }, items: { none: {} }, lineItems: { none: {} }, ...ownerWhere, ...dealCompanyWhere },
-          take: MAX_ROWS,
-          select: { id: true, title: true, value: true, closedAt: true, invoiceNo: true, billingCompany: true, owner: { select: { name: true, title: true } }, account: { select: { name: true, code: true } } },
-        });
+  const bareDeals = await bareDealsP;
 
   // Monthly targets for the months the period touches (whole months), for
   // the chart studio's target values.
-  const targetRows = await prisma.target.findMany({
-    where: {
-      month: { gte: new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 1)), lt: end },
-      ...(repId ? { userId: repId } : others ? { userId: { in: [] } } : {}),
-    },
-    select: { month: true, targetValue: true, user: { select: { name: true } } },
-  });
+  const targetRows = await targetRowsP;
   const targets = targetRows.map((t) => ({ salesPerson: t.user.name, month: t.month.toISOString().slice(0, 7), value: t.targetValue }));
 
   // Account codes for project billing lines (they carry the customer name only).
@@ -137,45 +172,14 @@ export default async function SalesRegisterPage({
         }))
       : [];
   // Deals won in the CRM before the invoice was asked for.
-  const missingInvoice = await prisma.deal.findMany({
-    // Won in the CRM with the invoice no. or the products billed missing.
-    where: { stage: "WON", sourceTxnNo: null, OR: [{ invoiceNo: null }, { items: { none: {} } }], ...(all ? {} : { ownerId: user.id }) },
-    orderBy: { closedAt: "desc" },
-    take: 200,
-    select: {
-      id: true,
-      title: true,
-      value: true,
-      closedAt: true,
-      invoiceNo: true,
-      billingCompany: true,
-      accountId: true,
-      _count: { select: { items: true } },
-      owner: { select: { name: true, title: true } },
-      account: { select: { name: true } },
-    },
-  });
+  const missingInvoice = await missingInvoiceP;
 
   // Head, one sales person picked: the sales they entered in the CRM in the
   // period, which can be cleared in one go and entered again.
-  const crmSales =
-    user.role === "HEAD" && repId
-      ? await prisma.deal.aggregate({
-          where: { ownerId: repId, stage: "WON", sourceTxnNo: null, closedAt: { gte: from, lt: end } },
-          _count: true,
-          _sum: { value: true },
-        })
-      : null;
+  const crmSales = await crmSalesP;
 
   // Head: lines with no deal behind them (no account, company or link).
-  const orphanLines =
-    user.role === "HEAD"
-      ? await prisma.saleLineItem.aggregate({
-          where: { dealId: null, docDate: { gte: listFrom, lt: end }, ...ownerWhere },
-          _count: true,
-          _sum: { value: true },
-        })
-      : null;
+  const orphanLines = await orphanLinesP;
 
   const truncated = lines.length >= MAX_ROWS || billings.length >= MAX_ROWS;
   const categoryOptions = [...categories.map((c) => c.category).filter((c) => c !== "Project & Service"), "Project & Service", "No products listed"];

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -60,12 +61,10 @@ export async function requireHead(): Promise<SessionUser> {
  * Returns the list of user ids whose records the current user is allowed to see.
  * Head / Sales Coordinator: everyone on the team. SALES_MANAGER: only themself.
  */
+// Everyone's ids, looked up once per request.
+const allUserIds = cache(async () => (await prisma.user.findMany({ select: { id: true } })).map((u) => u.id));
 export async function visibleOwnerIds(user: SessionUser): Promise<string[]> {
-  if (isBackOffice(user)) {
-    const users = await prisma.user.findMany({ select: { id: true } });
-    return users.map((u) => u.id);
-  }
-  return [user.id];
+  return isBackOffice(user) ? allUserIds() : [user.id];
 }
 
 /** Returns true if the given record ownerId is visible/editable by the current user. */

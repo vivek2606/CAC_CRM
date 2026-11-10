@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { early } from "@/lib/early";
 import { requireUser, isBackOffice } from "@/lib/rbac";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { formatCompactCurrency, formatDate } from "@/lib/format";
@@ -76,6 +77,10 @@ export default async function MyDayPage() {
   const endOfWeek = new Date(endOfToday.getTime() + 7 * DAY);
   const service = await isServiceManager(user);
   const sales = !service;
+  // Started now, read further down: this week's standards, your contacts'
+  // dates and the company name for greetings.
+  const standardsP = early(sales && !isBackOffice(user) ? Promise.all([getStandards(), weeklyCounts([user.id], 1, now)]) : null);
+  const keyDatesP = early(Promise.all([upcomingKeyDates([user.id], 3, now), getCompanySettings()]));
 
   const [dueNow, comingUp, followUps, stalled, quiet] = await Promise.all([
     prisma.activity.findMany({ where: { ownerId: user.id, status: "PENDING", dueAt: { lt: endOfToday } }, orderBy: { dueAt: "asc" }, take: 50, select: activitySelect }),
@@ -190,20 +195,18 @@ export default async function MyDayPage() {
 
   const todayLabel = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" });
   // This week against the weekly minimums (sales people).
-  const standardsBlock =
-    sales && !isBackOffice(user)
-      ? await Promise.all([getStandards(), weeklyCounts([user.id], 1, now)]).then(([standards, { byUser }]) => (
-          <Section title="This week's activity standards">
-            <Scorecard counts={byUser[user.id][0]} standards={standards} compact />
-            <div className="mt-2 text-right">
-              <ScorecardLink />
-            </div>
-          </Section>
-        ))
-      : null;
+  const standards = await standardsP;
+  const standardsBlock = standards ? (
+    <Section title="This week's activity standards">
+      <Scorecard counts={standards[1].byUser[user.id][0]} standards={standards[0]} compact />
+      <div className="mt-2 text-right">
+        <ScorecardLink />
+      </div>
+    </Section>
+  ) : null;
 
   // Birthdays and anniversaries of your contacts, today to 3 days ahead.
-  const [keyDates, companySettings] = await Promise.all([upcomingKeyDates([user.id], 3, now), getCompanySettings()]);
+  const [keyDates, companySettings] = await keyDatesP;
   const keyDatesBlock = keyDates.length ? (
     <Section title="Birthdays and anniversaries" count={keyDates.length}>
       <KeyDatesList items={keyDates} from={user.name ?? ""} company={pickCompany(companySettings, undefined).name} />
