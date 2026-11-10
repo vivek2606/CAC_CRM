@@ -95,7 +95,7 @@ export async function getWinBackList(ownerIds: string[], cutoff: Date): Promise<
 // twice their usual gap between orders (a once-a-year buyer isn't late
 // after 3 months). Left out once someone is on it: an open deal, or a call /
 // visit / any activity with them in the last 30 days.
-export const QUIET_MIN_DAYS = 90;
+const QUIET_MIN_DAYS = 90;
 export const QUIET_HANDLED_DAYS = 30;
 const DAY = 86400000;
 

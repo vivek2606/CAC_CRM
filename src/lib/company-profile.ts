@@ -45,7 +45,7 @@ export const companySettingsSchema = z.object({
 });
 export type CompanySettings = z.infer<typeof companySettingsSchema>;
 
-export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   companies: [
     {
       key: "SAKURAGI",
@@ -128,19 +128,4 @@ export function pickCompany(settings: CompanySettings, key: string | undefined):
     settings.companies.find((c) => c.key === settings.defaultCompany) ??
     settings.companies[0]
   );
-}
-
-// Letterhead fields still empty - shown as a reminder to the Head.
-export function missingCompanyDetails(c: CompanyProfile): string[] {
-  return [
-    c.addressLines.filter(Boolean).length === 0 && "address",
-    !c.phone && "phone",
-    !c.bankName && "bank details",
-  ].filter((x): x is string => Boolean(x));
-}
-
-// "RC 1234567  |  TIN 0123-4567" - without doubling a prefix already typed in.
-export function registrationLine(c: CompanyProfile): string {
-  const strip = (v: string, prefix: string) => v.replace(new RegExp(`^${prefix}[\\s.:#-]*`, "i"), "").trim();
-  return [c.rcNumber && `RC ${strip(c.rcNumber, "RC")}`, c.tin && `TIN ${strip(c.tin, "TIN")}`].filter(Boolean).join("  |  ");
 }

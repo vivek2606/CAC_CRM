@@ -22,19 +22,6 @@ export function serialNumbers(rows: { kind: "section" | "item" }[]): string[] {
   });
 }
 
-// e.g. SNL/VIV/20262109 - prefix / initials / year + day + month, the
-// format used on existing CAC quotations.
-export function defaultRef(prefix: string, userName: string, date: Date): string {
-  const initials = userName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0]!.toUpperCase())
-    .join("")
-    .slice(0, 3);
-  const stamp = `${date.getFullYear()}${String(date.getDate()).padStart(2, "0")}${String(date.getMonth() + 1).padStart(2, "0")}`;
-  return [prefix, initials, stamp].filter(Boolean).join("/");
-}
-
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
 const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 const SCALES = ["", "Thousand", "Million", "Billion", "Trillion"];

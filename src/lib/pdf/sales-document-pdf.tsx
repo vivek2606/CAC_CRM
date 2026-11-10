@@ -156,7 +156,7 @@ function roundOffRow(doc: SalesDocument, first: boolean) {
   );
 }
 
-export function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fill?: boolean }) {
+function SalesDocumentPdf({ doc, fill = true }: { doc: SalesDocument; fill?: boolean }) {
   const c = doc.company;
   const contact = [c.phone, c.email, c.website].filter(Boolean).join("  |  ");
   const reg = doc.regLines ? doc.regLines.join("  |  ") : [c.rcNumber && `RC ${c.rcNumber.replace(/^RC[\s.:#-]*/i, "")}`, doc.tin && `TIN ${doc.tin.replace(/^TIN[\s.:#-]*/i, "")}`]

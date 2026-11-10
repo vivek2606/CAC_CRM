@@ -45,7 +45,7 @@ export const STATE_TONE: Record<StageState, string> = {
 
 type SlaComplaint = { registeredAt: Date; priority: string; status: string; assignedAt: Date | null; attendedAt: Date | null; resolvedAt: Date | null };
 const HOUR = 3600000;
-export const RISK_SHARE = 0.75;
+const RISK_SHARE = 0.75;
 
 export function slaStages(c: SlaComplaint, s: SlaSettings, now = new Date()) {
   const p = c.priority === "URGENT" ? "URGENT" : "NORMAL";

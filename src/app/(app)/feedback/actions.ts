@@ -1,18 +1,12 @@
 "use server";
 
-import { headers } from "next/headers";
+import { requestOrigin } from "@/lib/request-origin";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner } from "@/lib/rbac";
 import { feedbackKindFor, feedbackMessage, newFeedbackToken } from "@/lib/feedback";
 import { getCompanySettings, pickCompany } from "@/lib/company-profile";
 
-async function origin() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 // The feedback link for a delivered / commissioned order (made once, reused
 // until answered) and the WhatsApp message to send it with. Logged as a
@@ -35,7 +29,7 @@ export async function prepareFeedbackRequest(dealId: string): Promise<{ error?: 
   const last = deal.feedback[0];
   if (last?.respondedAt) return { error: "The customer has already given feedback on this order." };
   const fb = last && last.kind === kind ? last : await prisma.customerFeedback.create({ data: { token: newFeedbackToken(), dealId, kind, createdById: user.id } });
-  const url = `${(await origin()).replace(/\/$/, "")}/share/feedback/${fb.token}`;
+  const url = `${(await requestOrigin()).replace(/\/$/, "")}/share/feedback/${fb.token}`;
   const settings = await getCompanySettings();
   const company = pickCompany(settings, deal.billingCompany?.toUpperCase() ?? undefined).name;
   const customer = deal.contact ? `${deal.contact.firstName} ${deal.contact.lastName}`.trim() : (deal.account?.name ?? deal.customerName ?? "");

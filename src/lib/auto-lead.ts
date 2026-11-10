@@ -4,7 +4,7 @@ import { audit } from "@/lib/audit";
 // Every deal starts from a lead. A deal created directly (the New Deal form)
 // or from a quotation gets its lead made automatically: dated 2 days before
 // the deal, already converted to it, with the deal's customer and details.
-export const AUTO_LEAD_DAYS_BEFORE = 2;
+const AUTO_LEAD_DAYS_BEFORE = 2;
 
 export async function createLeadForDeal(dealId: string, userId: string, how: string): Promise<void> {
   const deal = await prisma.deal.findUnique({

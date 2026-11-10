@@ -61,7 +61,7 @@ The search box at the top finds leads, accounts, products, contacts and deals by
 | Pipeline coverage | Open deals closing in the next 3 months ÷ target still to go. 3× or more is healthy, under 2× the target is at risk - build pipeline now |
 | Lead funnel | Last 90 days' leads: how many became deals, got a quote and were won. The smallest % is where leads are lost (▼ in the team table) |
 | Quotations to follow up | Quotes sent 7+ days ago with no follow-up (amber at 7 days, red at 14) |
-| Target vs sales | Last 6 months: sales against target, with the same month last year (grey bar, and "vs last year" in the table) and a 3-month average line, so a seasonal peak or dip isn't mistaken for a trend |
+| Target vs sales | Last 6 months: sales against target, with the same month last year (grey bar labelled with its amount and its % of last year's target; Last year, LY ach. and vs LY in the table) and a 3-month average line, so a seasonal peak or dip isn't mistaken for a trend. Hover a month for both years' achievement |
 | Pipeline movement, Pipeline by stage (team) | Are we filling the pipeline as fast as we close it? |
 | New leads by sales person | Each sales person's new and active leads and their lead-to-deal conversion |
 | Upcoming activities | Calls, visits and meetings due - your to-do list |
@@ -70,9 +70,15 @@ The Service Manager's Dashboard is the **Service Dashboard** instead: pending co
 
 **Plan my week** (button on My Day): plan your customer and site visits Monday to Saturday - pick the day, time, customer or deal and the purpose, or add a suggestion in one click (customers gone quiet, stalled deals, deals not visited in 60 days). On the day the visit shows on My Day: **Check in** with a note of what happened; with your permission the phone adds where you were. The Head and the Coordinator see each person's planned vs done visits.
 
-**My Day** (second in the menu) is your to-do list for today: activities due or overdue (tick them off there), quotations to follow up, a "Call these" list of stalled deals and regular customers gone quiet, and what's coming this week. The Service Manager's My Day shows complaints past or near their service level, installations and AMC visits due.
+**My Day** (second in the menu) is your to-do list for today:
 
-**The bell** collects everything that needs action, with a count: follow-ups due, deals past their close date, discounts waiting for approval, won deals missing an invoice number, stock arrived for balance orders, complaints past their service level, AMCs to renew, warranty claims to raise. Click an item to go straight to it. Clear the bell every day and nothing slips.`,
+- **Birthdays and anniversaries** of your contacts, from 3 days before, with **Send greeting** (WhatsApp opens with a greeting from you).
+- **This week's activity standards**: your calls, site visits, quotations and new leads against the weekly minimums (green when met). **Activity Standards** in the menu shows your last 8 weeks.
+- Visits today (with **Check in**), activities due or overdue (tick them off there), quotations to follow up, a "Call these" list of stalled deals and regular customers gone quiet, and what's coming this week.
+
+The Service Manager's My Day shows complaints past or near their service level, installations and AMC visits due.
+
+**The bell** collects everything that needs action, with a count: follow-ups due, deals past their close date, discounts and stock reservations waiting for approval (and the Head's decision on yours), reservations ending within 3 days, orders to ask for feedback, unhappy customers (1-2 stars), birthdays and anniversaries, won deals missing an invoice number, stock arrived for balance orders, complaints past their service level, AMCs to renew, warranty claims to raise. Click an item to go straight to it. Clear the bell every day and nothing slips.`,
   },
   {
     id: "leads",
@@ -121,6 +127,10 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 **Order checklist.** A won deal shows what's done and what's left: invoiced, account linked, everything billed (or a balance order waiting for stock), **delivered** (click Mark delivered with the date and waybill no.), installed (supply-only sales skip this) and serial nos. The bell reminds you about won orders not marked delivered a week on.
 
+**Hold stock for a deal.** On the deal, **Request stock reservation**: the deal's items are filled in (add more if needed), with the quantity and **why** (e.g. "advance promised by Friday"). Only stock that's free can be asked for. The Head approves or rejects it with a note; you're told in the bell and on your phone. Approved units are held for your deal for **14 days** and taken off "available" for everyone else; the Head can extend. It ends by itself when the item is invoiced on the deal, the deal is lost, or the 14 days run out - or **Release** it yourself if the customer drops it. The bell warns 3 days before a hold ends. **Stock & Pending Orders → Stock reservations** lists them all.
+
+**Customer feedback.** Once a won order is delivered (supply only) or commissioned (when we install it), the deal's **Customer feedback** card has **Ask for feedback on WhatsApp**: WhatsApp opens with a short message and a link. The customer opens it without logging in and gives 1-5 stars and a comment. 1-2 stars alert you and the Head straight away. The rating shows on the deal and the account; **Customer Feedback** (under Reports) lists yours. The bell reminds you of orders delivered or installed in the last 30 days not yet asked.
+
 **Mark Lost** asks for the reason (price, competitor, project cancelled...). Be honest - these reasons tell us where we lose business. **Lost on price:** enter the brand they bought and **their price for the same scope** (excl. VAT, even roughly) - the CRM shows how much higher we were, and Team Reports shows the average gap per competitor. A lost or won deal can be reopened if needed.`,
   },
   {
@@ -141,7 +151,7 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 **Customer price history.** Once the customer is filled in, each product line shows what that customer was **last quoted** and **last bought at** for that model (after discount, in this quote's VAT terms) - in amber if you're now quoting higher than they last paid.
 
-**Discounts.** The "Disc. %" and "Our cost" columns are not printed. A discount beyond the product's permissible limit goes to the Head for approval (Approvals tab) before the quote can be sent. Items not in stock get a tentative rate and no discount.
+**Discounts.** The "Disc. %" and "Our cost" columns are not printed. A discount beyond the product's permissible limit goes to the Head for approval (Approvals tab) before the quote can be sent - type **why** it's needed in the box under the message (e.g. "competitor quoted ₦X"), so the Head can decide quickly. Items not in stock get a tentative rate and no discount.
 
 **Deal and lead made for you.** An equipment quote downloaded without a deal creates its lead and deal straight away, at the Quotation stage. You're then asked to link the customer's account. Servicing and spares quotes don't create deals. To put a quote on an existing deal, start it from the deal, or use **Link deal** in Saved quotations.
 
@@ -172,12 +182,14 @@ You don't always need to create the lead by hand: a deal created directly gets i
 | --- | --- | --- |
 | Accounts & Contacts | Each customer company and its people, with all their leads, deals, quotes, invoices and activities | Open the account before a call: you see everything we've sold and quoted them |
 | Products | Every model with its price list rate and permissible discount | Quote the right price; check specs and prices on the go |
-| Stock & Pending Orders | Stock in the warehouse, units arriving, and orders taken for items not in stock | Promise delivery only on what's in stock or arriving |
+| Stock & Pending Orders | Stock in the warehouse, units arriving, orders taken for items not in stock, and stock reservations | Promise delivery only on what's in stock or arriving; "available" already leaves out units reserved for other deals |
 | Sales Register | Every invoiced line: date, invoice, customer, model, qty, value, sales person | Your real sales, filterable and exportable to Excel |
 
 **Regular customers gone quiet.** Accounts → Win-back starts with customers who bought 2+ times in the last 15 months but haven't ordered for over 3 months - and longer than twice their usual gap. They also show in your bell. Call them: once there's an open deal or any call, visit or note logged with them, they drop off the list.
 
-**Account at a glance.** An account's page opens with what the customer has bought (last 12 months, all time, by year, top models and the last rate paid), their last purchase - flagged if they've gone quiet - open pipeline, and service (units, warranty, AMC, open complaints). Read it before every call or visit.
+**Account at a glance.** An account's page opens with what the customer has bought (last 12 months, all time, by year, top models and the last rate paid), their last purchase - flagged if they've gone quiet - open pipeline, service (units, warranty, AMC, open complaints), their contacts' birthdays and anniversaries, and their feedback ratings. Read it before every call or visit.
+
+**Contacts' dates.** On a contact (New / Edit), add their **Birthday** and one **Other date** (wedding or company anniversary...) - day and month only. You're reminded on My Day and in the bell from 3 days before.
 
 **Accounts matter.** Link every lead, deal and quote to the customer's account; the CRM asks after a quote is downloaded. Repeat business, warranty and service history all hang off the account.
 
@@ -254,11 +266,10 @@ Most sales - to contractors - are supply only and need nothing here. When **we**
 | Menu | Use it to |
 | --- | --- |
 | Monthly review pack | One month for the division or one person: sales vs target, year to date, vs last year, each person's figures, wins and losses with reasons, the funnel, activities, forecast accuracy and service - print / save as PDF or download Excel (button on Team Reports; sales people get their own from the Dashboard) |
-| Stock reservations | On a deal, **Request stock reservation** asks the Head to hold units of items (the deal's items to start with) - say why. Once the Head approves, those units are held for that deal for 14 days and taken off "available" everywhere else (stock hints, reorder planning); the Head can extend. It ends when the item is invoiced on the deal, the deal is lost, it's released or the time runs out. **Stock & Pending Orders → Stock reservations** lists them all; the Head and the Coordinator **Download for the warehouse** (product, code, quantity, customer, sales person, hold-until, plus a total per item). The bell tells the Head of new requests and the sales person of the decision and of holds ending within 3 days |
-| Customer feedback | Once a won order is delivered (supply only) or commissioned (when we install), the deal's **Customer feedback** card has **Ask for feedback on WhatsApp**: it opens WhatsApp with a short message and a link. The customer opens the link without logging in, gives 1-5 stars and a comment. 1-2 stars alert the Head and the sales person straight away (bell and phone). The rating shows on the deal and the account, and **Customer Feedback** (under Reports) shows the average, the share happy, unhappy customers first, and orders still to ask. The bell reminds the sales person of orders delivered or installed in the last 30 days not yet asked |
-| Birthdays and anniversaries | On a contact (New / Edit), add their **Birthday** and one **Other date** (wedding or company anniversary...) - day and month only. From 3 days before, it shows on your **My Day** and in the bell, with **Send greeting**: WhatsApp opens with a ready greeting from you. The dates also show on the contact and on the account's At a glance |
+| Stock reservations | The Head approves or rejects each request with a note (bell, **Stock & Pending Orders → Stock reservations**, or on the deal) and can extend a hold. The Head and the Coordinator **Download for the warehouse**: each reservation (product, code, quantity, customer, sales person, hold-until, reason) plus a total per item - send it to the warehouse to set the units aside |
+| Customer feedback | **Customer Feedback** (Reports): average rating, share happy (4-5 stars), unhappy customers first, answers awaited and orders still to ask, for 30 days, 90 days or 12 months. 1-2 stars reach the Head at once (bell and phone) |
 | Approval log | **Settings → Approval Log** (Head): every quotation discount, deal discount, stock reservation and monthly incentive approval - who asked and when, what (items and discount vs the maximum, quantities, amount), the reason they gave, and your decision with your note; waiting ones first. Filter by dates, kind and decision; Export CSV. A sales person whose quote is held types **why** the discount is needed under the message; you add a note when deciding (a note is required to decline or reject) |
-| Activity Standards | Weekly minimums for each sales person (set by the Head; 25 calls, 5 site visits, 5 quotations, 3 new leads to start). Calls and visits count when marked done, quotations when issued, leads when created; the week runs Monday to Sunday. A sales person sees this week on My Day and their last 8 weeks on the page; the Head and the Coordinator see each person this week and how many of the 4 minimums each met over 8 weeks |
+| Activity Standards | The Head sets the weekly minimums (25 calls, 5 site visits, 5 quotations, 3 new leads to start) at the bottom of the page. Calls and visits count when marked done, quotations when issued, leads when created; weeks run Monday to Sunday. The Head and the Coordinator see each person this week and how many of the 4 minimums each met in each of the last 8 weeks |
 | Billing in USD | Team Reports → **Billing in USD** (Head and Coordinator): each month's billing (as in the Sales Register) and target in US dollars, January to the month picked, against the same months last year - with the year to date, a chart, and each product category this year vs last year with its share; Excel download. Every month is converted at its own rate from Settings → Exchange Rate; a month with no rate yet borrows the nearest month's and is marked provisional |
 | Team Reports | Target vs achievement, sales breakdown by person, category and month, pipeline, conversion, response times and activity, with Excel export |
 | Data Health | Duplicates, incomplete records and orphans to fix; each line links to the fix |
@@ -282,16 +293,17 @@ Most sales - to contractors - are supply only and need nothing here. When **we**
 
 | Role | Morning | During the day | Before leaving |
 | --- | --- | --- | --- |
-| Sales person | Clear the bell; check Upcoming activities and Quotation follow-ups | Log every new enquiry as a lead; make every quote in the CRM; Mark Won with the invoice the day you bill | Log today's calls and visits; set the next activity on each open deal |
+| Sales person | Open My Day and clear the bell: follow-ups, visits, greetings, reservations ending | Log every new enquiry as a lead; make every quote in the CRM; Mark Won with the invoice the day you bill | Log today's calls and visits; set the next activity on each open deal |
 | Sales Coordinator | Clear the bell; team follow-ups due; balance orders with stock arrived | Prepare quotes for the sales people (pick the sales person); enter branch and project billing | Check won deals missing invoice numbers |
 | Service Manager | Filter complaints "Past service level" and "At risk"; assign technicians | Update each complaint after the visit: serial no., spares, resolution | Close resolved complaints; raise warranty claims for free spares |
-| Head of Sales | Dashboard and bell: approvals, stalled deals, service breaches | Team Reports for reviews | Approve incentives at month end |
+| Head of Sales | Dashboard and bell: discount and reservation approvals, unhappy customers, stalled deals, service breaches | Team Reports (incl. Billing in USD) and Activity Standards for reviews | Approve incentives at month end; look over the Approval Log |
 
 ### FAQ
 
 - **My sale isn't showing in my achievement.** Only invoiced sales count. Check the deal is Won with its invoice number, date and products.
 - **The quote has someone else's initials in the reference.** The reference uses the sales person's initials. Change the Sales person before the first download, or the reference is reissued on the next download.
-- **My quote is "waiting for approval".** A discount is beyond the limit, so the Head must approve it before you can send it. You'll be notified.
+- **My quote is "waiting for approval".** A discount is beyond the limit, so the Head must approve it before you can send it. Type why under the message; you'll be notified of the decision.
+- **The stock I need shows as not available.** Units may be reserved for another deal - see Stock & Pending Orders → Stock reservations. Ask for your own reservation from your deal as soon as the customer commits.
 - **I deleted something by mistake.** Ask the Head or the Coordinator to restore it from the Recycle Bin.
 - **I'm not getting notifications.** Turn them on from the bell on each device. On iPhone, open the CRM from the Home Screen icon first.
 - **The customer has no invoice for the unit with a complaint.** Enter the invoice date if known; without it the unit is treated as out of warranty unless the Head overrides it.

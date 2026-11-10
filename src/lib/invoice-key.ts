@@ -8,7 +8,5 @@ export type InvoiceType = "sale" | "return";
 
 export const invoiceTypeOf = (total: number): InvoiceType => (total < 0 ? "return" : "sale");
 
-export const INVOICE_TYPE_LABEL: Record<InvoiceType, string> = { sale: "Sale", return: "Sales return" };
-
 export const invoiceKey = (company: string | null | undefined, type: InvoiceType, invoiceNo: string) =>
   `${company ?? ""}|${type}|${invoiceNo.trim().toLowerCase()}`;

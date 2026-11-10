@@ -15,7 +15,7 @@ export type RosterEntry = {
 // Historical salesperson roster from the Orion ERP sales register (2020-2026).
 // "active" accounts get real logins; everyone else is preserved as an
 // inactive record so historical deals still show the correct owner.
-export const SALES_REGISTER_ROSTER: RosterEntry[] = [
+const SALES_REGISTER_ROSTER: RosterEntry[] = [
   { name: "AWOSANYA ADEBAYO", division: "Design", active: false },
   { name: "ADEDAPO OKUNADE SIKIRU", division: "Service", active: true, email: "service@somotexnig.com", title: "Service Manager" },
   { name: "ADEYEMI VICTOR ADEMOLA", division: "Others", active: false },

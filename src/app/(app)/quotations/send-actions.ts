@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { requestOrigin } from "@/lib/request-origin";
 import { prisma } from "@/lib/prisma";
 import { requireUser, type SessionUser } from "@/lib/rbac";
 import { canSeeQuotation, DRAFT_TYPE } from "@/lib/saved-quotes";
@@ -51,12 +51,6 @@ async function loadQuote(user: SessionUser, quoteId: string) {
   return q;
 }
 
-async function origin() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 export async function prepareQuoteSend(quoteId: string): Promise<SendInfo> {
   const user = await requireUser();
@@ -76,7 +70,7 @@ export async function prepareQuoteSend(quoteId: string): Promise<SendInfo> {
   const emails = uniq(contacts.map((c) => c.email)).filter((e) => /@/.test(e));
 
   const kind = TYPE_LABEL[q.type] ?? "quotation";
-  const link = quoteShareUrl(q.id, await origin());
+  const link = quoteShareUrl(q.id, await requestOrigin());
   const message = `Dear ${q.customerName},\n\nPlease find our ${kind} ${q.ref} here:\n${link}\n\nDo let me know if you have any questions.\n\nRegards,\n${q.owner.name}${q.owner.phone ? `\n${q.owner.phone}` : ""}`;
   return {
     ref: q.ref,

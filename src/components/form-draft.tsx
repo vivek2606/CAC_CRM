@@ -123,8 +123,6 @@ export function FormDraft({ draftKey, restored = false, onRestore }: { draftKey:
   );
 }
 
-// Field value helpers for turning a draft back into a form's defaults.
-export const draftText = (v: string | undefined) => (v == null ? undefined : v);
 export const draftNumber = (v: string | undefined) => {
   if (v == null || v.trim() === "") return null;
   const n = Number(v.replace(/[₦,\s]/g, ""));

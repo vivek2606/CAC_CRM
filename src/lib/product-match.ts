@@ -5,7 +5,7 @@ import { computeCapacityKw } from "@/lib/capacity";
 // Temporary codes for models seen for the first time (e.g. on an in-transit
 // sheet before the ERP has a code for them). Replaced with the ERP code
 // when the goods arrive - see assignProductCode().
-export const TEMP_CODE_PREFIX = "TEMP-";
+const TEMP_CODE_PREFIX = "TEMP-";
 
 export function isTempCode(code: string): boolean {
   return code.toUpperCase().startsWith(TEMP_CODE_PREFIX);
@@ -13,7 +13,7 @@ export function isTempCode(code: string): boolean {
 
 // Model names are compared ignoring case, spaces and punctuation, so
 // "MDV-D24Q4/N1-E(At)" and "mdv d24q4 n1 e at" match.
-export function normalizeModel(model: string): string {
+function normalizeModel(model: string): string {
   return model.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 

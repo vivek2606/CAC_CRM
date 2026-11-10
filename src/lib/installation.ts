@@ -27,8 +27,8 @@ export const isInstallStatus = (s: string | undefined): s is InstallStatus => !!
 
 // A won deal is prompted for hand-over when one of its quotations was made
 // with installation, for this long after the win.
-export const HANDOVER_PROMPT_DAYS = 60;
-export const withInstallationQuote = { quotations: { some: { ...NOT_DRAFT, data: { path: ["withInstallation"], equals: true } } } } satisfies Prisma.DealWhereInput;
+const HANDOVER_PROMPT_DAYS = 60;
+const withInstallationQuote = { quotations: { some: { ...NOT_DRAFT, data: { path: ["withInstallation"], equals: true } } } } satisfies Prisma.DealWhereInput;
 
 // Won deals quoted with installation and not handed over yet.
 export function awaitingHandoverWhere(now = new Date()): Prisma.DealWhereInput {

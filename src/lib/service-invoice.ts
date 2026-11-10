@@ -99,7 +99,7 @@ export async function buildServiceInvoice(input: ServiceInvoiceInput): Promise<S
 // Next invoice number: SNL/CAC/LAG/LK/<invoice date yyyymmdd>/<running
 // no.>. The running number is a per-year counter in AppSetting bumped in one
 // statement (two downloads at once can't clash), so it is unique on its own.
-export const SERVICE_INVOICE_REF_PREFIX = "SNL/CAC/LAG/LK";
+const SERVICE_INVOICE_REF_PREFIX = "SNL/CAC/LAG/LK";
 export async function nextServiceInvoiceRef(invoiceDate: Date): Promise<string> {
   const year = invoiceDate.getUTCFullYear();
   const key = `service-invoice-seq:${year}`;

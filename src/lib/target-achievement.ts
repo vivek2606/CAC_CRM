@@ -12,7 +12,7 @@ export type TargetAchievement = { from: Date; to: Date; months: Date[]; rows: TA
 
 export const achievementPct = (achieved: number, target: number) => (target > 0 ? Math.round((achieved / target) * 1000) / 10 : null);
 
-export function parseMonthParam(raw: string | null | undefined, fallback: Date): Date {
+function parseMonthParam(raw: string | null | undefined, fallback: Date): Date {
   const m = raw?.match(/^(\d{4})-(\d{1,2})$/);
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : fallback;
 }
@@ -67,5 +67,5 @@ export async function getTargetAchievement(from: Date, to: Date, months: Date[])
   return { from, to, months, rows, team };
 }
 
-export const monthLabel = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const monthLabel = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 export const periodLabel = (r: { from: Date; to: Date }) => (r.from.getTime() === r.to.getTime() ? monthLabel(r.from) : `${monthLabel(r.from)} - ${monthLabel(r.to)}`);

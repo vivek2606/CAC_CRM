@@ -117,7 +117,7 @@ function firstOfMonth(date: Date): Date {
 
 // Identifies one Orion document: Txn Code + Txn No, or Txn No alone for an
 // export without the Txn Code column.
-export function docKeyFor(row: Pick<RawSalesRow, "txnCode" | "txnNo">): string {
+function docKeyFor(row: Pick<RawSalesRow, "txnCode" | "txnNo">): string {
   return row.txnCode ? `${row.txnCode}/${row.txnNo}` : String(row.txnNo);
 }
 
@@ -135,7 +135,7 @@ export function placeholderEmail(name: string): string {
 // code is one account, named after the code's cash / service / retail
 // customer name if it has one, else the name it was billed under most.
 const CASH_NAME = /cash\s*customer|one\s*time|service\s*customer|retail/i;
-export function canonicalCustNames(rows: RawSalesRow[]): Map<string, string> {
+function canonicalCustNames(rows: RawSalesRow[]): Map<string, string> {
   const byCode = new Map<string, Map<string, number>>();
   for (const r of rows) {
     const code = r.custCode.trim();

@@ -10,7 +10,7 @@ const BILLING = "Project & Service billing";
 
 const M = (key: string, label: string, short: string, value: MeasureDef["value"], o: Partial<MeasureDef> = {}): MeasureDef => ({ key, label, short, value, ...o });
 
-export const DEALS: DatasetDef = {
+const DEALS: DatasetDef = {
   key: "deals",
   label: "Deals & project billing",
   noun: "records (deals + project billings)",
@@ -82,7 +82,7 @@ export const DEALS: DatasetDef = {
   ],
 };
 
-export const LEADS: DatasetDef = {
+const LEADS: DatasetDef = {
   key: "leads",
   label: "Leads",
   noun: "leads",
@@ -119,7 +119,7 @@ export const LEADS: DatasetDef = {
   ],
 };
 
-export const ACTIVITIES: DatasetDef = {
+const ACTIVITIES: DatasetDef = {
   key: "activities",
   label: "Activities",
   noun: "activities",
@@ -153,7 +153,7 @@ export const ACTIVITIES: DatasetDef = {
   ],
 };
 
-export const ACCOUNTS: DatasetDef = {
+const ACCOUNTS: DatasetDef = {
   key: "accounts",
   label: "Accounts",
   noun: "accounts",

@@ -149,7 +149,7 @@ export function labelOf(dim: string | null | undefined, k: string): string {
 // ---- Totals ---------------------------------------------------------------
 
 export const acc = (): Acc => ({ n: 0, sums: {}, sets: {}, target: 0 });
-export function addRec(a: Acc, r: Rec, ds: DatasetDef) {
+function addRec(a: Acc, r: Rec, ds: DatasetDef) {
   a.n += 1;
   for (const f of ds.sums) {
     const v = r[f];

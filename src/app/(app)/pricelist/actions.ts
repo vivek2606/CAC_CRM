@@ -19,26 +19,6 @@ function blankToNull(value: FormDataEntryValue | null | undefined) {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 
-export async function createPricelistEntry(formData: FormData) {
-  await requireHead();
-  const raw = Object.fromEntries(formData.entries());
-  const parsed = pricelistSchema.parse({ ...raw, landedPrice: blankToNull(formData.get("landedPrice")) });
-  const month = parseMonth(parsed.month);
-
-  // Pricelist has at most one row per (product, month) - a product priced
-  // earlier this month (by this form, or by a Stock & Price List / Price
-  // Master upload) already has a row for it, so this must update that row
-  // rather than blind-create and hit the unique constraint.
-  await prisma.pricelist.upsert({
-    where: { productId_month: { productId: parsed.productId, month } },
-    create: { productId: parsed.productId, month, dealerPrice: parsed.dealerPrice, landedPrice: parsed.landedPrice },
-    update: { dealerPrice: parsed.dealerPrice, landedPrice: parsed.landedPrice },
-  });
-
-  revalidatePath("/products");
-  redirect(`/products?productId=${parsed.productId}`);
-}
-
 export async function updatePricelistEntry(entryId: string, formData: FormData) {
   await requireHead();
   const raw = Object.fromEntries(formData.entries());
@@ -67,7 +47,7 @@ export async function deletePricelistEntry(entryId: string) {
 
 // Lets Head create a brand-new product and its first price entry in one
 // step, instead of a separate trip through a product-creation page first.
-// When mode is "existing" this behaves exactly like createPricelistEntry.
+// When mode is "existing" it just prices that product for the month.
 // Problems (a product code already in the catalog, a missing field) come
 // back as a message for the form instead of an error page.
 export async function createProductAndPricelistEntry(formData: FormData): Promise<{ error: string } | void> {
@@ -107,9 +87,8 @@ export async function createProductAndPricelistEntry(formData: FormData): Promis
 
   const month = parseMonth(entryParsed.month);
 
-  // Same reasoning as createPricelistEntry: upsert so re-pricing a product
-  // for a month it already has a row for updates that row instead of
-  // hitting the (productId, month) unique constraint.
+  // Pricelist has at most one row per (product, month) - an earlier price
+  // this month (by this form or an upload) is updated, not duplicated.
   await prisma.pricelist.upsert({
     where: { productId_month: { productId, month } },
     create: { productId, month, dealerPrice: entryParsed.dealerPrice, landedPrice: entryParsed.landedPrice },

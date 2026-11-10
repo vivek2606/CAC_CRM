@@ -35,7 +35,7 @@ export type IncentiveApproval = {
   snapshot?: IncentiveSnapshot; // set on approval
 };
 
-export const monthKey = (month: Date) => `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, "0")}`;
+const monthKey = (month: Date) => `${month.getUTCFullYear()}-${String(month.getUTCMonth() + 1).padStart(2, "0")}`;
 const settingKey = (month: Date) => `incentive-approval:${monthKey(month)}`;
 
 export async function getIncentiveApproval(month: Date): Promise<IncentiveApproval | null> {

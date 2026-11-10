@@ -69,9 +69,6 @@ export async function applyDealWarranty(dealId: string, months: number) {
 export function serialSlots(u: { qty: number; serialNos: string[] }): string[] {
   return Array.from({ length: Math.max(u.qty, u.serialNos.length) }, (_, i) => u.serialNos[i]?.trim() ?? "");
 }
-export function filledSerials(u: { serialNos: string[] }): number {
-  return u.serialNos.filter((s) => s.trim()).length;
-}
 
 // A serial no. already recorded on another unit, if any ("MSAF-12 of
 // Customer, unit 2").
@@ -88,7 +85,7 @@ export async function serialElsewhere(serial: string, unitId: string, slot: numb
 export class SerialTaken extends Error {}
 
 // Records the serial no. of one unit of a sale line.
-export async function setUnitSerial(unitId: string, slot: number, serial: string) {
+async function setUnitSerial(unitId: string, slot: number, serial: string) {
   const u = await prisma.installedUnit.findUnique({ where: { id: unitId }, select: { qty: true, serialNos: true } });
   if (!u || slot < 0 || slot >= Math.max(u.qty, u.serialNos.length)) return;
   const slots = serialSlots(u);

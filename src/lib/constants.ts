@@ -171,19 +171,6 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   EVENT: "Event",
 };
 
-// Fixed categorical order, validated for colorblind-safe adjacent contrast
-// (see dataviz skill) - never reorder or cycle these independently of LEAD_SOURCES.
-export const LEAD_SOURCE_COLORS: Record<LeadSource, string> = {
-  COLD_CALL: "#3b82f6",
-  WEBSITE: "#f97316",
-  CONTRACTOR: "#14b8a6",
-  CONSULTANT: "#f59e0b",
-  ARCHITECT: "#ec4899",
-  DIRECT: "#16a34a",
-  REFERRAL: "#7c3aed",
-  EVENT: "#ef4444",
-};
-
 export const EQUIPMENT_TYPES: EquipmentType[] = [
   "VRF",
   "ATOM",
@@ -226,20 +213,6 @@ export const END_USE_SEGMENT_LABELS: Record<EndUseSegment, string> = {
   REAL_ESTATE_DEVELOPER: "Real Estate Developer",
   EDUCATIONAL_INSTITUTION: "Educational Institution",
   RELIGIOUS_INSTITUTION: "Religious Institution",
-};
-
-// Full 8-step validated categorical order used for LEAD_SOURCE_COLORS.
-export const END_USE_SEGMENT_COLORS: Record<EndUseSegment, string> = {
-  RESIDENTIAL: "#3b82f6",
-  COMMERCIAL_OFFICE: "#f97316",
-  HOSPITALITY: "#14b8a6",
-  RETAIL: "#f59e0b",
-  HEALTHCARE: "#ec4899",
-  INDUSTRIAL: "#16a34a",
-  GOVERNMENT_INSTITUTIONAL: "#7c3aed",
-  REAL_ESTATE_DEVELOPER: "#ef4444",
-  EDUCATIONAL_INSTITUTION: "#0ea5e9",
-  RELIGIOUS_INSTITUTION: "#a16207",
 };
 
 export const ACCOUNT_TYPES: AccountType[] = [

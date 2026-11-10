@@ -23,12 +23,3 @@ export function SakuragiMark({ className = "h-8 w-8" }: { className?: string }) 
     </svg>
   );
 }
-
-export function SakuragiWordmark({ className = "" }: { className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
-      <SakuragiMark className="h-6 w-6" />
-      <span className="font-bold tracking-wide">SAKURAGI</span>
-    </span>
-  );
-}

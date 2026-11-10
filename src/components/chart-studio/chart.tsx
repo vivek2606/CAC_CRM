@@ -69,13 +69,6 @@ function Column3D(props: unknown) {
   );
 }
 
-export const fmtMeasure = (info: MeasureDef, x: unknown, compact = true) => {
-  const n = Number(x);
-  if (info.money) return compact ? formatCompactCurrency(n) : n.toLocaleString("en-NG", { style: "currency", currency: "NGN" });
-  if (info.pct) return `${n.toFixed(1)}%`;
-  return n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
-};
-
 export function PivotChart({
   pivot,
   rowField,

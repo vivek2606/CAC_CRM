@@ -18,13 +18,3 @@ export const CATEGORY_PALETTE = [
 export const CATEGORY_OTHER_COLOR = "#94a3b8"; // slate-400, muted/neutral
 export const MAX_CATEGORY_SLOTS = CATEGORY_PALETTE.length;
 export const OTHER_CATEGORY_LABEL = "Other";
-
-// categoriesByRank: category names ordered largest-first (or whatever
-// ranking the caller wants slot priority to follow).
-export function assignCategoryColors(categoriesByRank: string[]): Map<string, string> {
-  const map = new Map<string, string>();
-  categoriesByRank.forEach((cat, i) => {
-    map.set(cat, i < MAX_CATEGORY_SLOTS ? CATEGORY_PALETTE[i] : CATEGORY_OTHER_COLOR);
-  });
-  return map;
-}

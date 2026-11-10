@@ -4,7 +4,6 @@ import { SOMOTEX_LOGO } from "@/lib/brand/somotex-logo";
 import { getCompanySettings, pickCompany, type CompanyProfile } from "@/lib/company-profile";
 import { nairaInWords, serialNumbers, isAvailabilityNote } from "@/lib/document-format";
 
-export { nairaInWords, serialNumbers, defaultRef } from "@/lib/document-format";
 
 // A quotation / proforma invoice / bill of quantity, as rendered to PDF and
 // Excel. Built on the server from what the user entered in the Quotations
@@ -219,7 +218,7 @@ export function netOf(rate: number, discountPct: number): number {
 
 // Up to the next whole naira (CEILING.MATH(n, 1)), ignoring floating-point
 // dust (1075.0000001 stays 1075).
-export function ceilNaira(n: number): number {
+function ceilNaira(n: number): number {
   return Math.ceil(Math.round(n * 100) / 100);
 }
 

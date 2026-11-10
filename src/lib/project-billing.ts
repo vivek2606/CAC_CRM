@@ -20,9 +20,3 @@ export async function getProjectBillings(
     select: { ownerId: true, docDate: true, value: true },
   });
 }
-
-export function sumByOwner(rows: { ownerId: string; value: number }[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const r of rows) map.set(r.ownerId, (map.get(r.ownerId) ?? 0) + r.value);
-  return map;
-}

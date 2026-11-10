@@ -49,31 +49,31 @@ export type ModelForecast = {
 };
 
 export type GrowthGroup = "Driver" | "Rooftop" | "Other";
-export const DEFAULT_GROWTH_PCT = 15;
-export const DEFAULT_ROOFTOP_GROWTH_PCT = 8;
-export const DEFAULT_OTHER_GROWTH_PCT = 0;
-export const DEFAULT_YEARS_BACK = 3;
-export const DEFAULT_COVER_MONTHS = 3; // March, April, May
+const DEFAULT_GROWTH_PCT = 15;
+const DEFAULT_ROOFTOP_GROWTH_PCT = 8;
+const DEFAULT_OTHER_GROWTH_PCT = 0;
+const DEFAULT_YEARS_BACK = 3;
+const DEFAULT_COVER_MONTHS = 3; // March, April, May
 
 // Atom-C duct (concealed) and cassette indoors, Floor Standing and VRF.
-export function isGrowthDriver(model: string, category: string): boolean {
+function isGrowthDriver(model: string, category: string): boolean {
   if (category === "VRF" || category === "Floorstanding") return true;
   return /atom-?\s*c\b|\(atc\)/i.test(model) && /cassette|concealed|duct/i.test(model);
 }
 
-export function growthGroupOf(model: string, category: string): GrowthGroup {
+function growthGroupOf(model: string, category: string): GrowthGroup {
   if (isGrowthDriver(model, category)) return "Driver";
   return category === "Rooftop" ? "Rooftop" : "Other";
 }
 
 // An order placed now ships in about three months and lands about two
 // after that: the first of the month five months on (October -> March).
-export function defaultArrival(now = new Date()): Date {
+function defaultArrival(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 5, 1));
 }
 
 // "2027-03" -> the first of that month, if 1 to 12 months ahead; else the default.
-export function parseArrival(raw: string | null | undefined, now = new Date()): Date {
+function parseArrival(raw: string | null | undefined, now = new Date()): Date {
   const m = raw?.match(/^(\d{4})-(\d{2})$/);
   if (!m) return defaultArrival(now);
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));

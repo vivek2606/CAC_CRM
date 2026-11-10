@@ -77,7 +77,7 @@ const BASE: Omit<StudioConfig, "dataset" | "rows" | "values"> = {
   size: "m",
   mode: "simple",
 };
-export function defaultConfig(ds: Dataset): StudioConfig {
+function defaultConfig(ds: Dataset): StudioConfig {
   return {
     ...BASE,
     dataset: ds.key,

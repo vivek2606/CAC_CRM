@@ -41,7 +41,7 @@ async function quoteForLinking(quoteId: string) {
 }
 
 // The sales person's deals, to link a quotation made without one.
-export async function dealOptionsForQuote(quoteId: string): Promise<{ id: string; label: string }[]> {
+async function dealOptionsForQuote(quoteId: string): Promise<{ id: string; label: string }[]> {
   const { user, q } = await quoteForLinking(quoteId);
   if (!canAccessOwner(user, q.ownerId)) return [];
   const deals = await prisma.deal.findMany({
