@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyStockArrived } from "@/lib/stock-selling";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessOwner, requireBackOffice, isBackOffice } from "@/lib/rbac";
 import { parseStockReceiptsBuffer, type StockReceiptRowProblem } from "@/lib/import/parse-stock-receipts";
@@ -131,6 +133,7 @@ export async function addStockReceipt(_prev: FormState | undefined, formData: Fo
     revalidatePath("/pricelist");
   }
 
+  after(() => notifyStockArrived([parsed.data.productId]));
   revalidateStock();
   revalidatePath("/deals/new");
   return { ok: true };
@@ -239,6 +242,7 @@ export async function importStockReceipts(_prev: BulkReceiptState | undefined, f
 
   if (toAdd.length > 0) {
     await prisma.stockReceipt.createMany({ data: toAdd.map((r) => ({ ...r, createdById: head.id })) });
+    after(() => notifyStockArrived([...new Set(toAdd.map((r) => r.productId))]));
   }
 
   // Updated dealer's prices become that month's price entry (latest row wins).
@@ -429,6 +433,7 @@ export async function receiveInTransit(_prev: FormState | undefined, formData: F
       data: { quantity: remaining, receivedQty: order.receivedQty + quantity, status: remaining === 0 ? "RECEIVED" : "IN_TRANSIT" },
     }),
   ]);
+  after(() => notifyStockArrived([productId]));
   revalidateStock();
   return { ok: true };
 }

@@ -193,6 +193,13 @@ You don't always need to create the lead by hand: a deal created directly gets i
 
 **Accounts matter.** Link every lead, deal and quote to the customer's account; the CRM asks after a quote is downloaded. Repeat business, warranty and service history all hang off the account.
 
+**Stock to sell** (Stock menu). Two lists that turn stock into calls:
+
+- **Slow-moving and aged stock:** models with no sale in 90 days or more than 6 months of stock at the current selling rate (**Slow**), or whose oldest units have been in the warehouse over 180 days (**Aged**). Open a model to see **who bought it in the last 2 years** - your customers, with units, last rate and date - and offer it to them with **WhatsApp** (a ready message), **Call** or **Plan a visit**.
+- **On its way / arrived:** each in-transit order with its expected date, and stock arrived in the last 14 days, with **who's waiting**: open pending orders and your deals lost as "product not available" in the last 6 months. Pre-sell before it lands; when it arrives you get a phone notification and a bell alert ("Stock arrived - customers waiting") - call them, and reopen the lost deal.
+
+The Head and the Coordinator see everyone's customers and can download it all in Excel.
+
 **Sales Register.** Sales come in from invoices: Mark Won on a deal, or the Head or the Coordinator importing the sales sheet. Sales of upcountry branch sales people are entered by the Head or the Coordinator and show together as **Others** (from 2026). They don't log in.`,
   },
   {

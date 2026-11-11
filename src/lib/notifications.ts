@@ -13,6 +13,7 @@ import { QUICK_ADD_TAG } from "@/lib/constants";
 import { getGoneQuiet } from "@/lib/win-back";
 import { feedbackToAsk, LOW_RATING } from "@/lib/feedback";
 import { upcomingKeyDates, whenLabel } from "@/lib/key-dates";
+import { getIncoming } from "@/lib/stock-selling";
 import { STALE_DAYS, lastContact, stalledWhere } from "@/lib/stalled";
 
 export type NotificationItem = { label: string; sub?: string; href: string };
@@ -276,6 +277,20 @@ export async function getNotifications(user: SessionUser): Promise<Notifications
   }
 
   });
+  // Stock arrived in the last 14 days for customers waiting on it (yours;
+  // the Head / Coordinator see the team's).
+  section(async (groups) => {
+    const arrived = (await getIncoming(team ? null : [user.id], now)).filter((i) => i.arrived && i.waiting.length);
+    if (arrived.length)
+      groups.push({
+        key: "stockArrived",
+        label: "Stock arrived - customers waiting",
+        count: arrived.length,
+        href: "/stock/sell",
+        items: arrived.slice(0, SHOW).map((i) => ({ label: `${i.model} (${i.qty} arrived ${fmt(i.date!)})`, sub: i.waiting.slice(0, 3).map((w) => `${w.customer}${who(w.ownerName)}`).join("; "), href: "/stock/sell" })),
+      });
+  });
+
   section(async (groups) => {
     // Regular customers gone quiet (win-back.ts) - the account owner's, or the
     // team's for the Head / Coordinator.

@@ -124,6 +124,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             <Link href="/stock/reservations" className="text-sm text-indigo-600 hover:text-indigo-700">
               Stock reservations →
             </Link>
+            <Link href="/stock/sell" className="text-sm text-indigo-600 hover:text-indigo-700">
+              Stock to sell →
+            </Link>
             {isHead && (
               <Link href="/reorder" className="text-sm text-indigo-600 hover:text-indigo-700">
                 Reorder planning →
