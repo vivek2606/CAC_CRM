@@ -2,6 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { getAvailableStockByProduct, getInTransitByProduct } from "@/lib/pricing";
 import { modelKey, modelCodeOf } from "@/lib/model-family";
 
+// Midea lead time: ~30 days manufacturing + ~60 days shipping to the
+// warehouse, so stock on hand has to carry ~3 months of sales before a new
+// order lands (Reorder Planning; the seasonality guide's "order by").
+export const LEAD_TIME_DAYS = 90;
+
 // The Midea order, model by model (every code of a model together, its
 // type kept apart - see model-family.ts):
 //  1. Stock expected at the end of the month before the order lands =

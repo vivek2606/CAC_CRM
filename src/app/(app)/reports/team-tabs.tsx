@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Crosshair, DollarSign, LayoutDashboard, Plus } from "lucide-react";
+import { CalendarRange, Crosshair, DollarSign, LayoutDashboard, Plus } from "lucide-react";
 import type { StudioView } from "@/components/chart-studio/studio";
 
 // Team Reports' tabs: the standard Overview, Target vs Achievement, then
@@ -37,6 +37,14 @@ export function TeamTabs({ tabs, active }: { tabs: StudioView[]; active: string 
         <>
           <DollarSign className="h-4 w-4" />
           Billing in USD
+        </>,
+      )}
+      {tab(
+        "/reports/seasonality",
+        active === "seasonality",
+        <>
+          <CalendarRange className="h-4 w-4" />
+          Seasonality
         </>,
       )}
       {tabs.map((t) => (

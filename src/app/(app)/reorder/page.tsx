@@ -6,12 +6,8 @@ import { formatDate } from "@/lib/format";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { ModelSales } from "./model-sales";
-import { forecastSettings, monthName } from "@/lib/model-forecast";
+import { forecastSettings, monthName, LEAD_TIME_DAYS } from "@/lib/model-forecast";
 
-// Midea lead time: ~30 days manufacturing + ~60 days shipping to the
-// warehouse, so stock on hand has to carry ~3 months of sales before a new
-// order lands - the target is 3-4 months' worth.
-const LEAD_TIME_DAYS = 90;
 const WINDOW_OPTIONS = [3, 6, 12] as const;
 const COVER_OPTIONS = [3, 4] as const;
 

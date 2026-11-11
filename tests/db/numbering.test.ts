@@ -1,4 +1,5 @@
-import { expect, it } from "vitest";
+import { beforeAll, expect, it } from "vitest";
+import { prisma } from "@/lib/prisma";
 import { nextQuoteRef } from "@/lib/quote-ref";
 import { isIssuedQuoteRef } from "@/lib/document-format";
 import { nextServiceInvoiceRef } from "@/lib/service-invoice";
@@ -9,6 +10,10 @@ const Y = 2100 + Math.floor(Math.random() * 7000);
 const at = (y: number, md = "05-01") => new Date(`${y}-${md}T10:00:00Z`);
 
 describeDb("quotation numbers", () => {
+  // The test database keeps earlier runs' data: clear these years' counters.
+  beforeAll(async () => {
+    await prisma.appSetting.deleteMany({ where: { key: { in: [Y, Y + 1, Y + 2].map((y) => `quote-ref-seq:${y}`) } } });
+  });
   it("issues SNIL/CAC/LAG/<initials>/<year>/<no.> numbers that run on", async () => {
     const a = await nextQuoteRef("Vivek Kumar", at(Y));
     const b = await nextQuoteRef("Chris Mokobia", at(Y, "06-01"));
